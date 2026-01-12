@@ -1,13 +1,13 @@
-package iuh.fit.ConnectionAppBackend.domain.entity;
+package iuh.fit.ConnectionAppBackend.domain.entity.message;
 
+import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
+import iuh.fit.ConnectionAppBackend.domain.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.LocalDateTime;

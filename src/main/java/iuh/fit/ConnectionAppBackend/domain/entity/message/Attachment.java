@@ -1,5 +1,6 @@
-package iuh.fit.ConnectionAppBackend.domain.entity;
+package iuh.fit.ConnectionAppBackend.domain.entity.message;
 
+import iuh.fit.ConnectionAppBackend.domain.common.AttachmentType;
 import lombok.*;
 import org.springframework.data.mongodb.core.mapping.Field;
 
