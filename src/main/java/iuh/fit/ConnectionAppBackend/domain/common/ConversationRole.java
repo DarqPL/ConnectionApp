@@ -1,4 +1,4 @@
-package iuh.fit.ConnectionAppBackend.domain.entity;
+package iuh.fit.ConnectionAppBackend.domain.common;
 
 public enum ConversationRole {
     OWNER,

@@ -1,6 +1,6 @@
-package iuh.fit.ConnectionAppBackend.domain.entity;
+package iuh.fit.ConnectionAppBackend.domain.entity.message;
 
-import jakarta.persistence.Column;
+import iuh.fit.ConnectionAppBackend.domain.common.MessageType;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;

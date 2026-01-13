@@ -1,5 +1,9 @@
 package iuh.fit.ConnectionAppBackend.domain.entity;
 
+import iuh.fit.ConnectionAppBackend.domain.common.Gender;
+import iuh.fit.ConnectionAppBackend.domain.common.Role;
+import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
+import iuh.fit.ConnectionAppBackend.domain.entity.message.ConversationUser;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
