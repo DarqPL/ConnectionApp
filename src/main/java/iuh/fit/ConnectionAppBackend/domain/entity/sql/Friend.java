@@ -1,13 +1,13 @@
-package iuh.fit.ConnectionAppBackend.domain.entity.message;
+package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
 import iuh.fit.ConnectionAppBackend.domain.common.FriendStatus;
-import iuh.fit.ConnectionAppBackend.domain.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.LocalDateTime;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 
 @Entity
 @Table(name = "friends",
@@ -43,7 +43,4 @@ public class Friend {
     @ManyToOne(fetch = FetchType.LAZY,  optional = false)
     @JoinColumn(name = "receiver_id",nullable = false)
     private User receiver;
-
-
-
 }

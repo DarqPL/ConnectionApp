@@ -1,4 +1,4 @@
-package iuh.fit.ConnectionAppBackend.domain.entity.message;
+package iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded;
 
 import lombok.*;
 import org.springframework.data.mongodb.core.mapping.Field;
@@ -9,7 +9,8 @@ import org.springframework.data.mongodb.core.mapping.Field;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SenderInfo {
-    private Long id;
+    @Field("sender_id")
+    private Long senderId;
 
     @Field("display_name")
     private String displayName;

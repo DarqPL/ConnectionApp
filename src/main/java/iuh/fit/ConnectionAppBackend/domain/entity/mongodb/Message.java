@@ -1,9 +1,7 @@
-package iuh.fit.ConnectionAppBackend.domain.entity.message;
+package iuh.fit.ConnectionAppBackend.domain.entity.mongodb;
 
-import iuh.fit.ConnectionAppBackend.domain.common.MessageType;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -14,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Document(collation = "messages")
+@Document(collection = "messages")
 @Setter
 @Getter
 @NoArgsConstructor
@@ -22,18 +20,16 @@ import java.util.List;
 @Builder
 public class Message {
 
-    @Id
+    @org.springframework.data.annotation.Id
     private String id;
 
     @Field("conversation_id")
     private Long conversationId;
 
-
     private SenderInfo senderInfo;
 
     private String content;
 
-    // attachments: [{file_url, file_type}, ...]
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
 
@@ -44,13 +40,9 @@ public class Message {
     private LocalDateTime createdAt;
 
     @Field("parent_id")
-    private Long parantId;
-
-    @Enumerated(EnumType.STRING)
-    private MessageType messageType;
+    private Long parentId;
 
     @Field("is_deleted")
     @Builder.Default
     private boolean isDeleted = false;
-
 }

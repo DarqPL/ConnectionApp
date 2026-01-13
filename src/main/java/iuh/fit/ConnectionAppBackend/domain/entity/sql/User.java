@@ -1,9 +1,8 @@
-package iuh.fit.ConnectionAppBackend.domain.entity;
+package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
 import iuh.fit.ConnectionAppBackend.domain.common.Gender;
 import iuh.fit.ConnectionAppBackend.domain.common.Role;
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
-import iuh.fit.ConnectionAppBackend.domain.entity.message.ConversationUser;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -28,11 +27,14 @@ public class User {
     private Long id;
 
     @Column(unique = true, nullable = false)
-    private String userName;
+    private String username;
 
-    private String password;
+    @Column(name = "hash_password")
+    private String hashPassword;
 
     private String displayName;
+
+    private LocalDateTime dob;
 
     private String email;
 
@@ -57,9 +59,4 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ConversationUser> conversationUsers = new ArrayList<>();
-
-
-
-
-
 }

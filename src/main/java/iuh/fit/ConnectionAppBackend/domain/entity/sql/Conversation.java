@@ -1,7 +1,6 @@
-package iuh.fit.ConnectionAppBackend.domain.entity.message;
+package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
 import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
-import iuh.fit.ConnectionAppBackend.domain.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,6 +12,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 
 @Entity
 @Table(name = "conversations")
@@ -40,9 +40,6 @@ public class Conversation {
     @CreatedDate
     private LocalDateTime createdAt;
 
-
-
-
     private LocalDateTime lastMessageAt;
 
     @Column(columnDefinition = "TEXT")
@@ -54,8 +51,6 @@ public class Conversation {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
-
     @OneToMany(mappedBy = "conversation",cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ConversationUser> conversationUsers = new ArrayList<>();
-
 }

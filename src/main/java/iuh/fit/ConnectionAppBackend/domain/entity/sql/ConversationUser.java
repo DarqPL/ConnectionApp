@@ -1,11 +1,12 @@
-package iuh.fit.ConnectionAppBackend.domain.entity.message;
+package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
 import iuh.fit.ConnectionAppBackend.domain.common.ConversationRole;
-import iuh.fit.ConnectionAppBackend.domain.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 
 @Entity
 @Table(name = "conversation_users",
@@ -26,8 +27,10 @@ public class ConversationUser {
     @Enumerated(EnumType.STRING)
     private ConversationRole role;
 
-    private LocalDateTime joinDate;
+    @Column(name = "joined_at")
+    private LocalDateTime joinedAt;
 
+    @Column(name = "unread_counts")
     private Long unreadCounts;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -37,6 +40,4 @@ public class ConversationUser {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
-
-
 }
