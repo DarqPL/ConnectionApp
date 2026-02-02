@@ -20,6 +20,10 @@ public class CustomerUserDetails implements UserDetails {
         this.user = user;
     }
 
+    public User getUser() {
+        return user;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
@@ -40,22 +44,9 @@ public class CustomerUserDetails implements UserDetails {
        return true;
     }
 
-//    @Override
-//    public boolean isAccountNonLocked() {
-//        return user.getStatus() != UserStatus.OFFLINE;
-//    }
-
     @Override
     public boolean isCredentialsNonExpired() {
         return true;
     }
 
-//    @Override
-//    public boolean isEnabled() {
-//        return user.getStatus() == User.
-//    }
-
-    public User getUser() {
-        return user;
-    }
 }
