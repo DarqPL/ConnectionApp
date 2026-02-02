@@ -6,10 +6,13 @@ import iuh.fit.ConnectionAppBackend.domain.dto.LoginRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.LoginResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.RegisterRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.UserResponse;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.RefreshToken;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
+import iuh.fit.ConnectionAppBackend.repo.RefreshTokenRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import iuh.fit.ConnectionAppBackend.security.JWTUtils;
 import iuh.fit.ConnectionAppBackend.service.CustomerUserDetails;
+import iuh.fit.ConnectionAppBackend.service.RefreshTokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +41,12 @@ public class AuthController {
 
     @Autowired
     private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private RefreshTokenService  refreshTokenService;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest req){
@@ -68,16 +78,42 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword())
         );
 
-        UserDetails userDetails =
-                (UserDetails) authentication.getPrincipal();
+        CustomerUserDetails  userDetails = (CustomerUserDetails) authentication.getPrincipal();
 
         String accessToken = jwtUtils.generateToken(userDetails);
-        String refreshToken = UUID.randomUUID().toString();
+        RefreshToken refreshToken =
+                refreshTokenService.createRefreshToken(
+                        userDetails.getUser()
+                );
 
         return ResponseEntity.ok(
-                new LoginResponse(accessToken, refreshToken)
+                new LoginResponse(accessToken, refreshToken.getToken())
         );
     }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(
+            @RequestBody Map<String, String> request) {
+
+        String refreshToken = request.get("refreshToken");
+
+        RefreshToken token = refreshTokenRepository.findByToken(refreshToken)
+                .map(refreshTokenService::verifyExpiration)
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid refresh token"));
+
+        String newAccessToken =
+                jwtUtils.generateToken(
+                        new CustomerUserDetails(token.getUser())
+                );
+
+        return ResponseEntity.ok(Map.of(
+                "accessToken", newAccessToken
+        ));
+    }
+
+
+
     @GetMapping("/hello")
     public ResponseEntity<?> hello(){
         return ResponseEntity.ok("hello");
