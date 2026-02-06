@@ -1,12 +1,26 @@
 package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
-import iuh.fit.ConnectionAppBackend.domain.common.ConversationRole;
-import jakarta.persistence.*;
-import lombok.*;
-
 import java.time.LocalDateTime;
-import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
-import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
+
+import iuh.fit.ConnectionAppBackend.domain.common.ConversationRole;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "conversation_users",
@@ -16,6 +30,7 @@ import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class ConversationUser {
 

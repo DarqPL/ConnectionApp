@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Document(collection = "messages")
-@Setter
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -47,4 +46,33 @@ public class Message {
     @Field("is_deleted")
     @Builder.Default
     private boolean isDeleted = false;
+
+    // Custom setters for fields with special naming
+    public void setIsDeleted(boolean isDeleted) {
+        this.isDeleted = isDeleted;
+    }
+
+    public void setUpdateAt(LocalDateTime updateAt) {
+        this.updateAt = updateAt;
+    }
+
+    public void setSenderInfo(SenderInfo senderInfo) {
+        this.senderInfo = senderInfo;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public void setConversationId(Long conversationId) {
+        this.conversationId = conversationId;
+    }
+
+    public void setAttachments(List<Attachment> attachments) {
+        this.attachments = attachments;
+    }
+
+    public void setParentId(Long parentId) {
+        this.parentId = parentId;
+    }
 }

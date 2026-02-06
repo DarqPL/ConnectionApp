@@ -1,0 +1,67 @@
+package iuh.fit.ConnectionAppBackend.repo;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
+
+@Repository
+public interface MessageRepository extends MongoRepository<Message, String> {
+
+    /**
+     * Get all messages in a conversation with pagination
+     */
+    Page<Message> findByConversationIdAndIsDeletedFalseOrderByCreatedAtDesc(
+            Long conversationId, Pageable pageable);
+
+    /**
+     * Get message by ID
+     */
+    Optional<Message> findByIdAndIsDeletedFalse(String id);
+
+    /**
+     * Get messages from a specific user in a conversation
+     */
+    List<Message> findByConversationIdAndSenderInfo_SenderIdAndIsDeletedFalse(
+            Long conversationId, Long senderId);
+
+    /**
+     * Search messages by content
+     */
+    @Query("{ 'conversationId': ?0, 'content': { $regex: ?1, $options: 'i' }, 'isDeleted': false }")
+    List<Message> searchByContent(Long conversationId, String searchTerm);
+
+    /**
+     * Get messages between two timestamps
+     */
+    List<Message> findByConversationIdAndCreatedAtBetweenAndIsDeletedFalseOrderByCreatedAtDesc(
+            Long conversationId, LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Get latest message in conversation
+     */
+    Optional<Message> findFirstByConversationIdAndIsDeletedFalseOrderByCreatedAtDesc(Long conversationId);
+
+    /**
+     * Count messages in conversation
+     */
+    long countByConversationIdAndIsDeletedFalse(Long conversationId);
+
+    /**
+     * Get unread messages count for a user in conversation
+     */
+    @Query("{ 'conversationId': ?0, 'senderInfo.senderId': { $ne: ?1 }, 'isDeleted': false }")
+    long countUnreadMessages(Long conversationId, Long userId);
+
+    /**
+     * Delete all messages in conversation (soft delete)
+     */
+    void deleteByConversationId(Long conversationId);
+}

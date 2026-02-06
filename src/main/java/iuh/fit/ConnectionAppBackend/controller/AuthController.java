@@ -111,13 +111,4 @@ public class AuthController {
                 "accessToken", newAccessToken
         ));
     }
-
-
-
-    @GetMapping("/hello")
-    public ResponseEntity<?> hello(){
-        return ResponseEntity.ok("hello");
-    }
-
-
 }
