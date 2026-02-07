@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Label } from "../ui/label";
 // import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 const signUpSchema = z.object({
   firstname: z.string().min(1, "Tên bắt buộc phải có"),
@@ -20,7 +21,7 @@ const signUpSchema = z.object({
 type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
-  // const { signUp } = useAuthStore();
+  const { signUp } = useAuthStore();
   const navigate = useNavigate();
   const {
     register,
@@ -30,11 +31,11 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     resolver: zodResolver(signUpSchema),
   });
 
-  const onSubmit = async () => {
-    // const { firstname, lastname, username, email, password } = data;
+  const onSubmit = async (data: SignUpFormValues) => {
+    const { firstname, lastname, username, email, password } = data;
 
     // gọi backend để signup
-    // await signUp(username, password, email, firstname, lastname);
+    await signUp(username, password, email, firstname, lastname);
 
     navigate("/signin");
   };
