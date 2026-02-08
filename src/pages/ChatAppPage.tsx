@@ -1,12 +1,19 @@
-import Logout from '@/components/auth/logout'
-import React from 'react'
+import ChatWindowLayout from "@/components/chat/ChatWindowLayout";
+import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 const ChatAppPage = () => {
+ 
   return (
-    <div>
-<Logout/>
-    </div>
-  )
-}
+    <SidebarProvider>
+      <AppSidebar />
+     
+      <div className="flex h-screen w-full p-2">
+        <ChatWindowLayout />
+      </div>
+      
+    </SidebarProvider>
+  );
+};
 
-export default ChatAppPage
+export default ChatAppPage;
