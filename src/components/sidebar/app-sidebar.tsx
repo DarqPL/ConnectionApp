@@ -27,16 +27,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isDark, toggleTheme } = useThemeStore();
   const { user } = useAuthStore();
   // const { convoLoading } = useChatStore();
- const user1={
-    id: '1',
+  const user1 = {
+    _id: '1',
     username: 'johndoe',
     displayName: 'John Doe',
     email: 'johndoe@example.com',
     avatarUrl: 'https://i.pravatar.cc/150?img=3',
-    status: 'online',
-    friends: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    bio: 'Passionate about technology and connecting with people. Love to code and explore new ideas.',
+    phone: '+84 123 456 789',
+    createdAt: '2024-01-01',
+    updatedAt: '2024-02-09',
   }
   return (
     <Sidebar
