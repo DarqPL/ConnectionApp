@@ -5,10 +5,10 @@ export interface AuthState {
   user: User | null;
   loading: boolean;
 
-  clearState:()=>void
+  clearState: () => void
 
-  
- 
+
+
   signUp: (
     username: string,
     password: string,
@@ -16,14 +16,20 @@ export interface AuthState {
     firstName: string,
     lastName: string
   ) => Promise<void>;
-  signIn:(username:string,password:string)=>Promise<void>;
-  signOut:()=>Promise<void>
+  signIn: (username: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>
 }
 export interface ThemeState {
   isDark: boolean;
   toggleTheme: () => void;
   setTheme: (dark: boolean) => void;
 }
+
+export interface ProfileState {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}
+
 
 
 
