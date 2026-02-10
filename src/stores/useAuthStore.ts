@@ -1,78 +1,54 @@
 import { create } from "zustand";
-import { toast } from "sonner";
+// import { toast } from "sonner";
+// import { authService } from "@/services/authService";
 import type { AuthState } from "@/types/store";
-import { authService } from "@/services/authServices";
+// import { persist } from "zustand/middleware";
+// import { useChatStore } from "./useChatStore";
+import { MOCK_CURRENT_USER } from "@/data/mockChatData";
 
-export const useAuthStore = create<AuthState>((set,get) => ({
-  accessToken: null,
-  user: null,
-  loading: false,
-  clearState:()=>{
-    set({accessToken:null,user:null,loading:false})
-  },
+export const useAuthStore = create<AuthState>()(
+  // persist(
+  (set, get) => ({
+    accessToken: "mock-access-token",
+    // ✅ Khởi tạo bằng mock user
+    user: MOCK_CURRENT_USER,
+    loading: false,
 
-  signUp: async (
-    username: string,
-    password: string,
-    email: string,
-    firstName: string,
-    lastName: string
-  ) => {
-    try {
-      set({ loading: true });
-
-      await authService.signUp(
-        username,
-        password,
-        email,
-        firstName,
-        lastName,
-      );
-
-      toast.success(
-        "Đăng ký thành công! Bạn sẽ được chuyển sang trang đăng nhập."
-      );
-    } catch (error) {
-        console.error(error)
-      toast.error(
-       "Đăng ký không thành công"
-      );
-    } finally {
-      set({ loading: false });
-    }
-  },
-
-  signIn: async (username, password) => {
-        try {
-         
-          set({ loading: true });
-
-          const { accessToken } = await authService.signIn(username, password);
-         
-
-          
-
-          toast.success("Chào mừng bạn quay lại với Connection");
-        } catch (error) {
-          console.error(error);
-          toast.error("Đăng nhập không thành công!");
-        } finally {
-          set({ loading: false });
-        }
-      },
-   signOut: async () => {
-        try {
-          get().clearState();
-          await authService.signOut();
-          toast.success("Logout thành công!");
-        } catch (error) {
-          console.error(error);
-          toast.error("Lỗi xảy ra khi logout. Hãy thử lại!");
-        }
-      },
-
-
-
-
-
-}));
+    setAccessToken: (accessToken) => {
+      set({ accessToken });
+    },
+    setUser: (user) => {
+      set({ user });
+    },
+    clearState: () => {
+      // ✅ Mock: reset về mock user thay vì null
+      set({ accessToken: "mock-access-token", user: MOCK_CURRENT_USER, loading: false });
+    },
+    signUp: async (_username, _password, _email, _firstName, _lastName) => {
+      // ✅ Mock: không gọi API
+      console.log("Mock signUp called");
+    },
+    signIn: async (_username, _password) => {
+      // ✅ Mock: không gọi API
+      console.log("Mock signIn called");
+      set({ user: MOCK_CURRENT_USER, accessToken: "mock-access-token" });
+    },
+    signOut: async () => {
+      // ✅ Mock: không gọi API
+      console.log("Mock signOut called");
+    },
+    fetchMe: async () => {
+      // ✅ Mock: dùng mock user
+      set({ user: MOCK_CURRENT_USER });
+    },
+    refresh: async () => {
+      // ✅ Mock: không gọi API
+      console.log("Mock refresh called");
+    },
+  }),
+  // {
+  //   name: "auth-storage",
+  //   partialize: (state) => ({ user: state.user }),
+  // }
+  // )
+);

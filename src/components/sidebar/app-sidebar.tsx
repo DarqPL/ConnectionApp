@@ -16,28 +16,16 @@ import { Moon, Sun } from "lucide-react";
 import { Switch } from "../ui/switch";
 // import CreateNewChat from "../chat/CreateNewChat";
 // import NewGroupChatModal from "../chat/NewGroupChatModal";
-// import GroupChatList from "../chat/GroupChatList";
+import GroupChatList from "../chat/GroupChatList";
 // import AddFriendModal from "../chat/AddFriendModal";
-// import DirectMessageList from "../chat/DirectMessageList";
+import DirectMessageList from "../chat/DirectMessageList";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { useAuthStore } from "@/stores/useAuthStore";
+import { MOCK_CURRENT_USER } from "@/data/mockChatData";
 
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isDark, toggleTheme } = useThemeStore();
-  const { user } = useAuthStore();
-  // const { convoLoading } = useChatStore();
-  const user1 = {
-    _id: '1',
-    username: 'johndoe',
-    displayName: 'John Doe',
-    email: 'johndoe@example.com',
-    avatarUrl: 'https://i.pravatar.cc/150?img=3',
-    bio: 'Passionate about technology and connecting with people. Love to code and explore new ideas.',
-    phone: '+84 123 456 789',
-    createdAt: '2024-01-01',
-    updatedAt: '2024-02-09',
-  }
+
   return (
     <Sidebar
       variant="inset"
@@ -87,12 +75,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {/* <NewGroupChatModal /> */}
           </div>
 
-          {/* <SidebarGroupContent>
-            {convoLoading ? <ConversationSkeleton /> : <GroupChatList />}
-          </SidebarGroupContent> */}
+          <SidebarGroupContent>
+            <GroupChatList />
+          </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Dirrect Message */}
+        {/* Direct Message */}
         <SidebarGroup>
           <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
           <SidebarGroupAction
@@ -102,13 +90,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {/* <AddFriendModal /> */}
           </SidebarGroupAction>
 
-          {/* <SidebarGroupContent>
-            {convoLoading ? <ConversationSkeleton /> : <DirectMessageList />}
-          </SidebarGroupContent> */}
+          <SidebarGroupContent>
+            <DirectMessageList />
+          </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       {/* Footer */}
-      <SidebarFooter>{user1 && <NavUser user={user1} />}</SidebarFooter>
+      <SidebarFooter>
+        <NavUser user={MOCK_CURRENT_USER} />
+      </SidebarFooter>
     </Sidebar>
   );
 }
