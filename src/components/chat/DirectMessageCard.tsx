@@ -10,17 +10,26 @@ import { useSocketStore } from "@/stores/useSocketStore";
 
 const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
-  const { activeConversationId, setActiveConversation, messages, fetchMessages } =
-    useChatStore();
-  const { onlineUsers } = useSocketStore();
+  const {
+    activeConversationId,
+    setActiveConversation,
+    messages,
+    fetchMessages,
+  } = useChatStore();
+
+  // 👇 fallback an toàn nếu onlineUsers undefined
+  const onlineUsers = useSocketStore((state) => state.onlineUsers ?? []);
 
   if (!user) return null;
 
   const otherUser = convo.participants.find((p) => p._id !== user._id);
   if (!otherUser) return null;
 
-  const unreadCount = convo.unreadCounts[user._id];
+  const unreadCount = convo.unreadCounts?.[user._id] ?? 0;
   const lastMessage = convo.lastMessage?.content ?? "";
+
+  const isOnline =
+    Array.isArray(onlineUsers) && onlineUsers.includes(otherUser._id);
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversation(id);
@@ -48,11 +57,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             name={otherUser.displayName ?? ""}
             avatarUrl={otherUser.avatarUrl ?? undefined}
           />
-          <StatusBadge
-            status={
-              onlineUsers.includes(otherUser?._id ?? "") ? "online" : "offline"
-            }
-          />
+          <StatusBadge status={isOnline ? "online" : "offline"} />
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
         </>
       }
@@ -60,7 +65,9 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
         <p
           className={cn(
             "text-sm truncate",
-            unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
+            unreadCount > 0
+              ? "font-medium text-foreground"
+              : "text-muted-foreground",
           )}
         >
           {lastMessage}

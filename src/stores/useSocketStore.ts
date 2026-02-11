@@ -1,90 +1,59 @@
 import { create } from "zustand";
-import { io, type Socket } from "socket.io-client";
+import SockJS from "sockjs-client";
+import { Client } from "@stomp/stompjs";
 import { useAuthStore } from "./useAuthStore";
-import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
-import { MOCK_ONLINE_USERS } from "@/data/mockChatData";
 
-const baseURL = import.meta.env.VITE_SOCKET_URL;
+interface SocketState {
+  client: Client | null;
+  onlineUsers: string[];
+  connectSocket: (conversationId: string) => void;
+  disconnectSocket: () => void;
+}
 
 export const useSocketStore = create<SocketState>((set, get) => ({
-  socket: null,
-  // ✅ Khởi tạo bằng mock online users
-  onlineUsers: MOCK_ONLINE_USERS,
-  connectSocket: () => {
-    const accessToken = useAuthStore.getState().accessToken;
-    const existingSocket = get().socket;
+  client: null,
+  onlineUsers: [],
 
-    if (existingSocket) return; // tránh tạo nhiều socket
+  connectSocket: (conversationId) => {
+    const token = useAuthStore.getState().accessToken;
+    const existingClient = get().client;
 
-    const socket: Socket = io(baseURL, {
-      auth: { token: accessToken },
-      transports: ["websocket"],
+    if (existingClient) return;
+
+    const socket = new SockJS("http://localhost:8080/ws");
+
+    const client = new Client({
+      webSocketFactory: () => socket,
+      connectHeaders: {
+        Authorization: `Bearer ${token}`,
+      },
+      reconnectDelay: 5000,
+
+      onConnect: () => {
+        console.log("Connected to WebSocket");
+
+        // subscribe message
+        client.subscribe(`/topic/conversation/${conversationId}`, (message) => {
+          const newMessage = JSON.parse(message.body);
+          useChatStore.getState().addMessage(newMessage);
+        });
+
+        // subscribe online users
+        client.subscribe("/topic/online-users", (message) => {
+          const users = JSON.parse(message.body);
+          set({ onlineUsers: users });
+        });
+      },
     });
 
-    set({ socket });
-
-    socket.on("connect", () => {
-      console.log("Đã kết nối với socket");
-    });
-
-    // online users
-    socket.on("online-users", (userIds) => {
-      set({ onlineUsers: userIds });
-    });
-
-    // new message
-    socket.on("new-message", ({ message, conversation, unreadCounts }) => {
-      useChatStore.getState().addMessage(message);
-
-      const lastMessage = {
-        _id: conversation.lastMessage._id,
-        content: conversation.lastMessage.content,
-        createdAt: conversation.lastMessage.createdAt,
-        sender: {
-          _id: conversation.lastMessage.senderId,
-          displayName: "",
-          avatarUrl: null,
-        },
-      };
-
-      const updatedConversation = {
-        ...conversation,
-        lastMessage,
-        unreadCounts,
-      };
-
-      if (useChatStore.getState().activeConversationId === message.conversationId) {
-        useChatStore.getState().markAsSeen();
-      }
-
-      useChatStore.getState().updateConversation(updatedConversation);
-    });
-
-    // read message
-    socket.on("read-message", ({ conversation, lastMessage }) => {
-      const updated = {
-        _id: conversation._id,
-        lastMessage,
-        lastMessageAt: conversation.lastMessageAt,
-        unreadCounts: conversation.unreadCounts,
-        seenBy: conversation.seenBy,
-      };
-
-      useChatStore.getState().updateConversation(updated);
-    });
-
-    // new group chat
-    socket.on("new-group", (conversation) => {
-      useChatStore.getState().addConvo(conversation);
-      socket.emit("join-conversation", conversation._id);
-    });
+    client.activate();
+    set({ client });
   },
+
   disconnectSocket: () => {
-    const socket = get().socket;
-    if (socket) {
-      socket.disconnect();
-      set({ socket: null });
-    }
+    const client = get().client;
+    client?.deactivate();
+    set({ client: null });
   },
 }));
