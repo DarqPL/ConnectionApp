@@ -5,7 +5,7 @@ export interface Conversation {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
-}
+} 
 
 export interface Message {
   id: string;
