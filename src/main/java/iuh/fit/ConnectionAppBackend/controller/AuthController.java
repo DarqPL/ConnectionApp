@@ -48,7 +48,7 @@ public class AuthController {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
-    @PostMapping("/register")
+    @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest req){
         if(userRepository.existsByUsername(req.getUsername())){
             return ResponseEntity.badRequest().body("Username is already in use");
@@ -72,7 +72,7 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/login")
+    @PostMapping("/signin")
     public ResponseEntity<?> loginUser(@RequestBody LoginRequest req){
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword())

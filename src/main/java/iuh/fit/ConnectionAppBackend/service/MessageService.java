@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,9 @@ public class MessageService {
 
     @Autowired
     private ConversationUserRepository conversationUserRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     /**
      * Send a message
@@ -68,8 +72,13 @@ public class MessageService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
+
         Message savedMessage = messageRepository.save(message);
-        return mapToMessageResponse(savedMessage);
+        MessageResponse response = mapToMessageResponse(savedMessage);
+
+        messagingTemplate.convertAndSend("/topic/conversation" + request.getConversationId(), response);
+
+        return response;
     }
 
     /**
