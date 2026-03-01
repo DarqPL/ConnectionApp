@@ -57,18 +57,21 @@ public class AuthController {
         User user = new User();
         user.setUsername(req.getUsername());
         user.setHashPassword(passwordEncoder.encode(req.getPassword()));
+        user.setEmail(req.getEmail());
+        user.setDisplayName(req.getFirstName() + " " + req.getLastName());
         user.setRole(Role.USER);
         user.setCreatedAt(LocalDateTime.now());
-        user.setDisplayName(req.getUsername());
         user.setStatus(UserStatus.OFFLINE);
 
         userRepository.save(user);
+
         UserResponse response = new UserResponse(
                 user.getId(),
                 user.getUsername(),
                 user.getRole().name(),
                 user.getStatus().name()
         );
+
         return ResponseEntity.ok(response);
     }
 
