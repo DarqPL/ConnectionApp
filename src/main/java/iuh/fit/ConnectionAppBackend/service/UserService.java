@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -94,6 +96,15 @@ public class UserService {
      */
     public boolean userExists(String username) {
         return userRepository.existsByUsername(username);
+    }
+
+    /**
+     * Search users by username, display name, or phone
+     */
+    public List<UserProfileResponse> searchUsers(String query) {
+        return userRepository.searchUsers(query).stream()
+                .map(this::mapToUserProfileResponse)
+                .collect(Collectors.toList());
     }
 
     /**

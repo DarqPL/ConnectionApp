@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
 
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
 import iuh.fit.ConnectionAppBackend.domain.dto.UserProfileResponse;
@@ -45,6 +46,15 @@ public class UserController {
     public ResponseEntity<UserProfileResponse> getUserProfile(@PathVariable Long userId) {
         UserProfileResponse profile = userService.getUserProfile(userId);
         return ResponseEntity.ok(profile);
+    }
+
+    /**
+     * Search users
+     */
+    @GetMapping("/search")
+    public ResponseEntity<List<UserProfileResponse>> searchUsers(@RequestParam String query) {
+        List<UserProfileResponse> results = userService.searchUsers(query);
+        return ResponseEntity.ok(results);
     }
 
     /**

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -45,6 +46,7 @@ public interface ConversationUserRepository extends JpaRepository<ConversationUs
     /**
      * Update unread count
      */
+    @Modifying
     @Query("UPDATE ConversationUser cu " +
             "SET cu.unreadCounts = :unreadCount " +
             "WHERE cu.conversation.id = :conversationId " +
@@ -52,6 +54,28 @@ public interface ConversationUserRepository extends JpaRepository<ConversationUs
     void updateUnreadCount(@Param("conversationId") Long conversationId,
                            @Param("userId") Long userId,
                            @Param("unreadCount") Long unreadCount);
+
+    /**
+     * Increment unread count for everyone except sender
+     */
+    @Modifying
+    @Query("UPDATE ConversationUser cu " +
+            "SET cu.unreadCounts = cu.unreadCounts + 1 " +
+            "WHERE cu.conversation.id = :conversationId " +
+            "AND cu.user.id != :senderId")
+    void incrementUnreadCount(@Param("conversationId") Long conversationId,
+                              @Param("senderId") Long senderId);
+
+    /**
+     * Reset unread count for a specific user
+     */
+    @Modifying
+    @Query("UPDATE ConversationUser cu " +
+            "SET cu.unreadCounts = 0 " +
+            "WHERE cu.conversation.id = :conversationId " +
+            "AND cu.user.id = :userId")
+    void resetUnreadCount(@Param("conversationId") Long conversationId,
+                          @Param("userId") Long userId);
 
     /**
      * Delete user from conversation

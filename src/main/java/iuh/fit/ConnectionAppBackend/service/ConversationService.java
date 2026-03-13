@@ -83,6 +83,15 @@ public class ConversationService {
             type = ConversationType.valueOf(request.getType().toUpperCase());
         }
 
+        // Avoid duplicate private conversations
+        if (type == ConversationType.PRIVATE && request.getParticipantIds() != null && request.getParticipantIds().length == 1) {
+            Long participantId = request.getParticipantIds()[0];
+            List<Conversation> existing = conversationRepository.findPrivateConversation(creatorId, participantId);
+            if (!existing.isEmpty()) {
+                return mapToConversationResponse(existing.get(0)); // Return existing
+            }
+        }
+
         Conversation conversation = Conversation.builder()
                 .name(request.getName())
                 .type(type)
@@ -213,6 +222,17 @@ public class ConversationService {
         }
 
         conversationUserRepository.deleteByConversationIdAndUserId(conversationId, userId);
+    }
+
+    /**
+     * Mark conversation as read
+     */
+    @Transactional
+    public void markAsRead(Long conversationId, Long userId) {
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (isMember) {
+            conversationUserRepository.resetUnreadCount(conversationId, userId);
+        }
     }
 
     /**

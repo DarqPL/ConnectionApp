@@ -38,8 +38,8 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
     @Query("SELECT c FROM Conversation c " +
             "WHERE c.type = 'PRIVATE' " +
             "AND c.activate = true " +
-            "AND (SELECT COUNT(cu) FROM c.conversationUsers cu WHERE cu.user.id IN (:userId1, :userId2)) = 2")
-    Optional<Conversation> findPrivateConversation(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
+            "AND (SELECT COUNT(cu) FROM c.conversationUsers cu WHERE cu.conversation.id = c.id AND cu.user.id IN (:userId1, :userId2)) = 2")
+    List<Conversation> findPrivateConversation(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
 
     /**
      * Search conversation by name

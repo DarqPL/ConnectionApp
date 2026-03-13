@@ -93,6 +93,10 @@ public class FriendService {
         List<Friend> friends = friendRepository.findFriendsByUserId(userId);
         return friends.stream()
                 .map(f -> mapToFriendResponse(f, userId))
+                // Dùng toMap để loại bỏ trùng lặp nếu database có record rác bị trùng
+                .collect(Collectors.toMap(FriendResponse::getFriendId, f -> f, (existing, replacement) -> existing))
+                .values()
+                .stream()
                 .collect(Collectors.toList());
     }
 
