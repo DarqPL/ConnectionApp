@@ -1,56 +1,90 @@
+/**
+ * ConversationUserResponse from backend
+ */
 export interface Participant {
-  _id: string;
+  id: number;
+  userId: number;
+  username: string;
   displayName: string;
   avatarUrl?: string | null;
+  role: string; // OWNER, CO_OWNER, MEMBER
   joinedAt: string;
+  unreadCounts: number;
 }
 
-export interface SeenUser {
-  _id: string;
-  displayName?: string;
+/**
+ * ConversationResponse from backend
+ */
+export interface Conversation {
+  id: number;
+  name: string;
+  avatarUrl?: string | null;
+  type: string; // PRIVATE, GROUP
+  lastMessageAt: string | null;
+  lastMessageContent: string | null;
+  activate: boolean;
+  createdById: number | null;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string | null;
+  participants: Participant[];
+  unreadCount: number;
+}
+
+/**
+ * PageResponse<T> from backend
+ */
+export interface PageResponse<T> {
+  content: T[];
+  pageNumber: number;
+  pageSize: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+/**
+ * MessageResponse from backend
+ */
+export interface Message {
+  id: string;
+  conversationId: number;
+  senderInfo: SenderInfo;
+  content: string | null;
+  attachments: Attachment[];
+  createdAt: string;
+  updatedAt: string | null;
+  parentId: number | null;
+  isDeleted: boolean;
+  isOwn?: boolean; // computed on frontend
+}
+
+export interface SenderInfo {
+  senderId: number;
+  displayName: string;
   avatarUrl?: string | null;
 }
 
-export interface Group {
-  name: string;
-  createdBy: string;
+export interface Attachment {
+  fileUrl: string;
+  type: string; // IMAGE, VIDEO, FILE, AUDIO
 }
 
-export interface LastMessage {
-  _id: string;
+/**
+ * MessageRequest to backend
+ */
+export interface MessageRequest {
+  conversationId: number;
   content: string;
-  createdAt: string;
-  sender: {
-    _id: string;
-    displayName: string;
-    avatarUrl?: string | null;
-  };
+  parentId?: number | null;
 }
 
-export interface Conversation {
-  _id: string;
-  type: "direct" | "group";
-  group: Group;
-  participants: Participant[];
-  lastMessageAt: string;
-  seenBy: SeenUser[];
-  lastMessage: LastMessage | null;
-  unreadCounts: Record<string, number>; // key = userId, value = unread count
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ConversationResponse {
-  conversations: Conversation[];
-}
-
-export interface Message {
-  _id: string;
-  conversationId: string;
-  senderId: string;
-  content: string | null;
-  imgUrl?: string | null;
-  updatedAt?: string | null;
-  createdAt: string;
-  isOwn?: boolean;
+/**
+ * ConversationRequest to backend
+ */
+export interface ConversationRequest {
+  name: string;
+  type: string; // PRIVATE, GROUP
+  participantIds: number[];
 }

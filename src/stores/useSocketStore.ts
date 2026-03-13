@@ -7,7 +7,7 @@ import { useChatStore } from "./useChatStore";
 interface SocketState {
   client: Client | null;
   onlineUsers: string[];
-  connectSocket: (conversationId: string) => void;
+  connectSocket: (conversationId: number) => void;
   disconnectSocket: () => void;
 }
 
@@ -33,17 +33,24 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       onConnect: () => {
         console.log("Connected to WebSocket");
 
-        // subscribe message
-        client.subscribe(`/topic/conversation/${conversationId}`, (message) => {
-          const newMessage = JSON.parse(message.body);
-          useChatStore.getState().addMessage(newMessage);
-        });
+        // Subscribe to conversation messages
+        client.subscribe(
+          `/topic/conversation${conversationId}`,
+          (message) => {
+            const newMessage = JSON.parse(message.body);
+            useChatStore.getState().addMessage(newMessage);
+          }
+        );
 
-        // subscribe online users
+        // Subscribe to online users
         client.subscribe("/topic/online-users", (message) => {
           const users = JSON.parse(message.body);
           set({ onlineUsers: users });
         });
+      },
+
+      onStompError: (frame) => {
+        console.error("STOMP error:", frame.headers["message"]);
       },
     });
 

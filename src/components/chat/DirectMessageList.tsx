@@ -7,7 +7,7 @@ const DirectMessageList = () => {
   if (!conversations) return;
 
   const directConversations = conversations.filter(
-    (convo) => convo.type === "direct"
+    (convo) => convo.type === "PRIVATE"
   );
 
   return (
@@ -15,7 +15,7 @@ const DirectMessageList = () => {
       {directConversations.map((convo) => (
         <DirectMessageCard
           convo={convo}
-          key={convo._id}
+          key={convo.id}
         />
       ))}
     </div>

@@ -1,37 +1,34 @@
+/**
+ * User profile - maps to backend UserProfileResponse
+ */
 export interface User {
-  _id: string;
+  id: number;
   username: string;
+  displayName: string;
   email: string;
-  displayName: string;
-  avatarUrl?: string;
-  bio?: string;
   phone?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  avatarUrl?: string;
+  gender?: string;
+  role: string;
+  status: string;
 }
 
+/**
+ * Friend - maps to backend FriendResponse
+ */
 export interface Friend {
-  _id: string;
+  id: number;
+  friendId: number;
   username: string;
   displayName: string;
   avatarUrl?: string;
+  status: string; // PENDING, ACCEPTED, BLOCKED
+  createdAt: string;
+  updatedAt?: string;
+  isRequester: boolean;
 }
 
-export interface FriendRequest {
-  _id: string;
-  from?: {
-    _id: string;
-    username: string;
-    displayName: string;
-    avatarUrl?: string;
-  };
-  to?: {
-    _id: string;
-    username: string;
-    displayName: string;
-    avatarUrl?: string;
-  };
-  message: string;
-  createdAt: string;
-  updatedAt: string;
-}
+/**
+ * FriendRequest is the same structure as Friend with status = PENDING
+ */
+export type FriendRequest = Friend;

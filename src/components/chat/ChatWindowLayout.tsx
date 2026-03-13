@@ -5,42 +5,39 @@ import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
 import { useEffect } from "react";
-// import ChatWindowSkeleton from "../skeleton/ChatWindowSkeleton";
+import { useSocketStore } from "@/stores/useSocketStore";
 
 const ChatWindowLayout = () => {
   const {
     activeConversationId,
     conversations,
-    // messageLoading: loading,
-    markAsSeen,
+    fetchMessages,
+    messages: allMessages,
   } = useChatStore();
+  const { connectSocket, disconnectSocket } = useSocketStore();
 
   const selectedConvo =
-    conversations.find((c) => c._id === activeConversationId) ?? null;
+    conversations.find((c) => c.id === activeConversationId) ?? null;
 
   useEffect(() => {
-    if (!selectedConvo) {
-      return;
-    }
+    if (activeConversationId) {
+      // Connect socket when active conversation changes
+      connectSocket(activeConversationId);
 
-    const markSeen = async () => {
-      try {
-        await markAsSeen();
-      } catch (error) {
-        console.error("Lỗi khi markSeen", error);
+      // Fetch initial messages if not fetched yet
+      if (!allMessages[activeConversationId]) {
+        fetchMessages(activeConversationId);
       }
-    };
 
-    markSeen();
-  }, [markAsSeen, selectedConvo]);
+      return () => {
+        disconnectSocket();
+      };
+    }
+  }, [activeConversationId, connectSocket, disconnectSocket, fetchMessages, allMessages]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
   }
-
-  // if (loading) {
-  //   return <ChatWindowSkeleton />;
-  // }
 
   return (
     <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">

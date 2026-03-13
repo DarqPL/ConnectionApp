@@ -2,7 +2,6 @@ import { cn, formatMessageTime } from "@/lib/utils";
 import type { Conversation, Message, Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
-import { Badge } from "../ui/badge";
 
 interface MessageItemProps {
   message: Message;
@@ -24,13 +23,15 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-      new Date(prev?.createdAt || 0).getTime() >
-      300000; // 5 phút
+    new Date(prev?.createdAt || 0).getTime() >
+    300000; // 5 phút
 
-  const isGroupBreak = isShowTime || message.senderId !== prev?.senderId;
+  const isGroupBreak =
+    isShowTime ||
+    message.senderInfo.senderId !== prev?.senderInfo.senderId;
 
   const participant = selectedConvo.participants.find(
-    (p: Participant) => p._id.toString() === message.senderId.toString()
+    (p: Participant) => p.userId === message.senderInfo.senderId
   );
 
   return (
@@ -54,8 +55,8 @@ const MessageItem = ({
             {isGroupBreak && (
               <UserAvatar
                 type="chat"
-                name={participant?.displayName ?? "Moji"}
-                avatarUrl={participant?.avatarUrl ?? undefined}
+                name={participant?.displayName ?? message.senderInfo.displayName ?? "User"}
+                avatarUrl={participant?.avatarUrl ?? message.senderInfo.avatarUrl ?? undefined}
               />
             )}
           </div>
@@ -76,21 +77,6 @@ const MessageItem = ({
           >
             <p className="text-sm leading-relaxed break-words">{message.content}</p>
           </Card>
-
-          {/* seen/ delivered */}
-          {message.isOwn && message._id === selectedConvo.lastMessage?._id && (
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-xs px-1.5 py-0.5 h-4 border-0",
-                lastMessageStatus === "seen"
-                  ? "bg-primary/20 text-primary"
-                  : "bg-muted text-muted-foreground"
-              )}
-            >
-              {lastMessageStatus}
-            </Badge>
-          )}
         </div>
       </div>
     </>

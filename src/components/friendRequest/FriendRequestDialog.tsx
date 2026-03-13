@@ -17,19 +17,21 @@ interface FriendRequestDialogProps {
 
 const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
   const [tab, setTab] = useState("received");
-  const { getAllFriendRequests } = useFriendStore();
+  const { getPendingRequests } = useFriendStore();
 
   useEffect(() => {
     const loadRequest = async () => {
       try {
-        await getAllFriendRequests();
+        await getPendingRequests();
       } catch (error) {
         console.error("Lỗi xảy ra khi load requests", error);
       }
     };
 
-    loadRequest();
-  }, []);
+    if (open) {
+      loadRequest();
+    }
+  }, [open]);
 
   return (
     <Dialog

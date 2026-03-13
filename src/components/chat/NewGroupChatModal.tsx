@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useChatStore } from "@/stores/useChatStore";
 
 const NewGroupChatModal = () => {
+  const [open, setOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
   const { friends, getFriends } = useFriendStore();
@@ -35,7 +36,7 @@ const NewGroupChatModal = () => {
   };
 
   const handleRemoveFriend = (friend: Friend) => {
-    setInvitedUsers(invitedUsers.filter((u) => u._id !== friend._id));
+    setInvitedUsers(invitedUsers.filter((u) => u.friendId !== friend.friendId));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,26 +48,30 @@ const NewGroupChatModal = () => {
       }
 
       await createConversation(
-        "group",
+        "GROUP",
         groupName,
-        invitedUsers.map((u) => u._id)
+        invitedUsers.map((u) => u.friendId)
       );
 
+      toast.success("Tạo nhóm thành công!");
       setSearch("");
       setInvitedUsers([]);
+      setGroupName("");
+      setOpen(false);
     } catch (error) {
       console.error("Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:", error);
+      toast.error("Tạo nhóm thất bại");
     }
   };
 
   const filteredFriends = friends.filter(
     (friend) =>
       friend.displayName.toLowerCase().includes(search.toLowerCase()) &&
-      !invitedUsers.some((u) => u._id === friend._id)
+      !invitedUsers.some((u) => u.friendId === friend.friendId)
   );
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"

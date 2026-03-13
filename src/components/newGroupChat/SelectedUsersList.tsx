@@ -15,7 +15,7 @@ const SelectedUsersList = ({ invitedUsers, onRemove }: SelectedUsersListProps) =
     <div className="flex flex-wrap gap-2 pt-2">
       {invitedUsers.map((user) => (
         <div
-          key={user._id}
+          key={user.id}
           className="flex items-center gap-1 bg-muted text-sm rounded-full px-3 py-1"
         >
           <UserAvatar
