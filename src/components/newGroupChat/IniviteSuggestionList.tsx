@@ -18,7 +18,7 @@ const IniviteSuggestionList = ({
     <div className="border rounded-lg mt-2 max-h-[180px] overflow-y-auto divide-y">
       {filteredFriends.map((friend) => (
         <div
-          key={friend._id}
+          key={friend.id}
           className="flex items-center gap-3 p-2 cursor-pointer hover:bg-muted transition"
           onClick={() => onSelect(friend)}
         >

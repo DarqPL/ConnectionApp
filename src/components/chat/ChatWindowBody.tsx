@@ -10,6 +10,7 @@ const ChatWindowBody = () => {
     conversations,
     messages: allMessages,
     fetchMessages,
+    messageLoading,
   } = useChatStore();
   const [lastMessageStatus, setLastMessageStatus] = useState<"delivered" | "seen">(
     "delivered"
@@ -18,24 +19,12 @@ const ChatWindowBody = () => {
   const messages = allMessages[activeConversationId!]?.items ?? [];
   const reversedMessages = [...messages].reverse();
   const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
-  const selectedConvo = conversations.find((c) => c._id === activeConversationId);
+  const selectedConvo = conversations.find((c) => c.id === activeConversationId);
   const key = `chat-scroll-${activeConversationId}`;
 
   // ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // seen status
-  useEffect(() => {
-    const lastMessage = selectedConvo?.lastMessage;
-    if (!lastMessage) {
-      return;
-    }
-
-    const seenBy = selectedConvo?.seenBy ?? [];
-
-    setLastMessageStatus(seenBy.length > 0 ? "seen" : "delivered");
-  }, [selectedConvo]);
 
   // kéo xuống dưới khi load convo
   useLayoutEffect(() => {
@@ -45,7 +34,7 @@ const ChatWindowBody = () => {
   }, [activeConversationId]);
 
   const fetchMoreMessages = async () => {
-    if (!activeConversationId) {
+    if (activeConversationId == null) {
       return;
     }
 
@@ -58,7 +47,7 @@ const ChatWindowBody = () => {
 
   const handleScrollSave = () => {
     const container = containerRef.current;
-    if (!container || !activeConversationId) {
+    if (!container || activeConversationId == null) {
       return;
     }
 
@@ -90,6 +79,13 @@ const ChatWindowBody = () => {
   }
 
   if (!messages?.length) {
+    if (messageLoading) {
+      return (
+        <div className="flex h-full items-center justify-center text-muted-foreground">
+          Đang tải tin nhắn...
+        </div>
+      );
+    }
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground ">
         Chưa có tin nhắn nào trong cuộc trò chuyện này.
@@ -121,7 +117,7 @@ const ChatWindowBody = () => {
         >
           {reversedMessages.map((message, index) => (
             <MessageItem
-              key={message._id ?? index}
+              key={message.id ?? index}
               message={message}
               index={index}
               messages={reversedMessages}

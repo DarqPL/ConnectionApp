@@ -8,9 +8,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { User } from "@/types/user";
+import { useState } from "react";
+import { useUserStore } from "@/stores/useUserStore";
 
 type EditableField = {
   key: keyof Pick<User, "displayName" | "username" | "email" | "phone">;
@@ -30,6 +31,22 @@ type Props = {
 };
 
 const PersonalInfoForm = ({ userInfo }: Props) => {
+  const { updateProfile } = useUserStore();
+  const [formData, setFormData] = useState<Partial<User>>({
+    displayName: userInfo?.displayName ?? "",
+    username: userInfo?.username ?? "",
+    email: userInfo?.email ?? "",
+    phone: userInfo?.phone ?? "",
+  });
+
+  const handleChange = (key: keyof User, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    await updateProfile(formData);
+  };
+
   if (!userInfo) return null;
 
   return (
@@ -55,26 +72,18 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
               <Input
                 id={key}
                 type={type ?? "text"}
-                value={userInfo[key] ?? ""}
-                onChange={() => { }}
+                value={(formData[key] as string) ?? ""}
+                onChange={(e) => handleChange(key, e.target.value)}
                 className="glass-light border-border/30"
               />
             </div>
           ))}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="bio">Giới thiệu</Label>
-          <Textarea
-            id="bio"
-            rows={3}
-            value={userInfo.bio ?? ""}
-            onChange={() => { }}
-            className="glass-light border-border/30 resize-none"
-          />
-        </div>
-
-        <Button className="w-full md:w-auto bg-gradient-primary hover:opacity-90 transition-opacity">
+        <Button
+          onClick={handleSave}
+          className="w-full md:w-auto bg-gradient-primary hover:opacity-90 transition-opacity"
+        >
           Lưu thay đổi
         </Button>
       </CardContent>

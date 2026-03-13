@@ -12,25 +12,26 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
 
   if (!user) return null;
 
-  const unreadCount = convo.unreadCounts[user._id];
-  const name = convo.group?.name ?? "";
-  const handleSelectConversation = async (id: string) => {
+  const unreadCount = convo.unreadCount ?? 0;
+  const name = convo.name ?? "";
+
+  const handleSelectConversation = async (id: number) => {
     setActiveConversation(id);
     if (!messages[id]) {
-      await fetchMessages();
+      await fetchMessages(id);
     }
   };
 
   return (
     <ChatCard
-      convoId={convo._id}
+      convoId={convo.id}
       name={name}
       timestamp={
-        convo.lastMessage?.createdAt
-          ? new Date(convo.lastMessage.createdAt)
+        convo.lastMessageAt
+          ? new Date(convo.lastMessageAt)
           : undefined
       }
-      isActive={activeConversationId === convo._id}
+      isActive={activeConversationId === convo.id}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
       leftSection={

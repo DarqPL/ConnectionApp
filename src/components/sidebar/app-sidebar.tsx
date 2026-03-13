@@ -14,17 +14,18 @@ import {
 } from "@/components/ui/sidebar";
 import { Moon, Sun } from "lucide-react";
 import { Switch } from "../ui/switch";
-// import CreateNewChat from "../chat/CreateNewChat";
-// import NewGroupChatModal from "../chat/NewGroupChatModal";
+import CreateNewChat from "../chat/CreateNewChat";
+import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
-// import AddFriendModal from "../chat/AddFriendModal";
+import AddFriendModal from "../chat/AddFriendModal";
 import DirectMessageList from "../chat/DirectMessageList";
 import { useThemeStore } from "@/stores/useThemeStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { MOCK_CURRENT_USER } from "@/data/mockChatData";
-
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isDark, toggleTheme } = useThemeStore();
+  const { user } = useAuthStore();
 
   return (
     <Sidebar
@@ -64,7 +65,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* New Chat */}
         <SidebarGroup>
           <SidebarGroupContent>
-            {/* <CreateNewChat /> */}
+            <CreateNewChat />
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -72,7 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <div className="flex items-center justify-between">
             <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
-            {/* <NewGroupChatModal /> */}
+            <NewGroupChatModal />
           </div>
 
           <SidebarGroupContent>
@@ -87,7 +88,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title="Kết Bạn"
             className="cursor-pointer"
           >
-            {/* <AddFriendModal /> */}
+            <AddFriendModal />
           </SidebarGroupAction>
 
           <SidebarGroupContent>
@@ -97,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       {/* Footer */}
       <SidebarFooter>
-        <NavUser user={MOCK_CURRENT_USER} />
+        <NavUser user={user || MOCK_CURRENT_USER} />
       </SidebarFooter>
     </Sidebar>
   );

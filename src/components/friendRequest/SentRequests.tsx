@@ -2,30 +2,16 @@ import { useFriendStore } from "@/stores/useFriendStore";
 import FriendRequestItem from "./FriendRequestItem";
 
 const SentRequests = () => {
-  const { sentList } = useFriendStore();
-
-  if (!sentList || sentList.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Bạn chưa gửi lời mời kết bạn nào.
-      </p>
-    );
-  }
+  // Note: Backend doesn't have a "sent requests" endpoint.
+  // The pending requests endpoint returns requests where the current user is the receiver.
+  // To show sent requests, you would need to add a backend endpoint.
+  // For now, this shows an empty state.
 
   return (
     <div className="space-y-3 mt-4">
-      <>
-        {sentList.map((req) => (
-          <FriendRequestItem
-            key={req._id}
-            requestInfo={req}
-            type="sent"
-            actions={
-              <p className="text-muted-foreground text-sm">Đang chờ trả lời...</p>
-            }
-          />
-        ))}
-      </>
+      <p className="text-sm text-muted-foreground">
+        Tính năng xem lời mời đã gửi đang được phát triển.
+      </p>
     </div>
   );
 };

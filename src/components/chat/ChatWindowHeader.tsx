@@ -15,7 +15,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   let otherUser;
 
-  chat = chat ?? conversations.find((c) => c._id === activeConversationId);
+  chat = chat ?? conversations.find((c) => c.id === activeConversationId);
 
   if (!chat) {
     return (
@@ -25,8 +25,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     );
   }
 
-  if (chat.type === "direct") {
-    const otherUsers = chat.participants.filter((p) => p._id !== user?._id);
+  if (chat.type === "PRIVATE") {
+    const otherUsers = chat.participants.filter((p) => p.userId !== user?.id);
     otherUser = otherUsers.length > 0 ? otherUsers[0] : null;
 
     if (!user || !otherUser) return;
@@ -44,17 +44,16 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
         <div className="p-2 w-full flex items-center gap-3">
           {/* avatar */}
           <div className="relative">
-            {chat.type === "direct" ? (
+            {chat.type === "PRIVATE" ? (
               <>
                 <UserAvatar
                   type={"sidebar"}
                   name={otherUser?.displayName || "Moji"}
                   avatarUrl={otherUser?.avatarUrl || undefined}
                 />
-                {/* todo: socket io */}
                 <StatusBadge
                   status={
-                    onlineUsers.includes(otherUser?._id ?? "") ? "online" : "offline"
+                    onlineUsers.includes(String(otherUser?.userId ?? "")) ? "online" : "offline"
                   }
                 />
               </>
@@ -68,7 +67,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
           {/* name */}
           <h2 className="font-semibold text-foreground">
-            {chat.type === "direct" ? otherUser?.displayName : chat.group?.name}
+            {chat.type === "PRIVATE" ? otherUser?.displayName : chat.name}
           </h2>
         </div>
       </div>

@@ -3,11 +3,11 @@ import { formatOnlineTime, cn } from "@/lib/utils";
 import { MoreHorizontal } from "lucide-react";
 
 interface ChatCardProps {
-  convoId: string;
+  convoId: number;
   name: string;
   timestamp?: Date;
   isActive: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: number) => void;
   unreadCount?: number;
   leftSection: React.ReactNode;
   subtitle: React.ReactNode;
@@ -29,7 +29,7 @@ const ChatCard = ({
       className={cn(
         "border-none p-3 cursor-pointer transition-smooth glass hover:bg-muted/30",
         isActive &&
-          "ring-2 ring-primary/50 bg-gradient-to-tr from-primary-glow/10 to-primary-foreground"
+        "ring-2 ring-primary/50 bg-gradient-to-tr from-primary-glow/10 to-primary-foreground"
       )}
       onClick={() => onSelect(convoId)}
     >

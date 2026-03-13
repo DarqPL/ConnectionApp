@@ -1,45 +1,70 @@
 import api from "@/lib/axios";
+import type { Friend } from "@/types/user";
 
 export const friendService = {
-  async searchByUsername(username: string) {
-    const res = await api.get(`/users/search?username=${username}`);
-    return res.data.user;
+  /**
+   * POST /api/friends/request/{receiverId}
+   * Returns: FriendResponse
+   */
+  async sendFriendRequest(receiverId: number): Promise<Friend> {
+    const res = await api.post(`/friends/request/${receiverId}`);
+    return res.data;
   },
 
-  async sendFriendRequest(to: string, message?: string) {
-    const res = await api.post("/friends/requests", { to, message });
-    return res.data.message;
+  /**
+   * POST /api/friends/accept/{requesterId}
+   * Returns: FriendResponse
+   */
+  async acceptFriendRequest(requesterId: number): Promise<Friend> {
+    const res = await api.post(`/friends/accept/${requesterId}`);
+    return res.data;
   },
 
-  async getAllFriendRequest() {
-    try {
-      const res = await api.get("/friends/requests");
-      const { sent, received } = res.data;
-      return { sent, received };
-    } catch (error) {
-      console.error("Lỗi khi gửi getAllFriendRequest", error);
-    }
+  /**
+   * DELETE /api/friends/reject/{requesterId}
+   */
+  async rejectFriendRequest(requesterId: number): Promise<void> {
+    await api.delete(`/friends/reject/${requesterId}`);
   },
 
-  async acceptRequest(requestId: string) {
-    try {
-      const res = await api.post(`/friends/requests/${requestId}/accept`);
-      return res.data.requestAcceptedBy;
-    } catch (error) {
-      console.error("Lỗi khi gửi acceptRequest", error);
-    }
-  },
-
-  async declineRequest(requestId: string) {
-    try {
-      await api.post(`/friends/requests/${requestId}/decline`);
-    } catch (error) {
-      console.error("Lỗi khi gửi declineRequest", error);
-    }
-  },
-
-  async getFriendList() {
+  /**
+   * GET /api/friends
+   * Returns: FriendResponse[]
+   */
+  async getFriends(): Promise<Friend[]> {
     const res = await api.get("/friends");
-    return res.data.friends;
+    return res.data;
+  },
+
+  /**
+   * GET /api/friends/pending
+   * Returns: FriendResponse[]
+   */
+  async getPendingRequests(): Promise<Friend[]> {
+    const res = await api.get("/friends/pending");
+    return res.data;
+  },
+
+  /**
+   * GET /api/friends/check/{otherUserId}
+   * Returns: boolean
+   */
+  async checkFriendship(otherUserId: number): Promise<boolean> {
+    const res = await api.get(`/friends/check/${otherUserId}`);
+    return res.data;
+  },
+
+  /**
+   * POST /api/friends/block/{blockedUserId}
+   */
+  async blockUser(blockedUserId: number): Promise<void> {
+    await api.post(`/friends/block/${blockedUserId}`);
+  },
+
+  /**
+   * DELETE /api/friends/block/{blockedUserId}
+   */
+  async unblockUser(blockedUserId: number): Promise<void> {
+    await api.delete(`/friends/block/${blockedUserId}`);
   },
 };

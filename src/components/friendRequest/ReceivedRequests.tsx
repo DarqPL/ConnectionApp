@@ -4,9 +4,9 @@ import { Button } from "../ui/button";
 import { toast } from "sonner";
 
 const ReceivedRequests = () => {
-  const { acceptRequest, declineRequest, loading, receivedList } = useFriendStore();
+  const { acceptFriendRequest, rejectFriendRequest, loading, pendingRequests } = useFriendStore();
 
-  if (!receivedList || receivedList.length === 0) {
+  if (!pendingRequests || pendingRequests.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         Bạn chưa có lời mời kết bạn nào.
@@ -14,18 +14,18 @@ const ReceivedRequests = () => {
     );
   }
 
-  const handleAccept = async (requestId: string) => {
+  const handleAccept = async (requesterId: number) => {
     try {
-      await acceptRequest(requestId);
+      await acceptFriendRequest(requesterId);
       toast.success("Đã đồng ý kết bạn thành công");
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handleDecline = async (requestId: string) => {
+  const handleDecline = async (requesterId: number) => {
     try {
-      await declineRequest(requestId);
+      await rejectFriendRequest(requesterId);
       toast.info("Đã từ chối kết bạn");
     } catch (error) {
       console.error(error);
@@ -34,16 +34,16 @@ const ReceivedRequests = () => {
 
   return (
     <div className="space-y-3 mt-4">
-      {receivedList.map((req) => (
+      {pendingRequests.map((req) => (
         <FriendRequestItem
-          key={req._id}
+          key={req.id}
           requestInfo={req}
           actions={
             <div className="flex gap-2">
               <Button
                 size="sm"
                 variant="primary"
-                onClick={() => handleAccept(req._id)}
+                onClick={() => handleAccept(req.friendId)}
                 disabled={loading}
               >
                 Chấp nhận
@@ -51,7 +51,7 @@ const ReceivedRequests = () => {
               <Button
                 size="sm"
                 variant="destructiveOutline"
-                onClick={() => handleDecline(req._id)}
+                onClick={() => handleDecline(req.friendId)}
                 disabled={loading}
               >
                 Từ chối

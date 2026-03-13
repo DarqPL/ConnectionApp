@@ -22,40 +22,41 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
 
   if (!user) return null;
 
-  const otherUser = convo.participants.find((p) => p._id !== user._id);
-  if (!otherUser) return null;
+  // Find the other participant (not the current user)
+  const otherParticipant = convo.participants.find((p) => p.userId !== user.id);
+  if (!otherParticipant) return null;
 
-  const unreadCount = convo.unreadCounts?.[user._id] ?? 0;
-  const lastMessage = convo.lastMessage?.content ?? "";
+  const unreadCount = convo.unreadCount ?? 0;
+  const lastMessage = convo.lastMessageContent ?? "";
 
   const isOnline =
-    Array.isArray(onlineUsers) && onlineUsers.includes(otherUser._id);
+    Array.isArray(onlineUsers) && onlineUsers.includes(String(otherParticipant.userId));
 
-  const handleSelectConversation = async (id: string) => {
+  const handleSelectConversation = async (id: number) => {
     setActiveConversation(id);
     if (!messages[id]) {
-      await fetchMessages();
+      await fetchMessages(id);
     }
   };
 
   return (
     <ChatCard
-      convoId={convo._id}
-      name={otherUser.displayName ?? ""}
+      convoId={convo.id}
+      name={otherParticipant.displayName ?? ""}
       timestamp={
-        convo.lastMessage?.createdAt
-          ? new Date(convo.lastMessage.createdAt)
+        convo.lastMessageAt
+          ? new Date(convo.lastMessageAt)
           : undefined
       }
-      isActive={activeConversationId === convo._id}
+      isActive={activeConversationId === convo.id}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
       leftSection={
         <>
           <UserAvatar
             type="sidebar"
-            name={otherUser.displayName ?? ""}
-            avatarUrl={otherUser.avatarUrl ?? undefined}
+            name={otherParticipant.displayName ?? ""}
+            avatarUrl={otherParticipant.avatarUrl ?? undefined}
           />
           <StatusBadge status={isOnline ? "online" : "offline"} />
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
