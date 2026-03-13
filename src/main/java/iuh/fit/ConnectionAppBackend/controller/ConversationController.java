@@ -162,4 +162,20 @@ public class ConversationController {
 
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Mark conversation as read
+     */
+    @PutMapping("/{conversationId}/read")
+    public ResponseEntity<Void> markAsRead(
+            Authentication authentication,
+            @PathVariable Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.markAsRead(conversationId, userId);
+        return ResponseEntity.noContent().build();
+    }
 }

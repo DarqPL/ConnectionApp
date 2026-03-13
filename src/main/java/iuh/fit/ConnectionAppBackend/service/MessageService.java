@@ -74,6 +74,10 @@ public class MessageService {
 
 
         Message savedMessage = messageRepository.save(message);
+
+        // Increment unread counts for other members
+        conversationUserRepository.incrementUnreadCount(request.getConversationId(), senderId);
+
         MessageResponse response = mapToMessageResponse(savedMessage);
 
         messagingTemplate.convertAndSend("/topic/conversation" + request.getConversationId(), response);
