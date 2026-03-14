@@ -5,6 +5,8 @@ import ChatListScreen from "./features/chat/screens/ChatListScreen";
 import ChatRoomScreen from "./features/chat/screens/ChatRoomScreen";
 import SignInScreen from "./features/auth/screens/SignInScreen";
 import SignUpScreen from "./features/auth/screens/SignUpScreen";
+import { AuthProvider, useAuth } from "./features/auth/context/AuthContext";
+import { ChatProvider } from "./features/chat/context/ChatContext";
 
 export type RootStackParamList = {
   SignIn: undefined;
@@ -15,37 +17,59 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App() {
+function AppNavigator() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="ChatList">
-        <Stack.Screen
-          name="SignIn"
-          component={SignInScreen}
-          options={{ headerShown: false }}
-        />
+      <Stack.Navigator>
+        {!isAuthenticated ? (
+          // Auth Stack
+          <>
+            <Stack.Screen
+              name="SignIn"
+              component={SignInScreen}
+              options={{ headerShown: false }}
+            />
 
-        <Stack.Screen
-          name="SignUp"
-          component={SignUpScreen}
-          options={{ headerShown: false }}
-        />
+            <Stack.Screen
+              name="SignUp"
+              component={SignUpScreen}
+              options={{ headerShown: false }}
+            />
+          </>
+        ) : (
+          // Chat Stack
+          <>
+            <Stack.Screen
+              name="ChatList"
+              component={ChatListScreen}
+              options={{
+                title: "Connection 💜",
+                headerShown: true,
+              }}
+            />
 
-        <Stack.Screen
-          name="ChatList"
-          component={ChatListScreen}
-          options={{ title: "Connection 💜" }}
-        />
-
-        <Stack.Screen
-          name="ChatRoom"
-          component={ChatRoomScreen}
-          options={({ route }) => ({
-            title: route.params.name,
-          })}
-        />
-  </Stack.Navigator>
-
+            <Stack.Screen
+              name="ChatRoom"
+              component={ChatRoomScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+          </>
+        )}
+      </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ChatProvider>
+        <AppNavigator />
+      </ChatProvider>
+    </AuthProvider>
   );
 }

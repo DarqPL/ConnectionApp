@@ -3,9 +3,18 @@ import { View, TextInput, StyleSheet } from "react-native";
 interface Props {
   placeholder: string;
   secureTextEntry?: boolean;
+  value?: string;
+  onChangeText?: (text: string) => void;
+  editable?: boolean;
 }
 
-export default function AuthInput({ placeholder, secureTextEntry }: Props) {
+export default function AuthInput({
+  placeholder,
+  secureTextEntry,
+  value,
+  onChangeText,
+  editable = true,
+}: Props) {
   return (
     <View style={styles.container}>
       <TextInput
@@ -13,6 +22,9 @@ export default function AuthInput({ placeholder, secureTextEntry }: Props) {
         secureTextEntry={secureTextEntry}
         style={styles.input}
         placeholderTextColor="#999"
+        value={value}
+        onChangeText={onChangeText}
+        editable={editable}
       />
     </View>
   );
