@@ -5,11 +5,13 @@ import { useEffect } from "react";
 import { useChatStore } from "@/stores/useChatStore";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 
 const ChatAppPage = () => {
   const { fetchConversations } = useChatStore();
   const { getFriends } = useFriendStore();
   const { fetchMe, user } = useAuthStore();
+  const { connectSocket, disconnectSocket } = useSocketStore();
 
   useEffect(() => {
     fetchMe();
@@ -19,8 +21,13 @@ const ChatAppPage = () => {
     if (user) {
       fetchConversations();
       getFriends();
+      connectSocket(user.id);
+
+      return () => {
+        disconnectSocket();
+      };
     }
-  }, [user, fetchConversations, getFriends]);
+  }, [user, fetchConversations, getFriends, connectSocket, disconnectSocket]);
 
   return (
     <SidebarProvider>

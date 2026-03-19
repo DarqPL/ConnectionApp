@@ -5,7 +5,6 @@ import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
 import { useEffect } from "react";
-import { useSocketStore } from "@/stores/useSocketStore";
 
 const ChatWindowLayout = () => {
   const {
@@ -14,26 +13,18 @@ const ChatWindowLayout = () => {
     fetchMessages,
     messages: allMessages,
   } = useChatStore();
-  const { connectSocket, disconnectSocket } = useSocketStore();
 
   const selectedConvo =
     conversations.find((c) => c.id === activeConversationId) ?? null;
 
   useEffect(() => {
     if (activeConversationId) {
-      // Connect socket when active conversation changes
-      connectSocket(activeConversationId);
-
       // Fetch initial messages if not fetched yet
       if (!allMessages[activeConversationId]) {
         fetchMessages(activeConversationId);
       }
-
-      return () => {
-        disconnectSocket();
-      };
     }
-  }, [activeConversationId, connectSocket, disconnectSocket, fetchMessages, allMessages]);
+  }, [activeConversationId, fetchMessages, allMessages]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;

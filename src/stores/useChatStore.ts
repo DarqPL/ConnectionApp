@@ -118,18 +118,24 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const prevItems = state.messages[conversationId]?.items ?? [];
 
+          const updatedConversations = state.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                ...c,
+                lastMessageContent: content,
+                lastMessageAt: messageWithOwn.createdAt,
+              }
+              : c
+          );
+
+          const targetConvo = updatedConversations.find(c => c.id === conversationId);
+          const otherConvos = updatedConversations.filter(c => c.id !== conversationId);
+          const finalConversations = targetConvo ? [targetConvo, ...otherConvos] : updatedConversations;
+
           if (prevItems.some((m) => m.id === messageWithOwn.id)) {
             // Update conversation's last message info anyway
             return {
-              conversations: state.conversations.map((c) =>
-                c.id === conversationId
-                  ? {
-                    ...c,
-                    lastMessageContent: content,
-                    lastMessageAt: messageWithOwn.createdAt,
-                  }
-                  : c
-              ),
+              conversations: finalConversations,
             };
           }
 
@@ -143,15 +149,7 @@ export const useChatStore = create<ChatState>()(
               },
             },
             // Update conversation's last message info
-            conversations: state.conversations.map((c) =>
-              c.id === conversationId
-                ? {
-                  ...c,
-                  lastMessageContent: content,
-                  lastMessageAt: messageWithOwn.createdAt,
-                }
-                : c
-            ),
+            conversations: finalConversations,
           };
         });
       } catch (error) {
@@ -175,17 +173,42 @@ export const useChatStore = create<ChatState>()(
         isOwn: user ? message.senderInfo.senderId === user.id : false,
       };
 
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [convoId]: {
-            items: [...prevItems, messageWithOwn],
-            hasMore: state.messages[convoId]?.hasMore ?? false,
-            page: state.messages[convoId]?.page ?? 0,
-          },
-        },
-        // Update conversation
-        conversations: state.conversations.map((c) =>
+      // Check if conversation exists in state
+      const convoExists = get().conversations.some((c) => c.id === convoId);
+
+      if (!convoExists) {
+        // Conversation not in state — fetch it from backend and add it
+        chatService.fetchConversationById(convoId).then((convo) => {
+          set((state) => {
+            const otherConvos = state.conversations.filter(c => c.id !== convoId);
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  items: [messageWithOwn],
+                  hasMore: false,
+                  page: 0,
+                },
+              },
+              conversations: [
+                {
+                  ...convo,
+                  lastMessageContent: message.content ?? "",
+                  lastMessageAt: message.createdAt,
+                  unreadCount: state.activeConversationId === convoId
+                    ? 0
+                    : 1,
+                },
+                ...otherConvos,
+              ],
+            };
+          });
+        }).catch(console.error);
+        return;
+      }
+
+      set((state) => {
+        const updatedConversations = state.conversations.map((c) =>
           c.id === convoId
             ? {
               ...c,
@@ -197,8 +220,24 @@ export const useChatStore = create<ChatState>()(
                 : (c.unreadCount || 0) + 1,
             }
             : c
-        ),
-      }));
+        );
+
+        const targetConvo = updatedConversations.find(c => c.id === convoId);
+        const otherConvos = updatedConversations.filter(c => c.id !== convoId);
+        const finalConversations = targetConvo ? [targetConvo, ...otherConvos] : updatedConversations;
+
+        return {
+          messages: {
+            ...state.messages,
+            [convoId]: {
+              items: [...prevItems, messageWithOwn],
+              hasMore: state.messages[convoId]?.hasMore ?? false,
+              page: state.messages[convoId]?.page ?? 0,
+            },
+          },
+          conversations: finalConversations,
+        };
+      });
 
       // If we are currently viewing it, notify backend that we've read it
       if (get().activeConversationId === convoId) {
@@ -216,14 +255,12 @@ export const useChatStore = create<ChatState>()(
 
     addConvo: (convo) => {
       set((state) => {
-        const exists = state.conversations.some(
-          (c) => c.id === convo.id
+        const otherConvos = state.conversations.filter(
+          (c) => c.id !== convo.id
         );
 
         return {
-          conversations: exists
-            ? state.conversations
-            : [convo, ...state.conversations],
+          conversations: [convo, ...otherConvos],
           activeConversationId: convo.id,
         };
       });
@@ -237,7 +274,9 @@ export const useChatStore = create<ChatState>()(
           type,
           participantIds,
         });
-        get().addConvo(newConvo);
+        // Re-fetch to ensure we have complete data (including participants)
+        const fullConvo = await chatService.fetchConversationById(newConvo.id);
+        get().addConvo(fullConvo);
       } catch (error) {
         console.error("Error creating conversation:", error);
         throw error;
