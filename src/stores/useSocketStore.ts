@@ -7,7 +7,7 @@ import { useChatStore } from "./useChatStore";
 interface SocketState {
   client: Client | null;
   onlineUsers: string[];
-  connectSocket: (conversationId: number) => void;
+  connectSocket: (userId: number) => void;
   disconnectSocket: () => void;
 }
 
@@ -15,7 +15,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   client: null,
   onlineUsers: [],
 
-  connectSocket: (conversationId) => {
+  connectSocket: (userId) => {
     const token = useAuthStore.getState().accessToken;
     const existingClient = get().client;
 
@@ -33,12 +33,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       onConnect: () => {
         console.log("Connected to WebSocket");
 
-        // Subscribe to conversation messages
+        // Subscribe to personal user topic for all conversation messages
         client.subscribe(
-          `/topic/conversation${conversationId}`,
+          `/topic/user.${userId}`,
           (message) => {
             const newMessage = JSON.parse(message.body);
             useChatStore.getState().addMessage(newMessage);
+          }
+        );
+
+        // Subscribe to new conversation notifications
+        client.subscribe(
+          `/topic/user.${userId}/conversations`,
+          (message) => {
+            const newConvo = JSON.parse(message.body);
+            useChatStore.getState().addConvo(newConvo);
           }
         );
 
