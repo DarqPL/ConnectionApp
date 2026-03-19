@@ -5,6 +5,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
@@ -81,6 +82,12 @@ public class MessageService {
         MessageResponse response = mapToMessageResponse(savedMessage);
 
         messagingTemplate.convertAndSend("/topic/conversation" + request.getConversationId(), response);
+
+        // Also notify each participant via their personal topic
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(request.getConversationId());
+        for (ConversationUser member : members) {
+            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId(), response);
+        }
 
         return response;
     }
