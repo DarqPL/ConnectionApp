@@ -18,9 +18,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +40,12 @@ public class ConversationService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     /**
      * Get all conversations for a user with pagination
@@ -131,7 +140,23 @@ public class ConversationService {
             }
         }
 
-        return mapToConversationResponse(savedConversation);
+        // Flush and clear persistence context so re-fetch gets fresh data with participants
+        entityManager.flush();
+        entityManager.clear();
+
+        // Re-fetch conversation with participants loaded to return complete response
+        Conversation fullConversation = conversationRepository.findByIdWithUsers(savedConversation.getId())
+                .orElse(savedConversation);
+
+        ConversationResponse response = mapToConversationResponse(fullConversation);
+
+        // Notify all participants about the new conversation via WebSocket
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(savedConversation.getId());
+        for (ConversationUser member : members) {
+            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/conversations", response);
+        }
+
+        return response;
     }
 
     /**
