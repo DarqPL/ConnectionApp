@@ -20,7 +20,7 @@ public class MessageResponse {
     private List<AttachmentResponse> attachments;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Long parentId;
+    private String parentId;
     private boolean isDeleted;
 
     @Data
