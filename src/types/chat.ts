@@ -55,8 +55,10 @@ export interface Message {
   attachments: Attachment[];
   createdAt: string;
   updatedAt: string | null;
-  parentId: number | null;
+  parentId: string | null;
   isDeleted: boolean;
+  recalledAt: string | null;
+  replyInfo: ReplyInfo | null;
   isOwn?: boolean; // computed on frontend
 }
 
@@ -71,13 +73,19 @@ export interface Attachment {
   type: string; // IMAGE, VIDEO, FILE, AUDIO
 }
 
+export interface ReplyInfo {
+  parentId: string;
+  parentContent: string | null;
+  parentSenderName: string;
+}
+
 /**
  * MessageRequest to backend
  */
 export interface MessageRequest {
   conversationId: number;
   content: string;
-  parentId?: number | null;
+  parentId?: string | null;
 }
 
 /**

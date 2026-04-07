@@ -48,8 +48,10 @@ export interface ChatState {
   setActiveConversation: (id: number | null) => void;
   fetchConversations: (page?: number) => Promise<void>;
   fetchMessages: (conversationId?: number) => Promise<void>;
-  sendMessage: (conversationId: number, content: string, parentId?: number | null) => Promise<void>;
+  sendMessage: (conversationId: number, content: string, parentId?: string | null) => Promise<void>;
   addMessage: (message: Message) => void;
+  updateMessage: (message: Message) => void;
+  recallMessage: (conversationId: number, messageId: string) => Promise<void>;
   updateConversation: (conversation: Partial<Conversation> & { id: number }) => void;
   addConvo: (convo: Conversation) => void;
   createConversation: (

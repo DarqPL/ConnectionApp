@@ -253,6 +253,59 @@ export const useChatStore = create<ChatState>()(
       }));
     },
 
+    updateMessage: (message) => {
+      const convoId = message.conversationId;
+      const user = useAuthStore.getState().user;
+      const messageWithOwn: Message = {
+        ...message,
+        isOwn: user ? message.senderInfo.senderId === user.id : false,
+      };
+
+      set((state) => {
+        const prevItems = state.messages[convoId]?.items ?? [];
+        return {
+          messages: {
+            ...state.messages,
+            [convoId]: {
+              ...state.messages[convoId],
+              items: prevItems.map((m) =>
+                m.id === messageWithOwn.id ? messageWithOwn : m
+              ),
+            },
+          },
+        };
+      });
+    },
+
+    recallMessage: async (conversationId, messageId) => {
+      try {
+        const response = await chatService.recallMessage(messageId);
+        const user = useAuthStore.getState().user;
+        const messageWithOwn: Message = {
+          ...response,
+          isOwn: user ? response.senderInfo.senderId === user.id : false,
+        };
+
+        set((state) => {
+          const prevItems = state.messages[conversationId]?.items ?? [];
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...state.messages[conversationId],
+                items: prevItems.map((m) =>
+                  m.id === messageWithOwn.id ? messageWithOwn : m
+                ),
+              },
+            },
+          };
+        });
+      } catch (error) {
+        console.error("Error recalling message:", error);
+        throw error;
+      }
+    },
+
     addConvo: (convo) => {
       set((state) => {
         const otherConvos = state.conversations.filter(

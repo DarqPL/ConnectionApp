@@ -4,7 +4,8 @@ import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { Message } from "@/types/chat";
 
 const ChatWindowLayout = () => {
   const {
@@ -14,8 +15,15 @@ const ChatWindowLayout = () => {
     messages: allMessages,
   } = useChatStore();
 
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+
   const selectedConvo =
     conversations.find((c) => c.id === activeConversationId) ?? null;
+
+  // Clear reply when switching conversations
+  useEffect(() => {
+    setReplyTo(null);
+  }, [activeConversationId]);
 
   useEffect(() => {
     if (activeConversationId) {
@@ -37,11 +45,15 @@ const ChatWindowLayout = () => {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto bg-primary-foreground">
-        <ChatWindowBody />
+        <ChatWindowBody onReply={(msg) => setReplyTo(msg)} />
       </div>
 
       {/* Footer */}
-      <MessageInput selectedConvo={selectedConvo} />
+      <MessageInput
+        selectedConvo={selectedConvo}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+      />
     </SidebarInset>
   );
 };

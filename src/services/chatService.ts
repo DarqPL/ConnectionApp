@@ -48,7 +48,7 @@ export const chatService = {
   async sendMessage(
     conversationId: number,
     content: string,
-    parentId?: number | null
+    parentId?: string | null
   ): Promise<Message> {
     const res = await api.post("/messages", {
       conversationId,
@@ -73,6 +73,15 @@ export const chatService = {
    */
   async deleteMessage(messageId: string): Promise<void> {
     await api.delete(`/messages/${messageId}`);
+  },
+
+  /**
+   * PUT /api/messages/{messageId}/recall
+   * Returns: MessageResponse
+   */
+  async recallMessage(messageId: string): Promise<Message> {
+    const res = await api.put(`/messages/${messageId}/recall`);
+    return res.data;
   },
 
   /**
