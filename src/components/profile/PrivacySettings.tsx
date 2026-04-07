@@ -2,13 +2,14 @@ import { authService, type DeviceSession } from "@/services/authService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import {
   Bell,
+  Globe,
   Laptop,
   Loader2,
+  RotateCcw,
   Shield,
   ShieldBan,
   Smartphone,
   Tablet,
-  Globe,
 } from "lucide-react";
 import {
   Card,
@@ -21,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
-import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
 
 const formatDate = (value?: string) => {
@@ -141,7 +141,7 @@ const PrivacySettings = () => {
         <Separator />
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <h4 className="font-medium">Thiết bị đang đăng nhập</h4>
             <Button
               variant="outline"
@@ -174,31 +174,30 @@ const PrivacySettings = () => {
                     key={device.id}
                     className="rounded-lg border border-border/40 p-3 bg-background/40"
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-2">
                       <div className="flex items-start gap-3 min-w-0">
                         <div className="rounded-md bg-primary/10 p-2 mt-0.5">
                           <DeviceIcon className="size-4 text-primary" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium truncate">
+                          <p className="font-medium wrap-break-word">
                             {device.deviceName || "Unknown device"}
                           </p>
-                          <p className="text-xs text-muted-foreground truncate">
+                          <p className="text-xs text-muted-foreground wrap-break-word">
                             IP: {device.ipAddress || "-"}
                           </p>
-                          <p className="text-xs text-muted-foreground truncate">
+                          <p className="text-xs text-muted-foreground break-all leading-relaxed">
                             {device.userAgent || "-"}
                           </p>
                         </div>
                       </div>
-
-                      <Badge variant="outline" className="shrink-0">
-                        Hết hạn: {formatDate(device.expiryDate)}
-                      </Badge>
                     </div>
 
-                    <div className="mt-2 text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground wrap-break-word">
                       Lần hoạt động gần nhất: {formatDate(device.lastUsedAt)}
+                    </div>
+                    <div className="text-xs text-muted-foreground wrap-break-word">
+                      Hết hạn: {formatDate(device.expiryDate)}
                     </div>
                   </div>
                 );
@@ -208,16 +207,17 @@ const PrivacySettings = () => {
         </div>
 
         <div className="pt-4 border-t border-border/30">
-          <h4 className="font-medium mb-3 text-destructive">
-            Khu vực nguy hiểm
-          </h4>
           <Button
             variant="destructive"
             className="w-full"
             onClick={handleLogoutAllDevices}
             disabled={logoutAllLoading}
           >
-            {logoutAllLoading && <Loader2 className="size-4 animate-spin" />}
+            {logoutAllLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}
             Đăng xuất tất cả thiết bị
           </Button>
         </div>
