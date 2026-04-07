@@ -20,8 +20,10 @@ public class MessageResponse {
     private List<AttachmentResponse> attachments;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Long parentId;
+    private String parentId;
     private boolean isDeleted;
+    private LocalDateTime recalledAt;
+    private ReplyInfoResponse replyInfo;
 
     @Data
     @NoArgsConstructor
@@ -40,5 +42,15 @@ public class MessageResponse {
     public static class AttachmentResponse {
         private String fileUrl;
         private String type;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ReplyInfoResponse {
+        private String parentId;
+        private String parentContent;
+        private String parentSenderName;
     }
 }

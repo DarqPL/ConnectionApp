@@ -127,6 +127,22 @@ public class MessageController {
     }
 
     /**
+     * Recall (unsend) a message
+     */
+    @PutMapping("/{messageId}/recall")
+    public ResponseEntity<MessageResponse> recallMessage(
+            Authentication authentication,
+            @PathVariable String messageId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        MessageResponse message = messageService.recallMessage(messageId, userId);
+        return ResponseEntity.ok(message);
+    }
+
+    /**
      * Search messages
      */
     @GetMapping("/search")
