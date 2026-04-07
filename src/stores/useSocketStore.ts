@@ -51,6 +51,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           }
         );
 
+        // Subscribe to message recall notifications
+        client.subscribe(
+          `/topic/user.${userId}/recall`,
+          (message) => {
+            const recalledMessage = JSON.parse(message.body);
+            useChatStore.getState().updateMessage(recalledMessage);
+          }
+        );
+
         // Subscribe to online users
         client.subscribe("/topic/online-users", (message) => {
           const users = JSON.parse(message.body);

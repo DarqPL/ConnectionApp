@@ -3,8 +3,13 @@ import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
+import type { Message } from "@/types/chat";
 
-const ChatWindowBody = () => {
+interface ChatWindowBodyProps {
+  onReply: (message: Message) => void;
+}
+
+const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
   const {
     activeConversationId,
     conversations,
@@ -123,6 +128,7 @@ const ChatWindowBody = () => {
               messages={reversedMessages}
               selectedConvo={selectedConvo}
               lastMessageStatus={lastMessageStatus}
+              onReply={onReply}
             />
           ))}
         </InfiniteScroll>

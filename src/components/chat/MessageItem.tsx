@@ -2,6 +2,10 @@ import { cn, formatMessageTime } from "@/lib/utils";
 import type { Conversation, Message, Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
+import { CornerUpLeft, Undo2 } from "lucide-react";
+import { useChatStore } from "@/stores/useChatStore";
+import { toast } from "sonner";
+import { useState, useRef, useEffect } from "react";
 
 interface MessageItemProps {
   message: Message;
@@ -9,6 +13,7 @@ interface MessageItemProps {
   messages: Message[];
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
+  onReply: (message: Message) => void;
 }
 
 const MessageItem = ({
@@ -17,7 +22,12 @@ const MessageItem = ({
   messages,
   selectedConvo,
   lastMessageStatus,
+  onReply,
 }: MessageItemProps) => {
+  const { recallMessage } = useChatStore();
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   const prev = index + 1 < messages.length ? messages[index + 1] : undefined;
 
   const isShowTime =
@@ -34,6 +44,35 @@ const MessageItem = ({
     (p: Participant) => p.userId === message.senderInfo.senderId
   );
 
+  const isRecalled = !!message.recalledAt;
+
+  // Close menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
+
+  const handleRecall = async () => {
+    setShowMenu(false);
+    try {
+      await recallMessage(message.conversationId, message.id);
+    } catch {
+      toast.error("Không thể thu hồi tin nhắn. Vui lòng thử lại!");
+    }
+  };
+
+  const handleReply = () => {
+    setShowMenu(false);
+    onReply(message);
+  };
+
   return (
     <>
       {/* time */}
@@ -45,13 +84,13 @@ const MessageItem = ({
 
       <div
         className={cn(
-          "flex gap-2 message-bounce mt-1",
+          "flex gap-2 message-bounce mt-1 group",
           message.isOwn ? "justify-end" : "justify-start"
         )}
       >
         {/* avatar */}
         {!message.isOwn && (
-          <div className="w-8">
+          <div className="w-8 flex-shrink-0">
             {isGroupBreak && (
               <UserAvatar
                 type="chat"
@@ -62,21 +101,77 @@ const MessageItem = ({
           </div>
         )}
 
-        {/* tin nhắn */}
+        {/* Message + action row */}
         <div
           className={cn(
-            "max-w-xs lg:max-w-md space-y-1 flex flex-col",
-            message.isOwn ? "items-end" : "items-start"
+            "flex items-center gap-1",
+            message.isOwn ? "flex-row-reverse" : "flex-row"
           )}
         >
-          <Card
+          {/* Bubble column */}
+          <div
             className={cn(
-              "p-3",
-              message.isOwn ? "chat-bubble-sent border-0" : "chat-bubble-received"
+              "max-w-xs lg:max-w-md space-y-0 flex flex-col",
+              message.isOwn ? "items-end" : "items-start"
             )}
           >
-            <p className="text-sm leading-relaxed break-words">{message.content}</p>
-          </Card>
+            {/* Reply preview */}
+            {message.replyInfo && !isRecalled && (
+              <div className="text-xs px-3 py-1.5 rounded-t-lg border-l-2 border-primary/40 bg-muted/60 max-w-full mb-0">
+                <span className="font-semibold text-primary/70 text-[11px]">
+                  {message.replyInfo.parentSenderName}
+                </span>
+                <p className="truncate text-muted-foreground text-[11px]">
+                  {message.replyInfo.parentContent ?? "Tin nhắn đã được thu hồi"}
+                </p>
+              </div>
+            )}
+
+            <Card
+              className={cn(
+                "p-3",
+                isRecalled
+                  ? "bg-muted/30 border-dashed border-muted-foreground/30"
+                  : message.isOwn ? "chat-bubble-sent border-0" : "chat-bubble-received",
+                message.replyInfo && !isRecalled ? "rounded-t-none" : ""
+              )}
+            >
+              {isRecalled ? (
+                <p className="text-sm leading-relaxed italic text-muted-foreground">
+                  Tin nhắn đã được thu hồi
+                </p>
+              ) : (
+                <p className="text-sm leading-relaxed break-words">{message.content}</p>
+              )}
+            </Card>
+          </div>
+
+          {/* Action buttons — inline next to bubble */}
+          {!isRecalled && (
+            <div
+              ref={menuRef}
+              className="relative flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={handleReply}
+                  className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                  title="Trả lời"
+                >
+                  <CornerUpLeft className="size-3.5 text-muted-foreground" />
+                </button>
+                {message.isOwn && (
+                  <button
+                    onClick={handleRecall}
+                    className="p-1.5 rounded-full hover:bg-destructive/10 transition-colors"
+                    title="Thu hồi"
+                  >
+                    <Undo2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
