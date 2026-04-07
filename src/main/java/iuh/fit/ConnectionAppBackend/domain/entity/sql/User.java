@@ -52,6 +52,9 @@ public class User {
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
+    @Column(nullable = false)
+    private Integer tokenVersion = 0;
+
     @LastModifiedDate
     private LocalDateTime updateAt;
 

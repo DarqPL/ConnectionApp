@@ -20,9 +20,20 @@ public class RefreshToken {
     @Column(nullable = false,unique = true)
     private String token;
 
-    @OneToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    private String deviceName;
+
+    @Column(length = 512)
+    private String userAgent;
+
+    private String ipAddress;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime lastUsedAt;
 
     private LocalDateTime expiryDate;
 }
