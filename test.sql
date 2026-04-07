@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS `refesh_tokens` (
   `user_id` bigint(20) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `UKhsw7kv130m2flob0vdw8y38w2` (`token`),
-  UNIQUE KEY `UK6iywvmoux7tf6x87lybauuk6o` (`user_id`),
+  KEY `idx_refesh_tokens_user_id` (`user_id`),
   CONSTRAINT `FKndh3gopjg6n48emqb8iihy6pb` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
 
