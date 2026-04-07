@@ -167,6 +167,41 @@ public class MessageService {
     }
 
     /**
+     * Recall (unsend) a message
+     */
+    @Transactional
+    public MessageResponse recallMessage(String messageId, Long userId) {
+        Message message = messageRepository.findByIdAndIsDeletedFalse(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + messageId));
+
+        // Check if user is the sender
+        if (!message.getSenderInfo().getSenderId().equals(userId)) {
+            throw new UnauthorizedException("User can only recall their own messages");
+        }
+
+        // Check if message is already recalled
+        if (message.getRecalledAt() != null) {
+            throw new BadRequestException("Message is already recalled");
+        }
+
+        message.setRecalledAt(LocalDateTime.now());
+        message.setContent(null);
+        message.setAttachments(new java.util.ArrayList<>());
+        message.setUpdateAt(LocalDateTime.now());
+
+        Message updatedMessage = messageRepository.save(message);
+        MessageResponse response = mapToMessageResponse(updatedMessage);
+
+        // Broadcast recall to all members via WebSocket
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(message.getConversationId());
+        for (ConversationUser member : members) {
+            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/recall", response);
+        }
+
+        return response;
+    }
+
+    /**
      * Search messages
      */
     public List<MessageResponse> searchMessages(Long conversationId, Long userId, String searchTerm) {
@@ -206,16 +241,30 @@ public class MessageService {
                         .build())
                 .collect(Collectors.toList());
 
+        // Build reply info if parentId exists
+        MessageResponse.ReplyInfoResponse replyInfo = null;
+        if (message.getParentId() != null) {
+            replyInfo = messageRepository.findById(message.getParentId())
+                    .map(parent -> MessageResponse.ReplyInfoResponse.builder()
+                            .parentId(parent.getId())
+                            .parentContent(parent.getRecalledAt() != null ? null : parent.getContent())
+                            .parentSenderName(parent.getSenderInfo().getDisplayName())
+                            .build())
+                    .orElse(null);
+        }
+
         return MessageResponse.builder()
                 .id(message.getId())
                 .conversationId(message.getConversationId())
                 .senderInfo(senderInfo)
-                .content(message.getContent())
+                .content(message.getRecalledAt() != null ? null : message.getContent())
                 .attachments(attachments)
                 .createdAt(message.getCreatedAt())
                 .updatedAt(message.getUpdateAt())
                 .parentId(message.getParentId())
                 .isDeleted(message.isDeleted())
+                .recalledAt(message.getRecalledAt())
+                .replyInfo(replyInfo)
                 .build();
     }
 }

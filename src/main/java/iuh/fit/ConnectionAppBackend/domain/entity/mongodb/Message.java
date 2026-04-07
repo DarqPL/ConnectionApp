@@ -43,6 +43,9 @@ public class Message {
     @Field("parent_id")
     private String parentId;
 
+    @Field("recalled_at")
+    private LocalDateTime recalledAt;
+
     @Field("is_deleted")
     @Builder.Default
     private boolean isDeleted = false;
@@ -74,5 +77,9 @@ public class Message {
 
     public void setParentId(String parentId) {
         this.parentId = parentId;
+    }
+
+    public void setRecalledAt(LocalDateTime recalledAt) {
+        this.recalledAt = recalledAt;
     }
 }
