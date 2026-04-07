@@ -1,5 +1,15 @@
 import api from "@/lib/axios";
 
+export interface DeviceSession {
+  id: number;
+  deviceName: string;
+  userAgent: string;
+  ipAddress: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiryDate: string;
+}
+
 export const authService = {
   /**
    * POST /api/auth/signup
@@ -11,7 +21,7 @@ export const authService = {
     password: string,
     email: string,
     firstName: string,
-    lastName: string
+    lastName: string,
   ) => {
     const res = await api.post("/auth/signup", {
       username,
@@ -26,23 +36,23 @@ export const authService = {
   /**
    * POST /api/auth/signin
    * Body: { username, password }
-   * Returns: LoginResponse { accessToken, refreshToken }
+   * Returns: LoginResponse { accessToken }
    */
   signIn: async (username: string, password: string) => {
     const res = await api.post("/auth/signin", {
       username,
       password,
     });
-    return res.data; // { accessToken, refreshToken }
+    return res.data; // { accessToken }
   },
 
   /**
-   * Sign out: just clear tokens locally.
-   * Backend doesn't have a signout endpoint (stateless JWT).
+   * POST /api/auth/logout
+   * Revokes current refresh token cookie on server.
    */
   signOut: async () => {
+    await api.post("/auth/logout");
     localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
   },
 
   /**
@@ -56,13 +66,29 @@ export const authService = {
 
   /**
    * POST /api/auth/refresh
-   * Body: { refreshToken }
+   * Uses HttpOnly refresh token cookie
    * Returns: { accessToken }
    */
-  refresh: async (refreshToken: string) => {
-    const res = await api.post("/auth/refresh", {
-      refreshToken,
-    });
+  refresh: async () => {
+    const res = await api.post("/auth/refresh");
     return res.data.accessToken;
+  },
+
+  /**
+   * GET /api/auth/devices
+   * Returns: { devices: DeviceSession[] }
+   */
+  getDevices: async (): Promise<DeviceSession[]> => {
+    const res = await api.get("/auth/devices");
+    return res.data.devices ?? [];
+  },
+
+  /**
+   * POST /api/auth/logout-all
+   * Revoke all active sessions of current user.
+   */
+  logoutAllDevices: async () => {
+    const res = await api.post("/auth/logout-all");
+    return res.data;
   },
 };

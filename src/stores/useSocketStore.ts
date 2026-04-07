@@ -3,6 +3,17 @@ import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
+import { toast } from "sonner";
+
+interface SecurityNotification {
+  type: string;
+  title: string;
+  message: string;
+  deviceName?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  loginAt?: string;
+}
 
 interface SocketState {
   client: Client | null;
@@ -19,7 +30,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const token = useAuthStore.getState().accessToken;
     const existingClient = get().client;
 
-    if (existingClient) return;
+    if (existingClient || !token) return;
 
     const socket = new SockJS("http://localhost:8080/ws");
 
@@ -34,31 +45,38 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         console.log("Connected to WebSocket");
 
         // Subscribe to personal user topic for all conversation messages
-        client.subscribe(
-          `/topic/user.${userId}`,
-          (message) => {
-            const newMessage = JSON.parse(message.body);
-            useChatStore.getState().addMessage(newMessage);
-          }
-        );
+        client.subscribe(`/topic/user.${userId}`, (message) => {
+          const newMessage = JSON.parse(message.body);
+          useChatStore.getState().addMessage(newMessage);
+        });
 
         // Subscribe to new conversation notifications
-        client.subscribe(
-          `/topic/user.${userId}/conversations`,
-          (message) => {
-            const newConvo = JSON.parse(message.body);
-            useChatStore.getState().addConvo(newConvo);
-          }
-        );
+        client.subscribe(`/topic/user.${userId}/conversations`, (message) => {
+          const newConvo = JSON.parse(message.body);
+          useChatStore.getState().addConvo(newConvo);
+        });
 
         // Subscribe to message recall notifications
-        client.subscribe(
-          `/topic/user.${userId}/recall`,
-          (message) => {
-            const recalledMessage = JSON.parse(message.body);
-            useChatStore.getState().updateMessage(recalledMessage);
-          }
-        );
+        client.subscribe(`/topic/user.${userId}/recall`, (message) => {
+          const recalledMessage = JSON.parse(message.body);
+          useChatStore.getState().updateMessage(recalledMessage);
+        });
+
+        // Subscribe to security warnings (unknown-device login).
+        client.subscribe(`/topic/user.${userId}/security`, (message) => {
+          const payload: SecurityNotification = JSON.parse(message.body);
+
+          toast.warning(payload.title || "Cảnh báo bảo mật", {
+            description: [
+              payload.message,
+              payload.deviceName ? `Thiết bị: ${payload.deviceName}` : null,
+              payload.ipAddress ? `IP: ${payload.ipAddress}` : null,
+            ]
+              .filter(Boolean)
+              .join(" • "),
+            duration: 9000,
+          });
+        });
 
         // Subscribe to online users
         client.subscribe("/topic/online-users", (message) => {

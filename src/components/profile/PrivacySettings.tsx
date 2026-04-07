@@ -1,4 +1,15 @@
-import { Shield, Bell, ShieldBan } from "lucide-react";
+import { authService, type DeviceSession } from "@/services/authService";
+import { useAuthStore } from "@/stores/useAuthStore";
+import {
+  Bell,
+  Laptop,
+  Loader2,
+  Shield,
+  ShieldBan,
+  Smartphone,
+  Tablet,
+  Globe,
+} from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -7,57 +18,212 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useNavigate } from "react-router";
+import { Badge } from "../ui/badge";
+import { Separator } from "../ui/separator";
 
-const PrivacySettings = () => (
-  <Card className="glass-strong border-border/30">
-    <CardHeader>
-      <CardTitle className="flex items-center gap-2">
-        <Shield className="h-5 w-5 text-primary" />
-        Quyền riêng tư & Bảo mật
-      </CardTitle>
-      <CardDescription>
-        Quản lý cài đặt quyền riêng tư và bảo mật của bạn
-      </CardDescription>
-    </CardHeader>
+const formatDate = (value?: string) => {
+  if (!value) return "-";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleString("vi-VN", {
+    hour12: false,
+  });
+};
 
-    <CardContent className="space-y-6">
-      <div className="space-y-4">
-        <Button
-          variant="outline"
-          className="w-full justify-start glass-light border-border/30 hover:text-warning"
-        >
-          <Shield className="h-4 w-4 mr-2" />
-          Đổi mật khẩu
-        </Button>
+const iconFromDevice = (deviceName?: string) => {
+  const keyword = (deviceName ?? "").toLowerCase();
+  if (keyword.includes("iphone") || keyword.includes("android"))
+    return Smartphone;
+  if (keyword.includes("ipad") || keyword.includes("tablet")) return Tablet;
+  if (
+    keyword.includes("windows") ||
+    keyword.includes("mac") ||
+    keyword.includes("linux")
+  )
+    return Laptop;
+  return Globe;
+};
 
-        <Button
-          variant="outline"
-          className="w-full justify-start glass-light border-border/30 hover:text-info"
-        >
-          <Bell className="h-4 w-4 mr-2" />
-          Cài đặt thông báo
-        </Button>
+const PrivacySettings = () => {
+  const [devices, setDevices] = useState<DeviceSession[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+  const { clearState } = useAuthStore();
+  const navigate = useNavigate();
 
-        <Button
-          variant="outline"
-          className="w-full justify-start glass-light border-border/30 hover:text-destructive"
-        >
-          <ShieldBan className="size-4 mr-2" />
-          Chặn & Báo cáo
-        </Button>
-      </div>
+  const sortedDevices = useMemo(
+    () =>
+      [...devices].sort((a, b) => {
+        const bTime = new Date(b.lastUsedAt || b.createdAt).getTime();
+        const aTime = new Date(a.lastUsedAt || a.createdAt).getTime();
+        return bTime - aTime;
+      }),
+    [devices],
+  );
 
-      <div className="pt-4 border-t border-border/30">
-        <h4 className="font-medium mb-3 text-destructive">Khu vực nguy hiểm</h4>
-        <Button
-          variant="destructive"
-          className="w-full"
-        >
-          Xoá tài khoản
-        </Button>
-      </div>
-    </CardContent>
-  </Card>
-);
+  const fetchDevices = async () => {
+    setLoadingDevices(true);
+    try {
+      const data = await authService.getDevices();
+      setDevices(data);
+    } catch {
+      toast.error("Không tải được danh sách thiết bị");
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  const handleLogoutAllDevices = async () => {
+    const confirmed = window.confirm(
+      "Bạn có chắc muốn đăng xuất khỏi tất cả thiết bị? Bạn sẽ phải đăng nhập lại.",
+    );
+    if (!confirmed) return;
+
+    setLogoutAllLoading(true);
+    try {
+      await authService.logoutAllDevices();
+      clearState();
+      toast.success("Đã đăng xuất tất cả thiết bị");
+      navigate("/signin");
+    } catch {
+      toast.error("Không thể đăng xuất tất cả thiết bị");
+    } finally {
+      setLogoutAllLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  return (
+    <Card className="glass-strong border-border/30">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-primary" />
+          Quyền riêng tư & Bảo mật
+        </CardTitle>
+        <CardDescription>
+          Quản lý cài đặt quyền riêng tư và phiên đăng nhập của bạn
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          <Button
+            variant="outline"
+            className="w-full justify-start glass-light border-border/30 hover:text-warning"
+          >
+            <Shield className="h-4 w-4 mr-2" />
+            Đổi mật khẩu
+          </Button>
+
+          <Button
+            variant="outline"
+            className="w-full justify-start glass-light border-border/30 hover:text-info"
+          >
+            <Bell className="h-4 w-4 mr-2" />
+            Cài đặt thông báo
+          </Button>
+
+          <Button
+            variant="outline"
+            className="w-full justify-start glass-light border-border/30 hover:text-destructive"
+          >
+            <ShieldBan className="size-4 mr-2" />
+            Chặn & Báo cáo
+          </Button>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="font-medium">Thiết bị đang đăng nhập</h4>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchDevices}
+              disabled={loadingDevices}
+            >
+              {loadingDevices ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                "Làm mới"
+              )}
+            </Button>
+          </div>
+
+          {loadingDevices ? (
+            <div className="text-sm text-muted-foreground">
+              Đang tải danh sách thiết bị...
+            </div>
+          ) : sortedDevices.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              Không có phiên đăng nhập nào đang hoạt động.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sortedDevices.map((device) => {
+                const DeviceIcon = iconFromDevice(device.deviceName);
+                return (
+                  <div
+                    key={device.id}
+                    className="rounded-lg border border-border/40 p-3 bg-background/40"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="rounded-md bg-primary/10 p-2 mt-0.5">
+                          <DeviceIcon className="size-4 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">
+                            {device.deviceName || "Unknown device"}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            IP: {device.ipAddress || "-"}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {device.userAgent || "-"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <Badge variant="outline" className="shrink-0">
+                        Hết hạn: {formatDate(device.expiryDate)}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Lần hoạt động gần nhất: {formatDate(device.lastUsedAt)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="pt-4 border-t border-border/30">
+          <h4 className="font-medium mb-3 text-destructive">
+            Khu vực nguy hiểm
+          </h4>
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={handleLogoutAllDevices}
+            disabled={logoutAllLoading}
+          >
+            {logoutAllLoading && <Loader2 className="size-4 animate-spin" />}
+            Đăng xuất tất cả thiết bị
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 export default PrivacySettings;
