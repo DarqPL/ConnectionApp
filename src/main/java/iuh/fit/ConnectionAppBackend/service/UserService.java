@@ -123,4 +123,66 @@ public class UserService {
                 .status(user.getStatus().name())
                 .build();
     }
+    /**
+     * Lock account
+     */
+    @Transactional
+    public String lockAccount(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new IllegalStateException("Cannot lock a deleted account");
+        }
+
+        if (user.getStatus() == UserStatus.LOCKED) {
+            return "Account is already locked";
+        }
+
+        user.setStatus(UserStatus.LOCKED);
+        userRepository.save(user);
+
+        return "Account locked successfully";
+    }
+
+    /**
+     * Unlock account
+     */
+    @Transactional
+    public String unlockAccount(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new IllegalStateException("Cannot unlock a deleted account");
+        }
+
+        if (user.getStatus() != UserStatus.LOCKED) {
+            return "Account is not locked";
+        }
+
+        // tuỳ logic: OFFLINE hoặc ONLINE
+        user.setStatus(UserStatus.OFFLINE);
+        userRepository.save(user);
+
+        return "Account unlocked successfully";
+    }
+
+    /**
+     * Delete account (soft delete)
+     */
+    @Transactional
+    public String deleteAccount(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (user.getStatus() == UserStatus.DELETED) {
+            return "Account already deleted";
+        }
+
+        user.setStatus(UserStatus.DELETED);
+        userRepository.save(user);
+
+        return "Account deleted successfully";
+    }
 }
