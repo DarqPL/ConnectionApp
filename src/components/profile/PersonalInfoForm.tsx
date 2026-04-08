@@ -29,7 +29,7 @@ const PERSONAL_FIELDS: EditableField[] = [
 type Props = {
   userInfo: User | null;
 };
-
+  
 const PersonalInfoForm = ({ userInfo }: Props) => {
   const { updateProfile } = useUserStore();
   const [formData, setFormData] = useState<Partial<User>>({
@@ -49,6 +49,7 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
 
   if (!userInfo) return null;
 
+  
   return (
     <Card className="glass-strong border-border/30">
       <CardHeader>

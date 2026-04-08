@@ -65,7 +65,7 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
               </TabsContent>
 
               <TabsContent value="privacy">
-                <PrivacySettings />
+                <PrivacySettings user={user}/>
               </TabsContent>
             </Tabs>
           </div>

@@ -7,9 +7,15 @@ import type { Message } from "@/types/chat";
 
 interface ChatWindowBodyProps {
   onReply: (message: Message) => void;
+  isLocked?: boolean;
+  isDeleted?: boolean;
 }
 
-const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
+const ChatWindowBody = ({
+  onReply,
+  isLocked,
+  isDeleted,
+}: ChatWindowBodyProps) => {
   const {
     activeConversationId,
     conversations,
@@ -17,44 +23,36 @@ const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
     fetchMessages,
     messageLoading,
   } = useChatStore();
-  const [lastMessageStatus, setLastMessageStatus] = useState<"delivered" | "seen">(
-    "delivered"
-  );
+
+  const [lastMessageStatus, setLastMessageStatus] = useState<
+    "delivered" | "seen"
+  >("delivered");
 
   const messages = allMessages[activeConversationId!]?.items ?? [];
   const reversedMessages = [...messages].reverse();
   const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
-  const selectedConvo = conversations.find((c) => c.id === activeConversationId);
+
+  const selectedConvo = conversations.find(
+    (c) => c.id === activeConversationId
+  );
+
   const key = `chat-scroll-${activeConversationId}`;
 
-  // ref
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // kéo xuống dưới khi load convo
   useLayoutEffect(() => {
-    if (!messagesEndRef.current) return;
-
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeConversationId]);
 
   const fetchMoreMessages = async () => {
-    if (activeConversationId == null) {
-      return;
-    }
-
-    try {
-      await fetchMessages(activeConversationId);
-    } catch (error) {
-      console.error("Lỗi xảy ra khi fetch thêm tin", error);
-    }
+    if (!activeConversationId) return;
+    await fetchMessages(activeConversationId);
   };
 
   const handleScrollSave = () => {
     const container = containerRef.current;
-    if (!container || activeConversationId == null) {
-      return;
-    }
+    if (!container || !activeConversationId) return;
 
     sessionStorage.setItem(
       key,
@@ -70,7 +68,6 @@ const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
     if (!container) return;
 
     const item = sessionStorage.getItem(key);
-
     if (item) {
       const { scrollTop } = JSON.parse(item);
       requestAnimationFrame(() => {
@@ -83,17 +80,12 @@ const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
     return <ChatWelcomeScreen />;
   }
 
-  if (!messages?.length) {
-    if (messageLoading) {
-      return (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-          Đang tải tin nhắn...
-        </div>
-      );
-    }
+  if (!messages.length) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground ">
-        Chưa có tin nhắn nào trong cuộc trò chuyện này.
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        {messageLoading
+          ? "Đang tải tin nhắn..."
+          : "Chưa có tin nhắn nào trong cuộc trò chuyện này."}
       </div>
     );
   }
@@ -107,6 +99,7 @@ const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
         className="flex flex-col-reverse overflow-y-auto overflow-x-hidden beautiful-scrollbar"
       >
         <div ref={messagesEndRef}></div>
+
         <InfiniteScroll
           dataLength={messages.length}
           next={fetchMoreMessages}
@@ -131,6 +124,14 @@ const ChatWindowBody = ({ onReply }: ChatWindowBodyProps) => {
               onReply={onReply}
             />
           ))}
+
+          {/* 🔥 Thông báo ở cuối chat */}
+          {(isLocked || isDeleted) && (
+            <div className="text-center text-xs text-muted-foreground mt-2">
+              {isLocked && "Tài khoản này đã bị khóa"}
+              {isDeleted && "Tài khoản này đã bị xóa"}
+            </div>
+          )}
         </InfiniteScroll>
       </div>
     </div>
