@@ -85,7 +85,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
           <SidebarGroupAction
-            title="Kết Bạn"
+            title="Tìm kiếm"
             className="cursor-pointer"
           >
             <AddFriendModal />

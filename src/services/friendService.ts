@@ -55,6 +55,40 @@ export const friendService = {
   },
 
   /**
+   * GET /api/friends/check/isSending/{otherUserId}
+   * Returns: boolean
+   */
+  async checkIsSending(otherUserId: number): Promise<boolean> {
+    const res = await api.get(`/friends/check/isSending/${otherUserId}`);
+    return res.data;
+  },
+
+  /**
+   * GET /api/friends/check/isReceived/{otherUserId}
+   * Returns: boolean
+   */
+  async checkIsReceived(otherUserId: number): Promise<boolean> {
+    const res = await api.get(`/friends/check/isReceived/${otherUserId}`);
+    return res.data;
+  },
+
+  /**
+   * DELETE /api/friends/cancel/{otherUserId}
+   * Hủy lời mời đã gửi
+   */
+  async cancelFriendRequest(otherUserId: number): Promise<void> {
+    await api.delete(`/friends/cancel/${otherUserId}`);
+  },
+
+  /**
+   * DELETE /api/friends/unfriend/{otherUserId}
+   * Hủy kết bạn
+   */
+  async unfriend(otherUserId: number): Promise<void> {
+    await api.delete(`/friends/unfriend/${otherUserId}`);
+  },
+
+  /**
    * POST /api/friends/block/{blockedUserId}
    */
   async blockUser(blockedUserId: number): Promise<void> {
