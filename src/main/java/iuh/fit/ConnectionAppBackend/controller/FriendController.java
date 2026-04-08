@@ -140,6 +140,62 @@ public class FriendController {
                 .getId();
 
         boolean areFriends = friendService.areFriends(userId, otherUserId);
+        System.out.println(areFriends);
         return ResponseEntity.ok(areFriends);
     }
+
+        @GetMapping("/check/isSending/{otherUserId}")
+        public ResponseEntity<Boolean> isSending(
+                Authentication authentication,
+                @PathVariable Long otherUserId) {
+               
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+        boolean result = friendService.isSending(userId, otherUserId);
+        System.out.println(result);
+        return ResponseEntity.ok(result);
+        }
+
+        @GetMapping("/check/isReceived/{otherUserId}")
+        public ResponseEntity<Boolean> isReceived(
+                Authentication authentication,
+                @PathVariable Long otherUserId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();              
+        boolean result = friendService.isReceived(userId, otherUserId);
+        System.out.println(result);
+        return ResponseEntity.ok(result);
+        }
+
+      @DeleteMapping("/cancel/{otherUserId}")
+        public ResponseEntity<?> cancelRequest(
+                Authentication authentication,
+                @PathVariable Long otherUserId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        friendService.cancelFriendRequest(userId, otherUserId);
+        return ResponseEntity.ok("Đã hủy lời mời");
+        }
+        @DeleteMapping("/unfriend/{otherUserId}")
+        public ResponseEntity<?> unfriend(
+                Authentication authentication,
+                @PathVariable Long otherUserId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        friendService.unfriend(userId, otherUserId);
+        return ResponseEntity.ok("Đã hủy kết bạn");
+        }
+
+
+
+
 }
