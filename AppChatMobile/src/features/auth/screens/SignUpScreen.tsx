@@ -22,14 +22,14 @@ export default function SignUpScreen({ navigation }: any) {
 
   const handleSignUp = async () => {
     if (!firstName || !lastName || !username || !email || !password) {
-      Alert.alert("Validation Error", "Please fill in all fields");
+      Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin đăng ký");
       return;
     }
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert("Validation Error", "Please enter a valid email address");
+      Alert.alert("Email không hợp lệ", "Vui lòng nhập đúng định dạng email");
       return;
     }
 
@@ -38,8 +38,8 @@ export default function SignUpScreen({ navigation }: any) {
       // Navigation is handled by the app's auth state
     } catch (err) {
       Alert.alert(
-        "Sign Up Failed",
-        error || (err instanceof Error ? err.message : "Unknown error")
+        "Đăng ký thất bại",
+        error || (err instanceof Error ? err.message : "Unknown error"),
       );
     }
   };

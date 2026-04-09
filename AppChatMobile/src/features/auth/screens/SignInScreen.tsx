@@ -15,11 +15,33 @@ import { useAuth } from "../context/AuthContext";
 export default function SignInScreen({ navigation }: any) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const { signIn, isLoading, error, clearError } = useAuth();
+  const [serverUrl, setServerUrl] = useState("");
+  const { signIn, isLoading, error, apiBaseUrl, setApiBaseUrl } = useAuth();
+
+  React.useEffect(() => {
+    setServerUrl(apiBaseUrl);
+  }, [apiBaseUrl]);
+
+  const handleSaveServerUrl = async () => {
+    if (!serverUrl.trim()) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập URL backend");
+      return;
+    }
+
+    try {
+      await setApiBaseUrl(serverUrl);
+      Alert.alert("Thành công", "Đã cập nhật Server URL");
+    } catch (err) {
+      Alert.alert(
+        "Lỗi cấu hình",
+        err instanceof Error ? err.message : "Không thể lưu Server URL",
+      );
+    }
+  };
 
   const handleSignIn = async () => {
     if (!username || !password) {
-      Alert.alert("Validation Error", "Please fill in all fields");
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập tên đăng nhập và mật khẩu");
       return;
     }
 
@@ -28,14 +50,17 @@ export default function SignInScreen({ navigation }: any) {
       // Navigation is handled by the app's auth state
     } catch (err) {
       Alert.alert(
-        "Sign In Failed",
-        error || (err instanceof Error ? err.message : "Unknown error")
+        "Đăng nhập thất bại",
+        error || (err instanceof Error ? err.message : "Unknown error"),
       );
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+    >
       <View style={styles.card}>
         <Text style={styles.title}>Chào mừng quay lại</Text>
         <Text style={styles.subtitle}>Đăng nhập vào tài khoản của bạn</Text>
@@ -54,6 +79,26 @@ export default function SignInScreen({ navigation }: any) {
           onChangeText={setPassword}
           editable={!isLoading}
         />
+
+        {/* <Text style={styles.sectionTitle}>Server URL</Text>
+        <AuthInput
+          placeholder="http://192.168.1.10:8080/api"
+          value={serverUrl}
+          onChangeText={setServerUrl}
+          editable={!isLoading}
+        />
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={handleSaveServerUrl}
+          disabled={isLoading}
+        >
+          <Text style={styles.secondaryButtonText}>Lưu cấu hình server</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.serverHint}>
+          Expo Go trên điện thoại: dùng IP LAN của máy chạy backend.
+        </Text> */}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -135,6 +180,33 @@ const styles = StyleSheet.create({
     color: "#e74c3c",
     fontSize: 14,
     marginBottom: 12,
+    textAlign: "center",
+  },
+  sectionTitle: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    marginBottom: 8,
+    fontSize: 13,
+    color: "#666",
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#4A00E0",
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  secondaryButtonText: {
+    color: "#4A00E0",
+    fontWeight: "600",
+  },
+  serverHint: {
+    fontSize: 12,
+    color: "#777",
+    marginBottom: 8,
     textAlign: "center",
   },
 });

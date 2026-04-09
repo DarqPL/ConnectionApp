@@ -6,15 +6,36 @@ import {
   Text,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
+  Alert,
 } from "react-native";
 import ChatItem from "../components/ChatItem";
 import { useNavigation } from "@react-navigation/native";
 import { useChat } from "../context/ChatContext";
+import { useAuth } from "../../auth/context/AuthContext";
+import type { Conversation } from "../types";
 
 const ChatListScreen = () => {
   const navigation = useNavigation<any>();
-  const { conversations, isLoading, fetchConversations } = useChat();
+  const {
+    conversations,
+    isLoading,
+    fetchConversations,
+    setCurrentConversation,
+  } = useChat();
+  const { signOut, user } = useAuth();
   const [refreshing, setRefreshing] = React.useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      Alert.alert(
+        "Lỗi",
+        error instanceof Error ? error.message : "Đăng xuất thất bại",
+      );
+    }
+  };
 
   useEffect(() => {
     fetchConversations();
@@ -29,7 +50,9 @@ const ChatListScreen = () => {
     }
   }, [fetchConversations]);
 
-  const formatTime = (dateString: string): string => {
+  const formatTime = (dateString: string | null): string => {
+    if (!dateString) return "";
+
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -37,17 +60,45 @@ const ChatListScreen = () => {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
+    if (diffMins < 1) return "now";
     if (diffMins < 60) return `${diffMins}m`;
     if (diffHours < 24) return `${diffHours}h`;
     if (diffDays < 7) return `${diffDays}d`;
     return date.toLocaleDateString();
   };
 
+  const resolveConversationName = (conversation: Conversation): string => {
+    if (conversation.name?.trim()) return conversation.name;
+
+    const other = conversation.participants.find(
+      (participant) => participant.userId !== user?.id,
+    );
+    return other?.displayName || "Cuộc trò chuyện";
+  };
+
+  const resolveConversationAvatar = (conversation: Conversation): string => {
+    if (conversation.avatarUrl) return conversation.avatarUrl;
+
+    const other = conversation.participants.find(
+      (participant) => participant.userId !== user?.id,
+    );
+    return other?.avatarUrl || "https://i.pravatar.cc/150?img=10";
+  };
+
+  const handleOpenConversation = (conversation: Conversation) => {
+    setCurrentConversation(conversation.id);
+    navigation.navigate("ChatRoom", {
+      conversationId: conversation.id,
+      name: resolveConversationName(conversation),
+      avatarUrl: resolveConversationAvatar(conversation),
+    });
+  };
+
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyText}>No conversations yet</Text>
+      <Text style={styles.emptyText}>Chưa có cuộc trò chuyện nào</Text>
       <Text style={styles.emptySubtext}>
-        Start a new conversation to begin chatting
+        Hãy bắt đầu cuộc trò chuyện mới để nhắn tin
       </Text>
     </View>
   );
@@ -62,18 +113,24 @@ const ChatListScreen = () => {
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Đoạn chat gần đây</Text>
+        <TouchableOpacity onPress={handleSignOut}>
+          <Text style={styles.signOutText}>Đăng xuất</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={conversations}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <ChatItem
-            name={item.name}
-            lastMessage={item.lastMessage}
+            name={resolveConversationName(item)}
+            lastMessage={item.lastMessageContent || "Chưa có tin nhắn"}
             time={formatTime(item.lastMessageAt)}
-            avatar={item.avatarUrl}
-            onPress={() =>
-              navigation.navigate("ChatRoom", { name: item.name })
-            }
+            avatar={resolveConversationAvatar(item)}
+            unreadCount={item.unreadCount}
+            onPress={() => handleOpenConversation(item)}
           />
         )}
         ListEmptyComponent={renderEmptyState}
@@ -91,6 +148,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  headerRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  signOutText: {
+    color: "#6c5ce7",
+    fontWeight: "600",
   },
   centerContent: {
     justifyContent: "center",

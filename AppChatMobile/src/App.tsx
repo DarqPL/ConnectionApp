@@ -1,6 +1,7 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import ChatListScreen from "./features/chat/screens/ChatListScreen";
 import ChatRoomScreen from "./features/chat/screens/ChatRoomScreen";
 import SignInScreen from "./features/auth/screens/SignInScreen";
@@ -12,13 +13,21 @@ export type RootStackParamList = {
   SignIn: undefined;
   SignUp: undefined;
   ChatList: undefined;
-  ChatRoom: { name: string };
+  ChatRoom: { conversationId: number; name: string; avatarUrl?: string | null };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppNavigator() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isHydrating } = useAuth();
+
+  if (isHydrating) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6c5ce7" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer>
@@ -45,7 +54,7 @@ function AppNavigator() {
               name="ChatList"
               component={ChatListScreen}
               options={{
-                title: "Connection 💜",
+                title: "Connection",
                 headerShown: true,
               }}
             />
@@ -73,3 +82,12 @@ export default function App() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+  },
+});
