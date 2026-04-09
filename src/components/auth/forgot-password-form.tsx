@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { authService } from "@/services/authService";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -49,6 +49,17 @@ export function ForgotPasswordForm({
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    let timer: any;
+    if (countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   // ── OTP input refs ─────────────────────────────────────────────────────────
   const otpDigits = useRef<(HTMLInputElement | null)[]>([]);
@@ -68,6 +79,7 @@ export function ForgotPasswordForm({
       await authService.forgotPassword(data.email);
       setEmail(data.email);
       setStep("otp");
+      setCountdown(60);
       toast.success("Mã OTP đã được gửi đến email của bạn!");
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Có lỗi xảy ra. Vui lòng thử lại.";
@@ -131,6 +143,7 @@ export function ForgotPasswordForm({
   const resendOtp = async () => {
     try {
       await authService.forgotPassword(email);
+      setCountdown(60);
       toast.success("Mã OTP mới đã được gửi!");
       setOtpValues(["", "", "", "", "", ""]);
       otpForm.setValue("otp", "");
@@ -176,8 +189,8 @@ export function ForgotPasswordForm({
                         i < stepIndex
                           ? "border-primary bg-primary text-primary-foreground"
                           : i === stepIndex
-                          ? "border-primary text-primary"
-                          : "border-muted-foreground/30 text-muted-foreground/50"
+                            ? "border-primary text-primary"
+                            : "border-muted-foreground/30 text-muted-foreground/50"
                       )}
                     >
                       {i < stepIndex ? "✓" : i + 1}
@@ -290,13 +303,17 @@ export function ForgotPasswordForm({
 
                 <div className="text-center text-sm text-muted-foreground">
                   Không nhận được mã?{" "}
-                  <button
-                    type="button"
-                    onClick={resendOtp}
-                    className="underline underline-offset-4 hover:text-primary cursor-pointer"
-                  >
-                    Gửi lại OTP
-                  </button>
+                  {countdown > 0 ? (
+                    <span className="font-medium text-primary">Gửi lại sau {countdown}s</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={resendOtp}
+                      className="underline underline-offset-4 hover:text-primary cursor-pointer font-medium"
+                    >
+                      Gửi lại OTP
+                    </button>
+                  )}
                 </div>
 
                 <div className="text-center">

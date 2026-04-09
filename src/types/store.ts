@@ -1,4 +1,4 @@
-import type { Conversation, Message, PageResponse } from "./chat";
+import type { Conversation, Message } from "./chat";
 import type { Friend, User } from "./user";
 
 export interface AuthState {
@@ -15,7 +15,9 @@ export interface AuthState {
     email: string,
     firstName: string,
     lastName: string,
+    otp: string,
   ) => Promise<void>;
+  sendSignupOtp: (email: string, username: string) => Promise<void>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
