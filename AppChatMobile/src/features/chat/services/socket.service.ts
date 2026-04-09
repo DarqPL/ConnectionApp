@@ -1,154 +1,140 @@
-import { Client, type StompSubscription } from "@stomp/stompjs";
+import { Client } from "@stomp/stompjs";
 import type { Conversation, Message } from "../types";
 
-interface ChatSocketHandlers {
+export interface ChatSocketHandlers {
   onIncomingMessage: (message: Message) => void;
   onIncomingConversation: (conversation: Conversation) => void;
   onRecallMessage: (message: Message) => void;
   onSecurityNotification?: (payload: {
     title?: string;
-    message?: string;
+    message: string;
     deviceName?: string;
     ipAddress?: string;
   }) => void;
   onConnectionError?: (error: string) => void;
 }
 
+/**
+ * Singleton WebSocket service for STOMP chat.
+ *
+ * Key design:
+ * - Handlers are stored in a mutable ref so the socket only connects ONCE
+ *   per session without needing to reconnect when React callbacks change.
+ * - Only disconnects/reconnects when user logs out or token changes.
+ */
 class ChatSocketService {
   private client: Client | null = null;
-  private isConnected = false;
-  private conversationSubscriptions = new Map<number, StompSubscription>();
-  private bufferedConversationIds: number[] = [];
+  private handlersRef: ChatSocketHandlers | null = null;
 
-  private subscribeConversationTopics(
-    conversationIds: number[],
-    onIncomingMessage: (message: Message) => void,
-  ): void {
-    if (!this.client || !this.isConnected) {
-      this.bufferedConversationIds = conversationIds;
-      return;
-    }
-
-    const nextSet = new Set(conversationIds);
-
-    // Unsubscribe removed conversations.
-    for (const [conversationId, subscription] of this
-      .conversationSubscriptions) {
-      if (!nextSet.has(conversationId)) {
-        subscription.unsubscribe();
-        this.conversationSubscriptions.delete(conversationId);
-      }
-    }
-
-    // Subscribe new conversations.
-    for (const conversationId of conversationIds) {
-      if (this.conversationSubscriptions.has(conversationId)) continue;
-
-      const subscription = this.client.subscribe(
-        `/topic/conversation${conversationId}`,
-        (frame) => {
-          const payload = JSON.parse(frame.body) as Message;
-          onIncomingMessage(payload);
-        },
-      );
-
-      this.conversationSubscriptions.set(conversationId, subscription);
-    }
+  /** Update handlers without reconnecting. Used from React context. */
+  updateHandlers(handlers: ChatSocketHandlers) {
+    this.handlersRef = handlers;
   }
 
   connect(
     wsUrl: string,
     userId: number,
     accessToken: string,
-    handlers: ChatSocketHandlers,
+    handlers: ChatSocketHandlers
   ): void {
     if (this.client?.active) {
+      // Just update handlers, don't reconnect
+      this.handlersRef = handlers;
+      console.log("[Socket] Already connected, handlers updated.");
       return;
     }
 
+    this.handlersRef = handlers;
+
+    console.log("[Socket] Connecting to:", wsUrl);
+
     const client = new Client({
-      webSocketFactory: () => new WebSocket(wsUrl),
+      webSocketFactory: () => {
+        const ws = new WebSocket(wsUrl);
+        console.log("[Socket] WebSocket created, readyState:", ws.readyState);
+        return ws;
+      },
       connectHeaders: {
         Authorization: `Bearer ${accessToken}`,
       },
       reconnectDelay: 5000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
 
-      onConnect: () => {
-        this.isConnected = true;
+      onConnect: (frame) => {
+        console.log("[Socket] ✅ Connected! Session:", frame.headers?.["session"]);
 
-        client.subscribe(`/topic/user.${userId}`, (frame) => {
-          const payload = JSON.parse(frame.body) as Message;
-          handlers.onIncomingMessage(payload);
+        // All handlers are called via ref to avoid stale closures
+        client.subscribe(`/topic/user.${userId}`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onIncomingMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse message:", e);
+          }
         });
 
-        client.subscribe(`/topic/user.${userId}/conversations`, (frame) => {
-          const payload = JSON.parse(frame.body) as Conversation;
-          handlers.onIncomingConversation(payload);
+        client.subscribe(`/topic/user.${userId}/conversations`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Conversation;
+            this.handlersRef?.onIncomingConversation(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse conversation:", e);
+          }
         });
 
-        client.subscribe(`/topic/user.${userId}/recall`, (frame) => {
-          const payload = JSON.parse(frame.body) as Message;
-          handlers.onRecallMessage(payload);
+        client.subscribe(`/topic/user.${userId}/recall`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onRecallMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse recall:", e);
+          }
         });
 
-        client.subscribe(`/topic/user.${userId}/security`, (frame) => {
-          const payload = JSON.parse(frame.body) as {
-            title?: string;
-            message?: string;
-            deviceName?: string;
-            ipAddress?: string;
-          };
-
-          handlers.onSecurityNotification?.(payload);
+        client.subscribe(`/topic/user.${userId}/security`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body);
+            this.handlersRef?.onSecurityNotification?.(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse security notification:", e);
+          }
         });
-
-        if (this.bufferedConversationIds.length > 0) {
-          this.subscribeConversationTopics(
-            this.bufferedConversationIds,
-            handlers.onIncomingMessage,
-          );
-        }
       },
 
       onStompError: (frame) => {
-        handlers.onConnectionError?.(
-          frame.headers["message"] || "STOMP connection error",
-        );
+        const msg = frame.headers?.["message"] || "Lỗi STOMP";
+        console.error("[Socket] STOMP error:", msg);
+        this.handlersRef?.onConnectionError?.(msg);
       },
 
-      onWebSocketError: () => {
-        handlers.onConnectionError?.("WebSocket connection error");
+      onWebSocketError: (evt) => {
+        console.error("[Socket] WebSocket error:", JSON.stringify(evt));
+        this.handlersRef?.onConnectionError?.("Không thể kết nối realtime");
       },
 
-      onWebSocketClose: () => {
-        this.isConnected = false;
+      onWebSocketClose: (evt) => {
+        const e = evt as any;
+        console.log(`[Socket] WebSocket closed. code=${e?.code}, reason=${e?.reason}`);
       },
     });
 
     client.activate();
     this.client = client;
-  }
-
-  syncConversationSubscriptions(
-    conversationIds: number[],
-    onIncomingMessage: (message: Message) => void,
-  ): void {
-    this.subscribeConversationTopics(conversationIds, onIncomingMessage);
+    console.log("[Socket] Client activated.");
   }
 
   disconnect(): void {
-    this.isConnected = false;
-    this.bufferedConversationIds = [];
-
-    for (const subscription of this.conversationSubscriptions.values()) {
-      subscription.unsubscribe();
-    }
-    this.conversationSubscriptions.clear();
-
     if (this.client) {
+      console.log("[Socket] Disconnecting...");
+      this.handlersRef = null;
       this.client.deactivate();
       this.client = null;
     }
+  }
+
+  get isConnected(): boolean {
+    return this.client?.connected ?? false;
   }
 }
 

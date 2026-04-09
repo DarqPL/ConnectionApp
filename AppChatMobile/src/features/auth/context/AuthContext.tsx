@@ -29,6 +29,7 @@ interface AuthContextType {
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
   setApiBaseUrl: (url: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserProfile: (data: Partial<User>) => Promise<void>;
   clearError: () => void;
 }
 
@@ -165,6 +166,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const updateUserProfile = useCallback(async (data: Partial<User>) => {
+    const { userService } = await import("../../chat/services/user.service");
+    const updatedUser = await userService.updateProfile(data);
+    setUser(updatedUser);
+  }, []);
+
   const signOut = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -206,6 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     resetPassword,
     setApiBaseUrl,
     signOut,
+    updateUserProfile,
     clearError,
   };
 

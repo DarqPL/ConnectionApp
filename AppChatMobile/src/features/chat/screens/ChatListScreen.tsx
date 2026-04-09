@@ -1,143 +1,174 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import {
   View,
+  Text,
   FlatList,
   StyleSheet,
-  Text,
   ActivityIndicator,
-  RefreshControl,
   TouchableOpacity,
-  Alert,
+  TextInput,
+  StatusBar,
+  RefreshControl,
 } from "react-native";
-import ChatItem from "../components/ChatItem";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useChat } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
+import ChatItem from "../components/ChatItem";
+import BottomNavigator from "../../../components/BottomNavigator";
+import { COLORS } from "../../../theme";
 import type { Conversation } from "../types";
 
-const ChatListScreen = () => {
-  const navigation = useNavigation<any>();
-  const {
-    conversations,
-    isLoading,
-    fetchConversations,
-    setCurrentConversation,
-  } = useChat();
-  const { signOut, user } = useAuth();
-  const [refreshing, setRefreshing] = React.useState(false);
+const formatTime = (dateStr?: string | null): string => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) {
+    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+};
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      Alert.alert(
-        "Lỗi",
-        error instanceof Error ? error.message : "Đăng xuất thất bại",
-      );
-    }
-  };
+const ChatListScreen = () => {
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
+  const { conversations, fetchConversations, isLoading, setCurrentConversation } = useChat();
+  const { user } = useAuth();
+  const [search, setSearch] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+  }, []);
 
-  const onRefresh = React.useCallback(async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await fetchConversations();
-    } finally {
-      setRefreshing(false);
-    }
+    await fetchConversations();
+    setRefreshing(false);
   }, [fetchConversations]);
 
-  const formatTime = (dateString: string | null): string => {
-    if (!dateString) return "";
-
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "now";
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return date.toLocaleDateString();
+  const getDisplayName = (conv: Conversation): string => {
+    if (conv.type === "PRIVATE") {
+      const other = conv.participants?.find((p) => p.userId !== user?.id);
+      return other?.displayName || conv.name || "Unknown";
+    }
+    return conv.name || "Nhóm chat";
   };
 
-  const resolveConversationName = (conversation: Conversation): string => {
-    if (conversation.name?.trim()) return conversation.name;
-
-    const other = conversation.participants.find(
-      (participant) => participant.userId !== user?.id,
-    );
-    return other?.displayName || "Cuộc trò chuyện";
+  const getAvatarUrl = (conv: Conversation): string | null => {
+    if (conv.type === "PRIVATE") {
+      const other = conv.participants?.find((p) => p.userId !== user?.id);
+      return other?.avatarUrl || null;
+    }
+    return conv.avatarUrl || null;
   };
 
-  const resolveConversationAvatar = (conversation: Conversation): string => {
-    if (conversation.avatarUrl) return conversation.avatarUrl;
-
-    const other = conversation.participants.find(
-      (participant) => participant.userId !== user?.id,
-    );
-    return other?.avatarUrl || "https://i.pravatar.cc/150?img=10";
-  };
-
-  const handleOpenConversation = (conversation: Conversation) => {
-    setCurrentConversation(conversation.id);
+  const handlePress = (conv: Conversation) => {
+    setCurrentConversation(conv.id);
     navigation.navigate("ChatRoom", {
-      conversationId: conversation.id,
-      name: resolveConversationName(conversation),
-      avatarUrl: resolveConversationAvatar(conversation),
+      conversationId: conv.id,
+      name: getDisplayName(conv),
+      avatarUrl: getAvatarUrl(conv),
+      type: conv.type,
+      participants: conv.participants || [],
     });
   };
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyText}>Chưa có cuộc trò chuyện nào</Text>
-      <Text style={styles.emptySubtext}>
-        Hãy bắt đầu cuộc trò chuyện mới để nhắn tin
-      </Text>
-    </View>
+  const filtered = conversations.filter((c) =>
+    getDisplayName(c).toLowerCase().includes(search.toLowerCase())
   );
-
-  if (isLoading && conversations.length === 0) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#8e44ad" />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Đoạn chat gần đây</Text>
-        <TouchableOpacity onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Đăng xuất</Text>
-        </TouchableOpacity>
-      </View>
+      <StatusBar barStyle="light-content" translucent />
 
-      <FlatList
-        data={conversations}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <ChatItem
-            name={resolveConversationName(item)}
-            lastMessage={item.lastMessageContent || "Chưa có tin nhắn"}
-            time={formatTime(item.lastMessageAt)}
-            avatar={resolveConversationAvatar(item)}
-            unreadCount={item.unreadCount}
-            onPress={() => handleOpenConversation(item)}
+      {/* Header */}
+      <LinearGradient
+        colors={COLORS.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      >
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Connection</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate("AddFriend")}
+            >
+              <Ionicons name="person-add-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => navigation.navigate("CreateGroup")}
+            >
+              <Ionicons name="people-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color="rgba(255,255,255,0.7)" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm..."
+            placeholderTextColor="rgba(255,255,255,0.6)"
+            value={search}
+            onChangeText={setSearch}
           />
-        )}
-        ListEmptyComponent={renderEmptyState}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.7)" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </LinearGradient>
+
+      {/* List */}
+      {isLoading && conversations.length === 0 ? (
+        <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <ChatItem
+              name={getDisplayName(item)}
+              lastMessage={item.lastMessageContent || "Chưa có tin nhắn"}
+              time={formatTime(item.lastMessageAt)}
+              avatar={getAvatarUrl(item)}
+              unreadCount={item.unreadCount || 0}
+              type={item.type}
+              participants={item.participants || []}
+              onPress={() => handlePress(item)}
+            />
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListEmptyComponent={() => (
+            <View style={styles.empty}>
+              <Ionicons name="chatbubbles-outline" size={56} color={COLORS.border} />
+              <Text style={styles.emptyText}>
+                {search ? "Không tìm thấy cuộc trò chuyện" : "Chưa có cuộc trò chuyện nào"}
+              </Text>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={filtered.length === 0 ? styles.emptyContainer : undefined}
+        />
+      )}
+
+      <BottomNavigator />
     </View>
   );
 };
@@ -147,43 +178,62 @@ export default ChatListScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background,
   },
-  headerRow: {
+  header: {
+    paddingBottom: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  headerBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    marginLeft: 6,
+  },
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    gap: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#fff",
+    padding: 0,
   },
-  signOutText: {
-    color: "#6c5ce7",
-    fontWeight: "600",
-  },
-  centerContent: {
-    justifyContent: "center",
+  empty: {
     alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 40,
   },
   emptyContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: "#999",
-    textAlign: "center",
+    color: COLORS.textMuted,
+    marginTop: 12,
+    fontSize: 15,
   },
 });

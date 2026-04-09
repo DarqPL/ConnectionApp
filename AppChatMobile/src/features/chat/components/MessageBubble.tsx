@@ -1,44 +1,85 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Alert,
+} from "react-native";
+import { COLORS } from "../../../theme";
 
 interface Props {
   message: string;
   isMe?: boolean;
   senderName?: string;
+  avatarUrl?: string | null;
   createdAt?: string;
+  recalledAt?: string | null;
+  isGroup?: boolean;
+  onLongPress?: () => void;
 }
+
+const formatTime = (dateStr: string) => {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+};
 
 const MessageBubble: React.FC<Props> = ({
   message,
-  isMe,
+  isMe = false,
   senderName,
+  avatarUrl,
   createdAt,
+  recalledAt,
+  isGroup = false,
+  onLongPress,
 }) => {
-  const timeLabel = createdAt
-    ? new Date(createdAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "";
+  const isRecalled = !!recalledAt;
+  const FALLBACK = "https://i.pravatar.cc/150?img=5";
 
   return (
-    <View
-      style={[
-        styles.container,
-        isMe ? styles.rightContainer : styles.leftContainer,
-      ]}
-    >
-      {!isMe && !!senderName && (
-        <Text style={styles.senderName} numberOfLines={1}>
-          {senderName}
-        </Text>
+    <View style={[styles.row, isMe ? styles.rowRight : styles.rowLeft]}>
+      {/* Avatar for received messages in groups */}
+      {!isMe && isGroup && (
+        <Image
+          source={{ uri: avatarUrl || FALLBACK }}
+          style={styles.avatar}
+        />
       )}
-      <Text style={isMe ? styles.rightText : styles.leftText}>{message}</Text>
-      {!!timeLabel && (
-        <Text style={isMe ? styles.rightTime : styles.leftTime}>
-          {timeLabel}
-        </Text>
-      )}
+
+      <View style={[styles.col, isMe ? styles.colRight : styles.colLeft]}>
+        {/* Sender name in group */}
+        {!isMe && isGroup && senderName && (
+          <Text style={styles.senderName}>{senderName}</Text>
+        )}
+
+        <TouchableOpacity
+          activeOpacity={isMe && !isRecalled ? 0.75 : 1}
+          onLongPress={isMe && !isRecalled ? onLongPress : undefined}
+          style={[
+            styles.bubble,
+            isMe ? styles.bubbleSent : styles.bubbleReceived,
+            isRecalled && styles.bubbleRecalled,
+          ]}
+        >
+          <Text
+            style={[
+              styles.messageText,
+              isMe ? styles.sentText : styles.receivedText,
+              isRecalled && styles.recalledText,
+            ]}
+          >
+            {isRecalled ? "Tin nhắn đã được thu hồi" : message}
+          </Text>
+        </TouchableOpacity>
+
+        {createdAt && !isRecalled && (
+          <Text style={[styles.time, isMe ? styles.timeRight : styles.timeLeft]}>
+            {formatTime(createdAt)}
+          </Text>
+        )}
+      </View>
     </View>
   );
 };
@@ -46,42 +87,92 @@ const MessageBubble: React.FC<Props> = ({
 export default MessageBubble;
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 12,
-    borderRadius: 18,
-    marginVertical: 4,
+  row: {
+    flexDirection: "row",
+    marginVertical: 2,
+    paddingHorizontal: 12,
+    alignItems: "flex-end",
+  },
+  rowLeft: {
+    justifyContent: "flex-start",
+  },
+  rowRight: {
+    justifyContent: "flex-end",
+  },
+  col: {
     maxWidth: "75%",
   },
-  leftContainer: {
-    backgroundColor: "#f1f1f1",
-    alignSelf: "flex-start",
+  colLeft: {
+    alignItems: "flex-start",
   },
-  rightContainer: {
-    backgroundColor: "#8e44ad",
-    alignSelf: "flex-end",
+  colRight: {
+    alignItems: "flex-end",
   },
-  leftText: {
-    color: "#000",
-  },
-  rightText: {
-    color: "#fff",
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 6,
+    marginBottom: 4,
+    backgroundColor: COLORS.backgroundMuted,
   },
   senderName: {
     fontSize: 11,
-    color: "#666",
-    marginBottom: 4,
+    color: COLORS.primary,
     fontWeight: "600",
+    marginBottom: 3,
+    marginLeft: 4,
   },
-  leftTime: {
-    marginTop: 6,
-    fontSize: 10,
-    color: "#777",
-    alignSelf: "flex-end",
+  bubble: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+    maxWidth: "100%",
   },
-  rightTime: {
-    marginTop: 6,
+  bubbleSent: {
+    backgroundColor: COLORS.primary,
+    borderBottomRightRadius: 4,
+  },
+  bubbleReceived: {
+    backgroundColor: "#fff",
+    borderBottomLeftRadius: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  bubbleRecalled: {
+    backgroundColor: COLORS.backgroundMuted,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  sentText: {
+    color: "#fff",
+  },
+  receivedText: {
+    color: COLORS.text,
+  },
+  recalledText: {
+    color: COLORS.textMuted,
+    fontStyle: "italic",
+    fontSize: 14,
+  },
+  time: {
     fontSize: 10,
-    color: "#ddd",
+    color: COLORS.textLight,
+    marginTop: 3,
+    marginHorizontal: 4,
+  },
+  timeLeft: {
+    alignSelf: "flex-start",
+  },
+  timeRight: {
     alignSelf: "flex-end",
   },
 });

@@ -35,12 +35,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const { user, accessToken, isAuthenticated } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<
-    number | null
-  >(null);
+  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Ref so socket handlers always access latest state without reconnecting
   const currentConversationRef = useRef<number | null>(null);
+  const userIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    currentConversationRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
 
   const sortConversations = (items: Conversation[]): Conversation[] =>
     [...items].sort((a, b) => {
@@ -51,141 +60,132 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const upsertMessage = (messages: Message[], incoming: Message): Message[] => {
     const index = messages.findIndex((item) => item.id === incoming.id);
-    if (index === -1) {
-      return [...messages, incoming];
-    }
-
+    if (index === -1) return [...messages, incoming];
     const next = [...messages];
     next[index] = incoming;
     return next;
   };
-
-  useEffect(() => {
-    currentConversationRef.current = currentConversationId;
-  }, [currentConversationId]);
-
-  const handleIncomingMessage = useCallback(
-    (incomingMessage: Message) => {
-      setConversations((prev) => {
-        const exists = prev.some(
-          (conversation) => conversation.id === incomingMessage.conversationId,
-        );
-        if (!exists) return prev;
-
-        return sortConversations(
-          prev.map((conversation) => {
-            if (conversation.id !== incomingMessage.conversationId)
-              return conversation;
-
-            const inActiveConversation =
-              currentConversationRef.current === conversation.id;
-            const isOwnMessage =
-              incomingMessage.senderInfo?.senderId === user?.id;
-            return {
-              ...conversation,
-              lastMessageContent: incomingMessage.content,
-              lastMessageAt: incomingMessage.createdAt,
-              unreadCount:
-                inActiveConversation || isOwnMessage
-                  ? 0
-                  : Math.max((conversation.unreadCount || 0) + 1, 1),
-            };
-          }),
-        );
-      });
-
-      if (incomingMessage.conversationId === currentConversationRef.current) {
-        setCurrentMessages((prev) => upsertMessage(prev, incomingMessage));
-      }
-    },
-    [user?.id],
-  );
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    chatSocketService.syncConversationSubscriptions(
-      conversations.map((conversation) => conversation.id),
-      handleIncomingMessage,
-    );
-  }, [conversations, isAuthenticated, handleIncomingMessage]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !user?.id || !accessToken) {
-      chatSocketService.disconnect();
-      return;
-    }
-
-    chatSocketService.connect(
-      authService.getWebSocketUrl(),
-      user.id,
-      accessToken,
-      {
-        onIncomingMessage: handleIncomingMessage,
-        onIncomingConversation: (incomingConversation) => {
-          setConversations((prev) => {
-            const index = prev.findIndex(
-              (conversation) => conversation.id === incomingConversation.id,
-            );
-            if (index === -1) {
-              return sortConversations([incomingConversation, ...prev]);
-            }
-
-            const next = [...prev];
-            next[index] = incomingConversation;
-            return sortConversations(next);
-          });
-        },
-        onRecallMessage: (recalledMessage) => {
-          if (
-            recalledMessage.conversationId === currentConversationRef.current
-          ) {
-            setCurrentMessages((prev) =>
-              prev.map((message) =>
-                message.id === recalledMessage.id ? recalledMessage : message,
-              ),
-            );
-          }
-        },
-        onSecurityNotification: (payload) => {
-          Alert.alert(
-            payload.title || "Cảnh báo bảo mật",
-            [
-              payload.message,
-              payload.deviceName,
-              payload.ipAddress ? `IP: ${payload.ipAddress}` : null,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-          );
-        },
-        onConnectionError: (socketError) => {
-          setError(socketError);
-        },
-      },
-    );
-
-    return () => {
-      chatSocketService.disconnect();
-    };
-  }, [isAuthenticated, user?.id, accessToken]);
 
   const fetchConversations = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await chatService.getConversations();
-      setConversations(data);
+      setConversations(sortConversations(data));
     } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Không tải được danh sách cuộc trò chuyện";
-      setError(errorMessage);
+      setError(err instanceof Error ? err.message : "Không tải được danh sách cuộc trò chuyện");
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  // ─── Socket handlers (stable functions, state accessed via refs/setters) ───
+
+  const onIncomingMessage = useCallback((incomingMessage: Message) => {
+    console.log("[ChatContext] Incoming message:", incomingMessage.id, "convId:", incomingMessage.conversationId);
+
+    // 1. Add to current chat room if it's open
+    if (incomingMessage.conversationId === currentConversationRef.current) {
+      setCurrentMessages((prev) => upsertMessage(prev, incomingMessage));
+    }
+
+    // 2. Update conversation list
+    setConversations((prev) => {
+      const index = prev.findIndex((c) => c.id === incomingMessage.conversationId);
+
+      if (index === -1) {
+        // Conversation not in list yet → refetch (new conv or first message)
+        console.log("[ChatContext] Unknown conversation, refetching list...");
+        chatService.getConversations().then((data) =>
+          setConversations(sortConversations(data))
+        ).catch(console.error);
+        return prev;
+      }
+
+      const next = [...prev];
+      const isOpen = currentConversationRef.current === incomingMessage.conversationId;
+      const isOwn = incomingMessage.senderInfo?.senderId === userIdRef.current;
+
+      next[index] = {
+        ...next[index],
+        lastMessageContent: incomingMessage.content,
+        lastMessageAt: incomingMessage.createdAt,
+        unreadCount: isOpen || isOwn ? 0 : (next[index].unreadCount || 0) + 1,
+      };
+
+      // Move to top
+      const updated = next.splice(index, 1)[0];
+      return [updated, ...next];
+    });
+  }, []); // ← empty deps: state is accessed via refs/functional setters
+
+  const onIncomingConversation = useCallback((newConvo: Conversation) => {
+    console.log("[ChatContext] New conversation:", newConvo.id);
+    setConversations((prev) => {
+      const index = prev.findIndex((c) => c.id === newConvo.id);
+      if (index === -1) return sortConversations([newConvo, ...prev]);
+      const next = [...prev];
+      next[index] = newConvo;
+      return sortConversations(next);
+    });
+  }, []);
+
+  const onRecallMessage = useCallback((recalledMessage: Message) => {
+    console.log("[ChatContext] Recalled message:", recalledMessage.id);
+    if (recalledMessage.conversationId === currentConversationRef.current) {
+      setCurrentMessages((prev) =>
+        prev.map((m) => m.id === recalledMessage.id ? recalledMessage : m)
+      );
+    }
+  }, []);
+
+  // ─── Single socket connect effect — only depends on userId/token ───
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id || !accessToken) {
+      chatSocketService.disconnect();
+      return;
+    }
+
+    const wsUrl = authService.getWebSocketUrl();
+    console.log("[ChatContext] Connecting socket, userId:", user.id, "url:", wsUrl);
+
+    chatSocketService.connect(wsUrl, user.id, accessToken, {
+      onIncomingMessage,
+      onIncomingConversation,
+      onRecallMessage,
+      onSecurityNotification: (payload) => {
+        Alert.alert(payload.title || "Cảnh báo bảo mật", payload.message);
+      },
+      onConnectionError: (socketError) => {
+        console.error("[ChatContext] Socket error:", socketError);
+        setError(socketError);
+      },
+    });
+
+    return () => {
+      chatSocketService.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id, accessToken]);
+  // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
+  //   and the socket service updates them via ref when needed
+
+  // ─── Update handlers ref when callbacks change (shouldn't happen with empty deps) ───
+  useEffect(() => {
+    if (chatSocketService.isConnected) {
+      chatSocketService.updateHandlers({
+        onIncomingMessage,
+        onIncomingConversation,
+        onRecallMessage,
+        onSecurityNotification: (payload) => {
+          Alert.alert(payload.title || "Cảnh báo bảo mật", payload.message);
+        },
+        onConnectionError: setError,
+      });
+    }
+  }, [onIncomingMessage, onIncomingConversation, onRecallMessage]);
+
+  // ─── Regular methods ───────────────────────────────────────────────────────
 
   const fetchMessages = useCallback(async (conversationId: number) => {
     setIsLoading(true);
@@ -194,83 +194,58 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const data = await chatService.getMessages(conversationId);
       setCurrentMessages(data);
       setCurrentConversationId(conversationId);
-      await chatService.markAsRead(conversationId);
+      // Mark as read
+      chatService.markAsRead(conversationId).catch(() => {});
       setConversations((prev) =>
-        prev.map((conversation) =>
-          conversation.id === conversationId
-            ? { ...conversation, unreadCount: 0 }
-            : conversation,
-        ),
+        prev.map((c) => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
       );
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Không tải được tin nhắn";
-      setError(errorMessage);
+      setError(err instanceof Error ? err.message : "Không tải được tin nhắn");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const sendMessage = useCallback(
-    async (conversationId: number, content: string) => {
-      setError(null);
-      try {
-        const newMessage = await chatService.sendMessage(
-          conversationId,
-          content,
-        );
-        setCurrentMessages((prev) => upsertMessage(prev, newMessage));
-
-        // Update last message in conversation
-        setConversations((prev) =>
-          prev.map((conv) =>
-            conv.id === conversationId
-              ? {
-                  ...conv,
-                  lastMessageContent: content,
-                  lastMessageAt: new Date().toISOString(),
-                  unreadCount: 0,
-                }
-              : conv,
-          ),
-        );
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Gửi tin nhắn thất bại";
-        setError(errorMessage);
-        throw err;
-      }
-    },
-    [],
-  );
+  const sendMessage = useCallback(async (conversationId: number, content: string) => {
+    setError(null);
+    try {
+      const newMsg = await chatService.sendMessage(conversationId, content);
+      // Optimistically add to current messages
+      setCurrentMessages((prev) => upsertMessage(prev, newMsg));
+      // Update conversation list
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, lastMessageContent: content, lastMessageAt: new Date().toISOString(), unreadCount: 0 }
+            : c
+        )
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gửi tin nhắn thất bại";
+      setError(msg);
+      throw err;
+    }
+  }, []);
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setError(null);
     try {
       await chatService.deleteMessage(messageId);
       setCurrentMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, isDeleted: true } : msg,
-        ),
+        prev.map((m) => m.id === messageId ? { ...m, recalledAt: new Date().toISOString() } : m)
       );
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại";
-      setError(errorMessage);
+      const msg = err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại";
+      setError(msg);
       throw err;
     }
   }, []);
 
-  const setCurrentConversationSafe = useCallback(
-    (conversationId: number | null) => {
-      setCurrentConversationId(conversationId);
-    },
-    [],
-  );
-
-  const clearError = useCallback(() => {
-    setError(null);
+  const setCurrentConversation = useCallback((conversationId: number | null) => {
+    setCurrentConversationId(conversationId);
   }, []);
+
+  const clearError = useCallback(() => setError(null), []);
 
   const value: ChatContextType = {
     conversations,
@@ -282,7 +257,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchMessages,
     sendMessage,
     deleteMessage,
-    setCurrentConversation: setCurrentConversationSafe,
+    setCurrentConversation,
     clearError,
   };
 
@@ -291,8 +266,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
 export const useChat = (): ChatContextType => {
   const context = useContext(ChatContext);
-  if (!context) {
-    throw new Error("useChat must be used within ChatProvider");
-  }
+  if (!context) throw new Error("useChat must be used within ChatProvider");
   return context;
 };

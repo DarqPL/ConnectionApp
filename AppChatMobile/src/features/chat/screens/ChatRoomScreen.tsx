@@ -5,21 +5,26 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Text,
+  StatusBar,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MessageBubble from "../components/MessageBubble";
 import ChatInput from "../components/ChatInput";
 import ChatHeader from "../components/ChatHeader";
 import { useChat } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
+import { COLORS } from "../../../theme";
 
 const ChatRoomScreen = ({ route }: any) => {
-  const { conversationId, name, avatarUrl } = route.params;
+  const insets = useSafeAreaInsets();
+  const { conversationId, name, avatarUrl, type, participants } = route.params;
   const {
     currentMessages,
     isLoading,
     fetchMessages,
     sendMessage,
+    deleteMessage,
     setCurrentConversation,
   } = useChat();
   const { user } = useAuth();
@@ -33,70 +38,80 @@ const ChatRoomScreen = ({ route }: any) => {
     return () => {
       setCurrentConversation(null);
     };
-  }, [conversationId, fetchMessages, setCurrentConversation]);
+  }, [conversationId]);
 
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim()) return;
-
+  const handleSend = async (content: string) => {
     setSending(true);
     try {
       await sendMessage(conversationId, content);
-      // Scroll to bottom after sending
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
     } catch (error) {
-      Alert.alert(
-        "Lỗi",
-        error instanceof Error ? error.message : "Gửi tin nhắn thất bại",
-      );
+      Alert.alert("Lỗi", error instanceof Error ? error.message : "Gửi thất bại");
     } finally {
       setSending(false);
     }
   };
 
-  // Filter out deleted messages for display
-  const displayMessages = currentMessages.filter((msg) => !msg.isDeleted);
+  const handleLongPress = (msgId: string) => {
+    Alert.alert("Thu hồi tin nhắn", "Bạn có chắc muốn thu hồi tin nhắn này?", [
+      { text: "Bỏ qua", style: "cancel" },
+      { text: "Thu hồi", style: "destructive", onPress: () => deleteMessage(msgId) },
+    ]);
+  };
 
-  const mappedMessages = displayMessages.map((msg) => ({
-    id: msg.id,
-    text: msg.content || "",
-    isMe: msg.senderInfo?.senderId === user?.id,
-    senderName: msg.senderInfo?.displayName || "Unknown",
-    createdAt: msg.createdAt,
-  }));
+  const isGroup = type === "GROUP";
+  const displayMessages = currentMessages.filter((m) => !m.isDeleted);
+
+  if (isLoading && displayMessages.length === 0) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <StatusBar barStyle="light-content" />
+        <ChatHeader name={name} avatar={avatarUrl} type={type} participants={participants} />
+        <ActivityIndicator size="large" color={COLORS.primary} style={{ flex: 1 }} />
+      </View>
+    );
+  }
 
   return (
-    <LinearGradient colors={["#8e44ad", "#6c5ce7"]} style={styles.container}>
-      <ChatHeader name={name} avatar={avatarUrl} />
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+      <StatusBar barStyle="light-content" />
+      <ChatHeader name={name} avatar={avatarUrl} type={type} participants={participants} />
 
-      {isLoading && mappedMessages.length === 0 ? (
-        <View style={[styles.messageContainer, styles.centerContent]}>
-          <ActivityIndicator size="large" color="#fff" />
+      {displayMessages.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Chưa có tin nhắn nào.{"\n"}Hãy gửi lời chào! 👋</Text>
         </View>
       ) : (
         <FlatList
           ref={flatListRef}
-          data={mappedMessages}
+          data={displayMessages}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <MessageBubble
-              message={item.text}
-              isMe={item.isMe}
-              senderName={item.senderName}
+              message={item.content || ""}
+              isMe={item.senderInfo?.senderId === user?.id}
+              senderName={item.senderInfo?.displayName}
+              avatarUrl={item.senderInfo?.avatarUrl}
               createdAt={item.createdAt}
+              recalledAt={item.recalledAt}
+              isGroup={isGroup}
+              onLongPress={
+                item.senderInfo?.senderId === user?.id
+                  ? () => handleLongPress(item.id)
+                  : undefined
+              }
             />
           )}
-          contentContainerStyle={styles.messageContainer}
+          contentContainerStyle={styles.msgList}
           onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: true })
+            flatListRef.current?.scrollToEnd({ animated: false })
           }
-          scrollEnabled={mappedMessages.length > 0}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          showsVerticalScrollIndicator={false}
         />
       )}
 
-      <ChatInput onSend={handleSendMessage} disabled={sending} />
-    </LinearGradient>
+      <ChatInput onSend={handleSend} disabled={sending} />
+    </View>
   );
 };
 
@@ -105,14 +120,24 @@ export default ChatRoomScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f1f0f8",
   },
-  messageContainer: {
-    padding: 16,
-    flexGrow: 1,
-    justifyContent: "flex-end",
+  center: {
+    justifyContent: "flex-start",
   },
-  centerContent: {
-    justifyContent: "center",
+  msgList: {
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  emptyContainer: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    color: COLORS.textMuted,
+    textAlign: "center",
+    fontSize: 15,
+    lineHeight: 24,
   },
 });

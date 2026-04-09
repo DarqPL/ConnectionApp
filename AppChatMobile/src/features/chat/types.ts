@@ -52,3 +52,13 @@ export interface PageResponse<T> {
   hasNext: boolean;
   hasPrevious: boolean;
 }
+
+export interface Friend {
+  id: number;
+  friendId: number;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  status: string;
+  isRequester: boolean;
+}

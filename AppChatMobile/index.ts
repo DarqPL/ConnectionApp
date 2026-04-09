@@ -1,8 +1,12 @@
-import { registerRootComponent } from 'expo';
+/**
+ * index.ts — App entry point.
+ *
+ * IMPORTANT: polyfills MUST be imported before App so they run before
+ * @stomp/stompjs is loaded (Metro bundler processes imports in order).
+ */
+import "./src/polyfills"; // ← MUST be first import
 
-import App from './src/App';
+import { registerRootComponent } from "expo";
+import App from "./src/App";
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
 registerRootComponent(App);
