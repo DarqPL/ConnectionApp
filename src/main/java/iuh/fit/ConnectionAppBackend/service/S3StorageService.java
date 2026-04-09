@@ -2,8 +2,8 @@ package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.config.S3Properties;
 import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
-import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
-import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
+import iuh.fit.ConnectionAppBackend.exception.ImageNotFoundException;
+import iuh.fit.ConnectionAppBackend.exception.ImageValidationException;
 import iuh.fit.ConnectionAppBackend.exception.StorageException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,12 +20,15 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.UUID;
 
 @Service
 public class S3StorageService {
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L;
+    private static final int RANDOM_SUFFIX_LENGTH = 6;
+    private static final int RANDOM_SUFFIX_BOUND = 1_000_000;
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
             "jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff", "svg"
     );
@@ -48,7 +51,7 @@ public class S3StorageService {
 
     public ImageObjectResponse replaceImage(String objectKey, MultipartFile file) {
         if (!StringUtils.hasText(objectKey)) {
-            throw new BadRequestException("Object key is required");
+            throw new ImageValidationException("IMG_KEY_REQUIRED", "Object key is required");
         }
 
         String normalizedKey = normalizeKey(objectKey);
@@ -60,7 +63,7 @@ public class S3StorageService {
 
     public void deleteImage(String objectKey) {
         if (!StringUtils.hasText(objectKey)) {
-            throw new BadRequestException("Object key is required");
+            throw new ImageValidationException("IMG_KEY_REQUIRED", "Object key is required");
         }
 
         String normalizedKey = normalizeKey(objectKey);
@@ -74,7 +77,7 @@ public class S3StorageService {
                             .build()
             );
         } catch (S3Exception ex) {
-            throw new StorageException("Failed to delete image from S3", ex);
+            throw new StorageException("IMG_S3_DELETE_FAILED", "Failed to delete image from S3", ex);
         }
     }
 
@@ -121,12 +124,12 @@ public class S3StorageService {
                             .build()
             );
         } catch (NoSuchKeyException ex) {
-            throw new ResourceNotFoundException("Image not found for key: " + objectKey);
+            throw new ImageNotFoundException("IMG_NOT_FOUND", "Image not found for key: " + objectKey);
         } catch (S3Exception ex) {
             if (ex.statusCode() == 404) {
-                throw new ResourceNotFoundException("Image not found for key: " + objectKey);
+                throw new ImageNotFoundException("IMG_NOT_FOUND", "Image not found for key: " + objectKey);
             }
-            throw new StorageException("Failed to query image from S3", ex);
+            throw new StorageException("IMG_S3_QUERY_FAILED", "Failed to query image from S3", ex);
         }
     }
 
@@ -151,9 +154,9 @@ public class S3StorageService {
                     .size(file.getSize())
                     .build();
         } catch (IOException ex) {
-            throw new StorageException("Failed to read image payload", ex);
+            throw new StorageException("IMG_PAYLOAD_READ_FAILED", "Failed to read image payload", ex);
         } catch (S3Exception ex) {
-            throw new StorageException("Failed to upload image to S3", ex);
+            throw new StorageException("IMG_S3_UPLOAD_FAILED", "Failed to upload image to S3", ex);
         }
     }
 
@@ -172,7 +175,11 @@ public class S3StorageService {
 
     private String buildNewObjectKey(String originalFilename, String folder) {
         String extension = extractExtension(originalFilename);
-        String fileName = UUID.randomUUID() + extension;
+        String randomSuffix = String.format(
+            "%0" + RANDOM_SUFFIX_LENGTH + "d",
+            ThreadLocalRandom.current().nextInt(RANDOM_SUFFIX_BOUND)
+        );
+        String fileName = UUID.randomUUID() + "-" + randomSuffix + extension;
 
         String prefix = trimSlashes(s3Properties.getKeyPrefix());
         String folderPrefix = trimSlashes(folder);
@@ -188,21 +195,24 @@ public class S3StorageService {
 
     private void validateImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BadRequestException("Image file is required");
+            throw new ImageValidationException("IMG_FILE_REQUIRED", "Image file is required");
         }
 
         if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
-            throw new BadRequestException("Image size must not exceed 5MB");
+            throw new ImageValidationException("IMG_SIZE_EXCEEDED", "Image size must not exceed 5MB");
         }
 
         String contentType = file.getContentType();
         if (!StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
-            throw new BadRequestException("Only image files are allowed");
+            throw new ImageValidationException("IMG_INVALID_MIME", "Only image MIME types are allowed");
         }
 
         String extension = extractExtensionWithoutDot(file.getOriginalFilename());
         if (!StringUtils.hasText(extension) || !ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
-            throw new BadRequestException("Only image extensions are allowed: jpg, jpeg, png, gif, webp, bmp, tif, tiff, svg");
+            throw new ImageValidationException(
+                    "IMG_INVALID_EXTENSION",
+                    "Only image extensions are allowed: jpg, jpeg, png, gif, webp, bmp, tif, tiff, svg"
+            );
         }
     }
 
@@ -227,7 +237,7 @@ public class S3StorageService {
 
     private String requireBucket() {
         if (!StringUtils.hasText(s3Properties.getBucket())) {
-            throw new BadRequestException("S3 bucket is not configured");
+            throw new ImageValidationException("IMG_BUCKET_NOT_CONFIGURED", "S3 bucket is not configured");
         }
         return s3Properties.getBucket();
     }
