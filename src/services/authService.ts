@@ -21,7 +21,8 @@ export const authService = {
     password: string,
     email: string,
     firstName: string,
-    lastName: string
+    lastName: string,
+    otp: string
   ) => {
     const res = await api.post("/auth/signup", {
       username,
@@ -29,7 +30,18 @@ export const authService = {
       email,
       firstName,
       lastName,
+      otp,
     });
+    return res.data;
+  },
+
+  /**
+   * POST /api/auth/signup/send-otp
+   * Body: { email, username }
+   * Gửi OTP để xác nhận đăng ký
+   */
+  sendSignupOtp: async (email: string, username: string) => {
+    const res = await api.post("/auth/signup/send-otp", { email, username });
     return res.data;
   },
 
