@@ -48,6 +48,8 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password",
                                 "/api/auth/verify-otp",
                                 "/api/auth/reset-password",
+                                "/ws-native/**",
+                                "/ws-native",
                                 "/ws/**",
                                 "/ws/info/**",
                                 "/ws").permitAll()
@@ -75,10 +77,27 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of("http://localhost:5173","http://localhost:5174"));
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "http://192.168.*:*",
+                "http://10.*:*",
+                "http://172.16.*:*",
+                "http://172.17.*:*",
+                "http://172.18.*:*",
+                "http://172.19.*:*",
+                "http://172.2*.*:*",
+                "https://*.ngrok-free.app",
+                "http://*.ngrok-free.app",
+                "https://*.ngrok.io",
+                "http://*.ngrok.io",
+                "exp://*"
+        ));
         configuration.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
