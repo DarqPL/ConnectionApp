@@ -6,12 +6,14 @@ import ChatListScreen from "./features/chat/screens/ChatListScreen";
 import ChatRoomScreen from "./features/chat/screens/ChatRoomScreen";
 import SignInScreen from "./features/auth/screens/SignInScreen";
 import SignUpScreen from "./features/auth/screens/SignUpScreen";
+import ForgotPasswordScreen from "./features/auth/screens/ForgotPasswordScreen";
 import { AuthProvider, useAuth } from "./features/auth/context/AuthContext";
 import { ChatProvider } from "./features/chat/context/ChatContext";
 
 export type RootStackParamList = {
   SignIn: undefined;
   SignUp: undefined;
+  ForgotPassword: undefined;
   ChatList: undefined;
   ChatRoom: { conversationId: number; name: string; avatarUrl?: string | null };
 };
@@ -44,6 +46,12 @@ function AppNavigator() {
             <Stack.Screen
               name="SignUp"
               component={SignUpScreen}
+              options={{ headerShown: false }}
+            />
+
+            <Stack.Screen
+              name="ForgotPassword"
+              component={ForgotPasswordScreen}
               options={{ headerShown: false }}
             />
           </>

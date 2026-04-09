@@ -103,6 +103,13 @@ export default function SignInScreen({ navigation }: any) {
         {error && <Text style={styles.errorText}>{error}</Text>}
 
         <TouchableOpacity
+          onPress={() => navigation.navigate("ForgotPassword")}
+          style={{ alignSelf: "flex-end", marginBottom: 15 }}
+        >
+          <Text style={[styles.link, { marginTop: 0 }]}>Quên mật khẩu?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={{ width: "100%" }}
           onPress={handleSignIn}
           disabled={isLoading}

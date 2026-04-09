@@ -22,7 +22,11 @@ interface AuthContextType {
     username: string,
     email: string,
     password: string,
+    otp: string,
   ) => Promise<void>;
+  sendSignupOtp: (username: string, email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
   setApiBaseUrl: (url: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
@@ -83,6 +87,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const sendSignupOtp = useCallback(async (username: string, email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.sendSignupOtp(username, email);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Gửi OTP thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const signUp = useCallback(
     async (
       firstName: string,
@@ -90,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       username: string,
       email: string,
       password: string,
+      otp: string,
     ) => {
       setIsLoading(true);
       setError(null);
@@ -100,6 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           username,
           email,
           password,
+          otp,
         );
         await authService.signIn(username, password);
         const profile = await authService.fetchMe();
@@ -116,6 +136,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [],
   );
+
+  const forgotPassword = useCallback(async (email: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.forgotPassword(email);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Gửi yêu cầu thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, otp: string, newPassword: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.resetPassword(email, otp, newPassword);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Đặt lại mật khẩu thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const signOut = useCallback(async () => {
     setIsLoading(true);
@@ -153,6 +201,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     error,
     signIn,
     signUp,
+    sendSignupOtp,
+    forgotPassword,
+    resetPassword,
     setApiBaseUrl,
     signOut,
     clearError,
