@@ -22,6 +22,7 @@ import iuh.fit.ConnectionAppBackend.service.RefreshTokenService;
 import iuh.fit.ConnectionAppBackend.service.SecurityNotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -69,6 +70,12 @@ public class AuthController {
 
     @Autowired
     private EmailService emailService;
+
+    @Value("${app.auth.cookie.secure:false}")
+    private boolean refreshCookieSecure;
+
+    @Value("${app.auth.cookie.same-site:Lax}")
+    private String refreshCookieSameSite;
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest req){
@@ -275,8 +282,8 @@ public class AuthController {
     private ResponseCookie buildRefreshTokenCookie(String token) {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE, token)
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(refreshCookieSecure)
+                .sameSite(refreshCookieSameSite)
                 .path("/")
                 .maxAge(REFRESH_TOKEN_COOKIE_MAX_AGE)
                 .build();
@@ -285,11 +292,13 @@ public class AuthController {
     private ResponseCookie buildExpiredRefreshTokenCookie() {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE, "")
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(refreshCookieSecure)
+                .sameSite(refreshCookieSameSite)
                 .path("/")
                 .maxAge(0)
                 .build();
+    }
+
     /**
      * POST /api/auth/forgot-password
      * Body: { email }
