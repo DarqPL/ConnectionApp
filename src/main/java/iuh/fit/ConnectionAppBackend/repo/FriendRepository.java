@@ -3,6 +3,7 @@ package iuh.fit.ConnectionAppBackend.repo;
 import iuh.fit.ConnectionAppBackend.domain.common.FriendStatus;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Friend;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -57,11 +58,22 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
      * Check if two users are friends
      */
     @Query("SELECT COUNT(f) > 0 FROM Friend f " +
-            "WHERE (f.requester.id = :userId1 AND f.receiver.id = :userId2) " +
-            "OR (f.requester.id = :userId2 AND f.receiver.id = :userId1) " +
-            "AND f.status = 'ACCEPTED'")
-    boolean areFriends(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
+        "WHERE ((f.requester.id = :userId1 AND f.receiver.id = :userId2) " +
+        "OR (f.requester.id = :userId2 AND f.receiver.id = :userId1)) " +
+        "AND f.status = 'ACCEPTED'")
+        boolean areFriends(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
 
+    @Query("SELECT COUNT(f) > 0 FROM Friend f " +
+        "WHERE f.requester.id = :userId1 " +
+        "AND f.receiver.id = :userId2 " +
+        "AND f.status = 'PENDING'")
+        boolean isSending(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
+
+    @Query("SELECT COUNT(f) > 0 FROM Friend f " +
+        "WHERE f.requester.id = :userId2 " +
+        "AND f.receiver.id = :userId1 " +
+        "AND f.status = 'PENDING'")
+    boolean isReceived(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
     /**
      * Check if user is blocked
      */
@@ -74,5 +86,18 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
     /**
      * Delete friend relationship
      */
-    void deleteByRequesterId(Long requesterId);
+    @Modifying
+        @Query("DELETE FROM Friend f " +
+        "WHERE ((f.requester.id = :userId1 AND f.receiver.id = :userId2) " +
+        "OR (f.requester.id = :userId2 AND f.receiver.id = :userId1)) " +
+        "AND f.status = 'ACCEPTED'")
+        int unfriend(@Param("userId1") Long userId1,
+                @Param("userId2") Long userId2);
+@Modifying
+@Query("DELETE FROM Friend f " +
+       "WHERE f.requester.id = :userId1 " +
+       "AND f.receiver.id = :userId2 " +
+       "AND f.status = 'PENDING'")
+int cancelRequest(@Param("userId1") Long userId1,
+                  @Param("userId2") Long userId2);
 }

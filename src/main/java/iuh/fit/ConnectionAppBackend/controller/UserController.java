@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -116,5 +117,19 @@ public class UserController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
+    }
+    @PostMapping("/{id}/lock")
+    public ResponseEntity<String> lockAccount(@PathVariable Long id){
+        return ResponseEntity.ok(userService.lockAccount(id));
+    }
+
+    @PostMapping("/{id}/unlock")
+    public ResponseEntity<String> unlockAccount(@PathVariable Long id){
+        return ResponseEntity.ok(userService.unlockAccount(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteAccount(@PathVariable Long id){
+        return ResponseEntity.ok(userService.deleteAccount(id));
     }
 }

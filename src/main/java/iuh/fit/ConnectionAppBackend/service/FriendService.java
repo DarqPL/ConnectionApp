@@ -42,8 +42,17 @@ public class FriendService {
 
         // Check if friendship already exists
         if (friendRepository.findFriendship(requesterId, receiverId).isPresent()) {
-            throw new BadRequestException("Friendship already exists between these users");
-        }
+            Friend f = friendRepository.findFriendship(requesterId, receiverId).get();
+            if(f.getStatus()==FriendStatus.PENDING){
+                f.setStatus(FriendStatus.ACCEPTED);
+                Friend savedFriend = friendRepository.save(f);
+                return mapToFriendResponse(savedFriend, requesterId);
+            }
+            else if(f.getStatus()==FriendStatus.ACCEPTED)
+                throw new BadRequestException("Friendship already exists between these users");
+            else 
+                throw new BadRequestException("ban");
+        }   
 
         Friend friend = Friend.builder()
                 .requester(requester)
@@ -161,6 +170,36 @@ public class FriendService {
     public boolean areFriends(Long userId1, Long userId2) {
         return friendRepository.areFriends(userId1, userId2);
     }
+
+    /**
+     * Check if userId1 Sending 
+     */
+    public boolean isSending(Long userId1, Long userId2) {
+        return friendRepository.isSending(userId1, userId2);
+    }
+
+    /**
+     * Check if userId1 Received
+     */
+    public boolean isReceived(Long userId1, Long userId2) {
+        return friendRepository.isReceived(userId1, userId2);
+    }
+
+    @Transactional
+    public void cancelFriendRequest(Long userId1, Long userId2) {
+        int deleted = friendRepository.cancelRequest(userId1, userId2);
+        if (deleted == 0) {
+            throw new RuntimeException("Không tìm thấy lời mời để hủy");
+        }
+    }
+    @Transactional
+    public void unfriend(Long userId1, Long userId2) {
+        int deleted = friendRepository.unfriend(userId1, userId2);
+        if (deleted == 0) {
+            throw new RuntimeException("Không phải bạn bè");
+        }
+    }
+    
 
     /**
      * Map Friend entity to FriendResponse DTO
