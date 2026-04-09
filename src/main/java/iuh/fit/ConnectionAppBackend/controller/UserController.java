@@ -2,6 +2,7 @@ package iuh.fit.ConnectionAppBackend.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
@@ -131,5 +133,39 @@ public class UserController {
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.deleteAccount(id));
+    }
+
+    @PostMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserProfileResponse> createCurrentUserAvatar(
+            Authentication authentication,
+            @RequestParam("file") MultipartFile avatarFile) {
+
+        Long userId = getAuthenticatedUserId(authentication);
+        UserProfileResponse updatedProfile = userService.createCurrentUserAvatar(userId, avatarFile);
+        return ResponseEntity.status(HttpStatus.CREATED).body(updatedProfile);
+    }
+
+    @PutMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UserProfileResponse> updateCurrentUserAvatar(
+            Authentication authentication,
+            @RequestParam("file") MultipartFile avatarFile) {
+
+        Long userId = getAuthenticatedUserId(authentication);
+        UserProfileResponse updatedProfile = userService.updateCurrentUserAvatar(userId, avatarFile);
+        return ResponseEntity.ok(updatedProfile);
+    }
+
+    @DeleteMapping("/profile/avatar")
+    public ResponseEntity<Void> deleteCurrentUserAvatar(Authentication authentication) {
+        Long userId = getAuthenticatedUserId(authentication);
+        userService.deleteCurrentUserAvatar(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    private Long getAuthenticatedUserId(Authentication authentication) {
+        String username = authentication.getName();
+        return userService.getUserByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
     }
 }
