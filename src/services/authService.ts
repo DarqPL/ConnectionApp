@@ -21,7 +21,7 @@ export const authService = {
     password: string,
     email: string,
     firstName: string,
-    lastName: string,
+    lastName: string
   ) => {
     const res = await api.post("/auth/signup", {
       username,
@@ -36,14 +36,15 @@ export const authService = {
   /**
    * POST /api/auth/signin
    * Body: { username, password }
-   * Returns: LoginResponse { accessToken }
+   * Returns: LoginResponse { accessToken } 
+   * (Assumes refreshToken is handled via HttpOnly Cookie by the backend)
    */
   signIn: async (username: string, password: string) => {
     const res = await api.post("/auth/signin", {
       username,
       password,
     });
-    return res.data; // { accessToken }
+    return res.data; 
   },
 
   /**
@@ -89,6 +90,36 @@ export const authService = {
    */
   logoutAllDevices: async () => {
     const res = await api.post("/auth/logout-all");
+    return res.data;
+  },
+
+  /**
+   * POST /api/auth/forgot-password
+   * Body: { email }
+   * Gửi OTP về email để đặt lại mật khẩu
+   */
+  forgotPassword: async (email: string) => {
+    const res = await api.post("/auth/forgot-password", { email });
+    return res.data;
+  },
+
+  /**
+   * POST /api/auth/verify-otp
+   * Body: { email, otp }
+   * Xác minh mã OTP
+   */
+  verifyOtp: async (email: string, otp: string) => {
+    const res = await api.post("/auth/verify-otp", { email, otp });
+    return res.data;
+  },
+
+  /**
+   * POST /api/auth/reset-password
+   * Body: { email, otp, newPassword }
+   * Đặt lại mật khẩu mới
+   */
+  resetPassword: async (email: string, otp: string, newPassword: string) => {
+    const res = await api.post("/auth/reset-password", { email, otp, newPassword });
     return res.data;
   },
 };

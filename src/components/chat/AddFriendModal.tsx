@@ -15,6 +15,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import UserAvatar from "./UserAvatar";
 import { userService } from "@/services/userService";
+import { friendService } from "@/services/friendService";
 
 const AddFriendModal = () => {
   const [open, setOpen] = useState(false);
@@ -22,7 +23,19 @@ const AddFriendModal = () => {
   const [foundUsers, setFoundUsers] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchDone, setSearchDone] = useState(false);
+  const [relationshipMap, setRelationshipMap] = useState<Record<number, string>>({});
+
   const { loading, sendFriendRequest } = useFriendStore();
+
+  const {
+    checkFriendship,
+    checkIsSending,
+    checkIsReceived,
+    acceptFriendRequest,
+    rejectFriendRequest,
+    cancelFriendRequest,
+    unfriend,
+  } = friendService;
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,9 +47,33 @@ const AddFriendModal = () => {
 
     try {
       const users = await userService.searchUsers(searchUsername);
-      setFoundUsers(users);
+
+      // ❌ lọc bỏ user DELETED
+      const filteredUsers = users.filter((u) => u.status !== "DELETED");
+
+      setFoundUsers(filteredUsers);
+
+      const map: Record<number, string> = {};
+
+      await Promise.all(
+        filteredUsers.map(async (u) => {
+          const [isFriend, isSending, isReceived] = await Promise.all([
+            checkFriendship(u.id),
+            checkIsSending(u.id),
+            checkIsReceived(u.id),
+          ]);
+
+          if (isFriend) map[u.id] = "FRIEND";
+          else if (isSending) map[u.id] = "SENDING";
+          else if (isReceived) map[u.id] = "RECEIVED";
+          else map[u.id] = "NONE";
+        })
+      );
+
+      setRelationshipMap(map);
     } catch (error) {
       console.error(error);
+      toast.error("Lỗi khi tìm kiếm");
     } finally {
       setIsSearching(false);
       setSearchDone(true);
@@ -46,12 +83,70 @@ const AddFriendModal = () => {
   const handleSendRequest = async (userId: number) => {
     try {
       await sendFriendRequest(userId);
-      toast.success("Đã gửi lời mời kết bạn!");
-      handleReset();
-      setOpen(false);
+      toast.success("Đã gửi lời mời");
+
+      setRelationshipMap((prev) => ({
+        ...prev,
+        [userId]: "SENDING",
+      }));
     } catch (error) {
-      console.error("Lỗi xảy ra khi gửi request", error);
-      toast.error("Lỗi xảy ra khi gửi kết bạn. Hãy thử lại");
+      toast.error("Không thể gửi");
+    }
+  };
+
+  const handleCancel = async (userId: number) => {
+    try {
+      await cancelFriendRequest(userId);
+      toast.success("Đã hủy lời mời");
+
+      setRelationshipMap((prev) => ({
+        ...prev,
+        [userId]: "NONE",
+      }));
+    } catch (error) {
+      toast.error("Lỗi khi hủy");
+    }
+  };
+
+  const handleUnfriend = async (userId: number) => {
+    try {
+      await unfriend(userId);
+      toast.success("Đã hủy kết bạn");
+
+      setRelationshipMap((prev) => ({
+        ...prev,
+        [userId]: "NONE",
+      }));
+    } catch (error) {
+      toast.error("Lỗi khi hủy kết bạn");
+    }
+  };
+
+  const handleAccept = async (userId: number) => {
+    try {
+      await acceptFriendRequest(userId);
+      toast.success("Đã chấp nhận");
+
+      setRelationshipMap((prev) => ({
+        ...prev,
+        [userId]: "FRIEND",
+      }));
+    } catch (error) {
+      toast.error("Lỗi khi accept");
+    }
+  };
+
+  const handleReject = async (userId: number) => {
+    try {
+      await rejectFriendRequest(userId);
+      toast.success("Đã từ chối");
+
+      setRelationshipMap((prev) => ({
+        ...prev,
+        [userId]: "NONE",
+      }));
+    } catch (error) {
+      toast.error("Lỗi khi reject");
     }
   };
 
@@ -59,37 +154,38 @@ const AddFriendModal = () => {
     setSearchUsername("");
     setFoundUsers([]);
     setSearchDone(false);
+    setRelationshipMap({});
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => {
-      setOpen(val);
-      if (!val) handleReset();
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val);
+        if (!val) handleReset();
+      }}
+    >
       <DialogTrigger asChild>
-        <div className="flex justify-center items-center size-5 rounded-full hover:bg-sidebar-accent cursor-pointer z-10">
+        <div className="flex justify-center items-center size-5 rounded-full hover:bg-sidebar-accent cursor-pointer">
           <UserPlus className="size-4" />
-          <span className="sr-only">Kết bạn</span>
         </div>
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[425px] border-none">
         <DialogHeader>
-          <DialogTitle>Kết Bạn</DialogTitle>
+          <DialogTitle>Kết bạn</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSearch} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="search-username">Tìm kiêm</Label>
+            <Label>Tìm kiếm</Label>
             <div className="flex gap-2">
               <Input
-                id="search-username"
-                placeholder="Số điện thoại, Tên, Tên đăng nhập..."
+                placeholder="Nhập username..."
                 value={searchUsername}
                 onChange={(e) => setSearchUsername(e.target.value)}
-                className="flex-1"
               />
-              <Button type="submit" disabled={isSearching || !searchUsername.trim()}>
+              <Button type="submit">
                 {isSearching ? "Đang tìm..." : "Tìm"}
               </Button>
             </div>
@@ -97,34 +193,76 @@ const AddFriendModal = () => {
 
           {searchDone && foundUsers.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Không tìm thấy người dùng "{searchUsername}"
+              Không tìm thấy "{searchUsername}"
             </p>
           )}
 
-          {foundUsers.map((u) => (
-            <div key={u.id} className="flex items-center justify-between rounded-lg border p-3">
-              <div className="flex items-center gap-3">
-                <UserAvatar
-                  type="sidebar"
-                  name={u.displayName}
-                  avatarUrl={u.avatarUrl}
-                />
-                <div>
-                  <p className="font-medium">{u.displayName}</p>
-                  <p className="text-sm text-muted-foreground">@{u.username}</p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => handleSendRequest(u.id)}
-                disabled={loading}
+          {foundUsers.map((u) => {
+            const status = relationshipMap[u.id];
+
+            return (
+              <div
+                key={u.id}
+                className="flex items-center justify-between border rounded-lg p-3"
               >
-                <UserPlus className="size-4 mr-1" />
-                Kết bạn
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3">
+                  <UserAvatar
+                    type="sidebar"
+                    name={u.displayName}
+                    avatarUrl={u.avatarUrl}
+                  />
+                  <div>
+                    <p className="font-medium">{u.displayName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      @{u.username}
+                    </p>
+
+                    {/* 🔥 tài khoản bị khóa */}
+                    {u.status === "LOCKED" && (
+                      <p className="text-xs text-red-500">
+                        Tài khoản này đã tạm khóa
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* ❌ nếu LOCKED thì không cho thao tác */}
+                {u.status !== "LOCKED" && (
+                  <>
+                    {status === "FRIEND" && (
+                      <Button size="sm" variant="destructive" onClick={() => handleUnfriend(u.id)}>
+                        Hủy kết bạn
+                      </Button>
+                    )}
+
+                    {status === "SENDING" && (
+                      <Button size="sm" variant="outline" onClick={() => handleCancel(u.id)}>
+                        Hủy lời mời
+                      </Button>
+                    )}
+
+                    {status === "RECEIVED" && (
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => handleAccept(u.id)}>
+                          Chấp nhận
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleReject(u.id)}>
+                          Từ chối
+                        </Button>
+                      </div>
+                    )}
+
+                    {status === "NONE" && (
+                      <Button size="sm" onClick={() => handleSendRequest(u.id)}>
+                        <UserPlus className="size-4 mr-1" />
+                        Kết bạn
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
         </form>
       </DialogContent>
     </Dialog>

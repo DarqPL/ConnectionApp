@@ -61,4 +61,31 @@ export const userService = {
     });
     return res.data;
   },
+  /**
+   * POST /api/users/{id}/lock
+   * Returns: string
+   */
+  async lockAccount(userId: number): Promise<string> {
+    const res = await api.post(`/users/${userId}/lock`);
+    return res.data;
+  },
+
+  /**
+   * POST /api/users/{id}/unlock
+   * Returns: string
+   */
+  async unlockAccount(userId: number): Promise<string> {
+    const res = await api.post(`/users/${userId}/unlock`);
+    return res.data;
+  },
+
+  /**
+   * DELETE /api/users/{id}
+   * Returns: string
+   */
+  async deleteAccount(userId: number): Promise<string> {
+    const res = await api.delete(`/users/${userId}`);
+    return res.data;
+  },
+
 };

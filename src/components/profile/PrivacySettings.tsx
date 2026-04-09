@@ -11,6 +11,10 @@ import {
   Smartphone,
   Tablet,
 } from "lucide-react";
+"use client";
+
+import { useState, useEffect } from "react";
+import { Shield, Bell, ShieldBan, Unlock } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -98,6 +102,63 @@ const PrivacySettings = () => {
   useEffect(() => {
     fetchDevices();
   }, []);
+import { userService } from "@/services/userService";
+import type { User } from "@/types/user";
+
+type Props = {
+  user: User | null;
+};
+
+const PrivacySettings = ({ user }: Props) => {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(user?.status);
+  console.log(user);
+  
+  useEffect(() => {
+    if (user?.status) {
+      setStatus(user.status);
+    }
+  }, [user]);
+
+  if (!user) return null;
+
+  const handleLockToggle = async () => {
+    try {
+      setLoading(true);
+
+      let message = "";
+
+      if (status === "LOCKED") {
+        message = await userService.unlockAccount(user.id);
+        setStatus("OFFLINE");
+      } else {
+        message = await userService.lockAccount(user.id);
+        setStatus("LOCKED");
+      }
+
+      console.log(message);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Bạn có chắc muốn xoá tài khoản không?")) return;
+
+    try {
+      setLoading(true);
+      const message = await userService.deleteAccount(user.id);
+      console.log(message);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isLocked = status === "LOCKED";
 
   return (
     <Card className="glass-strong border-border/30">
@@ -131,10 +192,29 @@ const PrivacySettings = () => {
 
           <Button
             variant="outline"
+          <Button
             className="w-full justify-start glass-light border-border/30 hover:text-destructive"
           >
             <ShieldBan className="size-4 mr-2" />
             Chặn & Báo cáo
+          </Button>
+
+          <Button
+            onClick={handleLockToggle}
+            disabled={loading}
+            className="w-full justify-start"
+          >
+            {isLocked ? (
+              <>
+                <Unlock className="size-4 mr-2" />
+                Mở khóa tài khoản
+              </>
+            ) : (
+              <>
+                <ShieldBan className="size-4 mr-2" />
+                Khóa tài khoản
+              </>
+            )}
           </Button>
         </div>
 
@@ -193,7 +273,7 @@ const PrivacySettings = () => {
                       </div>
                     </div>
 
-                    <div className="text-xs text-muted-foreground wrap-break-word">
+                    <div className="text-xs text-muted-foreground wrap-break-word mt-2">
                       Lần hoạt động gần nhất: {formatDate(device.lastUsedAt)}
                     </div>
                     <div className="text-xs text-muted-foreground wrap-break-word">
@@ -216,9 +296,23 @@ const PrivacySettings = () => {
             {logoutAllLoading ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
-              <RotateCcw className="size-4" />
+              <RotateCcw className="size-4 mr-2" />
             )}
             Đăng xuất tất cả thiết bị
+          </Button>
+        </div>
+
+        <div className="pt-4 border-t">
+          <h4 className="font-medium mb-3 text-destructive">
+            Khu vực nguy hiểm
+          </h4>
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={handleDelete}
+            disabled={loading}
+          >
+            Xoá tài khoản
           </Button>
         </div>
       </CardContent>
