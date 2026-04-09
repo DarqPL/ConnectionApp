@@ -6,6 +6,9 @@ interface Props {
   value?: string;
   onChangeText?: (text: string) => void;
   editable?: boolean;
+  keyboardType?: "default" | "email-address" | "numeric" | "phone-pad" | "number-pad";
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  maxLength?: number;
 }
 
 export default function AuthInput({
@@ -14,6 +17,9 @@ export default function AuthInput({
   value,
   onChangeText,
   editable = true,
+  keyboardType = "default",
+  autoCapitalize = "none",
+  maxLength,
 }: Props) {
   return (
     <View style={styles.container}>
@@ -25,6 +31,9 @@ export default function AuthInput({
         value={value}
         onChangeText={onChangeText}
         editable={editable}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        maxLength={maxLength}
       />
     </View>
   );

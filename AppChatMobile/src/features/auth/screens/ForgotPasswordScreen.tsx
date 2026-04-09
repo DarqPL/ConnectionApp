@@ -12,18 +12,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import AuthInput from "../components/AuthInput";
 import { useAuth } from "../context/AuthContext";
 
-export default function SignUpScreen({ navigation }: any) {
-  const [step, setStep] = useState(1); // 1: Info, 2: OTP
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
+export default function ForgotPasswordScreen({ navigation }: any) {
+  const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: New Password
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { signUp, sendSignupOtp, isLoading, error, clearError } = useAuth();
+  const { forgotPassword, resetPassword, isLoading, error } = useAuth();
 
   useEffect(() => {
     if (countdown > 0) {
@@ -37,19 +35,13 @@ export default function SignUpScreen({ navigation }: any) {
   }, [countdown]);
 
   const handleSendOtp = async () => {
-    if (!firstName || !lastName || !username || !email || !password) {
-      Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin đăng ký");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert("Email không hợp lệ", "Vui lòng nhập đúng định dạng email");
+    if (!email) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập email của bạn");
       return;
     }
 
     try {
-      await sendSignupOtp(username, email);
+      await forgotPassword(email);
       setStep(2);
       setCountdown(60);
       Alert.alert("Thành công", "Mã OTP đã được gửi đến email của bạn");
@@ -58,24 +50,41 @@ export default function SignUpScreen({ navigation }: any) {
     }
   };
 
-  const handleVerifyAndSignUp = async () => {
+  const handleVerifyOtp = async () => {
     if (!otp || otp.length < 6) {
       Alert.alert("Thiếu thông tin", "Vui lòng nhập mã OTP 6 chữ số");
       return;
     }
+    // We don't have a standalone verify-only context method yet, 
+    // but we can just move to step 3 and verify during reset.
+    // Or we could add it to context. For now, let's keep it simple.
+    setStep(3);
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập đầy đủ mật khẩu mới");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Mật khẩu không khớp", "Mật khẩu xác nhận không trùng khớp");
+      return;
+    }
 
     try {
-      await signUp(firstName, lastName, username, email, password, otp);
-      // Auth state will trigger navigation
+      await resetPassword(email, otp, newPassword);
+      Alert.alert("Thành công", "Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại.", [
+        { text: "OK", onPress: () => navigation.navigate("SignIn") }
+      ]);
     } catch (err) {
-      Alert.alert("Đăng ký thất bại", err instanceof Error ? err.message : "Lỗi không xác định");
+      Alert.alert("Lỗi", err instanceof Error ? err.message : "Đặt lại mật khẩu thất bại");
     }
   };
 
   const handleResendOtp = async () => {
     if (countdown > 0) return;
     try {
-      await sendSignupOtp(username, email);
+      await forgotPassword(email);
       setCountdown(60);
       Alert.alert("Thông báo", "Mã OTP mới đã được gửi");
     } catch (err) {
@@ -90,51 +99,28 @@ export default function SignUpScreen({ navigation }: any) {
     >
       <View style={styles.card}>
         <Text style={styles.title}>
-          {step === 1 ? "Tạo tài khoản" : "Xác thực OTP"}
+          {step === 1 ? "Quên mật khẩu" : step === 2 ? "Xác thực OTP" : "Đặt lại mật khẩu"}
         </Text>
         <Text style={styles.subtitle}>
           {step === 1
-            ? "Chào mừng bạn! Hãy đăng ký để bắt đầu"
-            : `Mã OTP đã được gửi đến ${email}`}
+            ? "Nhập email để nhận mã khôi phục"
+            : step === 2
+            ? `Mã OTP đã được gửi đến ${email}`
+            : "Nhập mật khẩu mới cho tài khoản của bạn"}
         </Text>
 
-        {step === 1 ? (
-          <>
-            <AuthInput
-              placeholder="Họ"
-              value={firstName}
-              onChangeText={setFirstName}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Tên"
-              value={lastName}
-              onChangeText={setLastName}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Tên đăng nhập"
-              value={username}
-              onChangeText={setUsername}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Mật khẩu"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              editable={!isLoading}
-            />
-          </>
-        ) : (
+        {step === 1 && (
+          <AuthInput
+            placeholder="Email"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+            editable={!isLoading}
+          />
+        )}
+
+        {step === 2 && (
           <>
             <AuthInput
               placeholder="Nhập mã OTP 6 chữ số"
@@ -153,9 +139,25 @@ export default function SignUpScreen({ navigation }: any) {
                 {countdown > 0 ? `Gửi lại mã (${countdown}s)` : "Gửi lại mã OTP"}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setStep(1)} disabled={isLoading}>
-              <Text style={styles.link}>Thay đổi thông tin</Text>
-            </TouchableOpacity>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <AuthInput
+              placeholder="Mật khẩu mới"
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+              editable={!isLoading}
+            />
+            <AuthInput
+              placeholder="Xác nhận mật khẩu mới"
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              editable={!isLoading}
+            />
           </>
         )}
 
@@ -163,7 +165,7 @@ export default function SignUpScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={{ width: "100%", marginTop: 10 }}
-          onPress={step === 1 ? handleSendOtp : handleVerifyAndSignUp}
+          onPress={step === 1 ? handleSendOtp : step === 2 ? handleVerifyOtp : handleResetPassword}
           disabled={isLoading}
         >
           <LinearGradient
@@ -174,14 +176,17 @@ export default function SignUpScreen({ navigation }: any) {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>
-                {step === 1 ? "Tiếp tục" : "Hoàn tất đăng ký"}
+                {step === 1 ? "Gửi mã OTP" : step === 2 ? "Tiếp tục" : "Đặt lại mật khẩu"}
               </Text>
             )}
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate("SignIn")} disabled={isLoading}>
-          <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
+        <TouchableOpacity 
+          onPress={() => step > 1 ? setStep(step - 1) : navigation.goBack()} 
+          disabled={isLoading}
+        >
+          <Text style={styles.link}>Quay lại</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
