@@ -10,11 +10,9 @@ import {
   ShieldBan,
   Smartphone,
   Tablet,
+  Unlock,
 } from "lucide-react";
-"use client";
 
-import { useState, useEffect } from "react";
-import { Shield, Bell, ShieldBan, Unlock } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -27,6 +25,8 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { Separator } from "../ui/separator";
+import { userService } from "@/services/userService";
+import type { User } from "@/types/user";
 
 const formatDate = (value?: string) => {
   if (!value) return "-";
@@ -51,10 +51,16 @@ const iconFromDevice = (deviceName?: string) => {
   return Globe;
 };
 
-const PrivacySettings = () => {
+type Props = {
+  user: User | null;
+};
+
+const PrivacySettings = ({ user }: Props) => {
   const [devices, setDevices] = useState<DeviceSession[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(user?.status);
   const { clearState } = useAuthStore();
   const navigate = useNavigate();
 
@@ -102,18 +108,7 @@ const PrivacySettings = () => {
   useEffect(() => {
     fetchDevices();
   }, []);
-import { userService } from "@/services/userService";
-import type { User } from "@/types/user";
 
-type Props = {
-  user: User | null;
-};
-
-const PrivacySettings = ({ user }: Props) => {
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState(user?.status);
-  console.log(user);
-  
   useEffect(() => {
     if (user?.status) {
       setStatus(user.status);
@@ -126,17 +121,13 @@ const PrivacySettings = ({ user }: Props) => {
     try {
       setLoading(true);
 
-      let message = "";
-
       if (status === "LOCKED") {
-        message = await userService.unlockAccount(user.id);
+        await userService.unlockAccount(user.id);
         setStatus("OFFLINE");
       } else {
-        message = await userService.lockAccount(user.id);
+        await userService.lockAccount(user.id);
         setStatus("LOCKED");
       }
-
-      console.log(message);
     } catch (err) {
       console.error(err);
     } finally {
@@ -145,12 +136,11 @@ const PrivacySettings = ({ user }: Props) => {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Bạn có chắc muốn xoá tài khoản không?")) return;
+    if (!window.confirm("Bạn có chắc muốn xoá tài khoản không?")) return;
 
     try {
       setLoading(true);
-      const message = await userService.deleteAccount(user.id);
-      console.log(message);
+      await userService.deleteAccount(user.id);
     } catch (err) {
       console.error(err);
     } finally {
@@ -192,7 +182,6 @@ const PrivacySettings = ({ user }: Props) => {
 
           <Button
             variant="outline"
-          <Button
             className="w-full justify-start glass-light border-border/30 hover:text-destructive"
           >
             <ShieldBan className="size-4 mr-2" />
