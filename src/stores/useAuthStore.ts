@@ -4,7 +4,6 @@ import type { AuthState } from "@/types/store";
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   accessToken: localStorage.getItem("accessToken"),
-  refreshToken: localStorage.getItem("refreshToken"),
   user: null,
   loading: false,
 
@@ -16,8 +15,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   clearState: () => {
     localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    set({ accessToken: null, refreshToken: null, user: null, loading: false });
+    set({ accessToken: null, user: null, loading: false });
   },
 
   signUp: async (username, password, email, firstName, lastName) => {
@@ -33,12 +31,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ loading: true });
     try {
       const data = await authService.signIn(username, password);
-      // Backend returns { accessToken, refreshToken }
+      // Backend returns { accessToken } and sets refresh token in HttpOnly cookie.
       localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
       set({
         accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
       });
     } finally {
       set({ loading: false });
@@ -47,7 +43,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   signOut: async () => {
     await authService.signOut();
-    set({ accessToken: null, refreshToken: null, user: null });
+    set({ accessToken: null, user: null });
   },
 
   fetchMe: async () => {
@@ -61,11 +57,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   refresh: async () => {
-    const { refreshToken } = get();
-    if (!refreshToken) return;
-
     try {
-      const newAccessToken = await authService.refresh(refreshToken);
+      const newAccessToken = await authService.refresh();
       localStorage.setItem("accessToken", newAccessToken);
       set({ accessToken: newAccessToken });
     } catch (error) {

@@ -3,7 +3,6 @@ import type { Friend, User } from "./user";
 
 export interface AuthState {
   accessToken: string | null;
-  refreshToken: string | null;
   user: User | null;
   loading: boolean;
 
@@ -15,7 +14,7 @@ export interface AuthState {
     password: string,
     email: string,
     firstName: string,
-    lastName: string
+    lastName: string,
   ) => Promise<void>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -48,16 +47,22 @@ export interface ChatState {
   setActiveConversation: (id: number | null) => void;
   fetchConversations: (page?: number) => Promise<void>;
   fetchMessages: (conversationId?: number) => Promise<void>;
-  sendMessage: (conversationId: number, content: string, parentId?: string | null) => Promise<void>;
+  sendMessage: (
+    conversationId: number,
+    content: string,
+    parentId?: string | null,
+  ) => Promise<void>;
   addMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;
   recallMessage: (conversationId: number, messageId: string) => Promise<void>;
-  updateConversation: (conversation: Partial<Conversation> & { id: number }) => void;
+  updateConversation: (
+    conversation: Partial<Conversation> & { id: number },
+  ) => void;
   addConvo: (convo: Conversation) => void;
   createConversation: (
     type: string,
     name: string,
-    participantIds: number[]
+    participantIds: number[],
   ) => Promise<void>;
 }
 
