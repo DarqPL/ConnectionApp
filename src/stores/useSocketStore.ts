@@ -4,6 +4,7 @@ import { Client } from "@stomp/stompjs";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
 import { toast } from "sonner";
+import api from "@/lib/axios";
 
 interface SecurityNotification {
   type: string;
@@ -22,6 +23,17 @@ interface SocketState {
   disconnectSocket: () => void;
 }
 
+const resolveSocketUrl = (): string => {
+  const base = api.defaults.baseURL;
+
+  if (typeof base === "string" && base.startsWith("http")) {
+    return base.replace(/\/api\/?$/, "") + "/ws";
+  }
+
+  // Fallback when baseURL is relative in production.
+  return `${window.location.origin}/ws`;
+};
+
 export const useSocketStore = create<SocketState>((set, get) => ({
   client: null,
   onlineUsers: [],
@@ -32,7 +44,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     if (existingClient || !token) return;
 
-    const socket = new SockJS("http://localhost:8080/ws");
+    const socket = new SockJS(resolveSocketUrl());
 
     const client = new Client({
       webSocketFactory: () => socket,
@@ -87,6 +99,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
       onStompError: (frame) => {
         console.error("STOMP error:", frame.headers["message"]);
+      },
+      onWebSocketClose: () => {
+        console.warn("WebSocket closed. Waiting for reconnect...");
+      },
+      onWebSocketError: () => {
+        console.error("WebSocket transport error");
       },
     });
 
