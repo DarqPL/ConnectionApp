@@ -265,6 +265,16 @@ export class AuthService {
     }
   }
 
+  async deleteAccount(userId: number): Promise<void> {
+    const response = await this.authFetch(`/users/${userId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Xóa tài khoản thất bại");
+    }
+  }
+
   async signIn(username: string, password: string): Promise<void> {
     const response = await this.safeFetch(this.buildUrl("/auth/signin"), {
       method: "POST",
