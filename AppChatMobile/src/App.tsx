@@ -4,6 +4,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import ChatListScreen from "./features/chat/screens/ChatListScreen";
 import ChatRoomScreen from "./features/chat/screens/ChatRoomScreen";
+import ProfileScreen from "./features/chat/screens/ProfileScreen";
+import AddFriendScreen from "./features/chat/screens/AddFriendScreen";
+import ContactScreen from "./features/chat/screens/ContactScreen";
+import CreateGroupScreen from "./features/chat/screens/CreateGroupScreen";
 import SignInScreen from "./features/auth/screens/SignInScreen";
 import SignUpScreen from "./features/auth/screens/SignUpScreen";
 import ForgotPasswordScreen from "./features/auth/screens/ForgotPasswordScreen";
@@ -16,6 +20,10 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   ChatList: undefined;
   ChatRoom: { conversationId: number; name: string; avatarUrl?: string | null };
+  Profile: undefined;
+  AddFriend: undefined;
+  Contacts: undefined;
+  CreateGroup: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -62,14 +70,45 @@ function AppNavigator() {
               name="ChatList"
               component={ChatListScreen}
               options={{
-                title: "Connection",
-                headerShown: true,
+                headerShown: false,
               }}
             />
 
             <Stack.Screen
               name="ChatRoom"
               component={ChatRoomScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="Profile"
+              component={ProfileScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="AddFriend"
+              component={AddFriendScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="Contacts"
+              component={ContactScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="CreateGroup"
+              component={CreateGroupScreen}
               options={{
                 headerShown: false,
               }}
@@ -81,13 +120,17 @@ function AppNavigator() {
   );
 }
 
+import { SafeAreaProvider } from "react-native-safe-area-context";
+
 export default function App() {
   return (
-    <AuthProvider>
-      <ChatProvider>
-        <AppNavigator />
-      </ChatProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ChatProvider>
+          <AppNavigator />
+        </ChatProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

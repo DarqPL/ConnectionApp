@@ -86,9 +86,9 @@ export default function SignInScreen({ navigation }: any) {
           value={serverUrl}
           onChangeText={setServerUrl}
           editable={!isLoading}
-        />
+        /> */}
 
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleSaveServerUrl}
           disabled={isLoading}

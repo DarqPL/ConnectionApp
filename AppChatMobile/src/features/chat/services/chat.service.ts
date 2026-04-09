@@ -116,6 +116,26 @@ export class ChatService {
       );
     }
   }
+
+  async createConversation(
+    type: "PRIVATE" | "GROUP",
+    name: string,
+    participantIds: number[],
+  ): Promise<Conversation> {
+    const response = await authService.authFetch("/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ type, name, participantIds }),
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể tạo hội thoại");
+    }
+
+    return (await response.json()) as Conversation;
+  }
 }
 
 export const chatService = new ChatService();
