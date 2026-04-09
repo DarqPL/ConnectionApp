@@ -147,13 +147,16 @@ export class AuthService {
   }
 
   async sendSignupOtp(username: string, email: string): Promise<void> {
-    const response = await this.safeFetch(this.buildUrl("/auth/signup/send-otp"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await this.safeFetch(
+      this.buildUrl("/auth/signup/send-otp"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, email }),
       },
-      body: JSON.stringify({ username, email }),
-    });
+    );
 
     if (!response.ok) {
       throw await this.parseError(response, "Không thể gửi mã OTP");
@@ -189,16 +192,22 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<void> {
-    const response = await this.safeFetch(this.buildUrl("/auth/forgot-password"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await this.safeFetch(
+      this.buildUrl("/auth/forgot-password"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
       },
-      body: JSON.stringify({ email }),
-    });
+    );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Không thể gửi yêu cầu quên mật khẩu");
+      throw await this.parseError(
+        response,
+        "Không thể gửi yêu cầu quên mật khẩu",
+      );
     }
   }
 
@@ -221,16 +230,38 @@ export class AuthService {
     otp: string,
     newPassword: string,
   ): Promise<void> {
-    const response = await this.safeFetch(this.buildUrl("/auth/reset-password"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await this.safeFetch(
+      this.buildUrl("/auth/reset-password"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, otp, newPassword }),
       },
-      body: JSON.stringify({ email, otp, newPassword }),
-    });
+    );
 
     if (!response.ok) {
       throw await this.parseError(response, "Đặt lại mật khẩu thất bại");
+    }
+  }
+
+  async changePassword(
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const params = new URLSearchParams({
+      oldPassword,
+      newPassword,
+    });
+
+    const response = await this.authFetch(
+      `/users/change-password?${params.toString()}`,
+      { method: "POST" },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Đổi mật khẩu thất bại");
     }
   }
 

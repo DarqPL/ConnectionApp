@@ -26,7 +26,12 @@ interface AuthContextType {
   ) => Promise<void>;
   sendSignupOtp: (username: string, email: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
-  resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
+  resetPassword: (
+    email: string,
+    otp: string,
+    newPassword: string,
+  ) => Promise<void>;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
   setApiBaseUrl: (url: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (data: Partial<User>) => Promise<void>;
@@ -94,7 +99,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await authService.sendSignupOtp(username, email);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Gửi OTP thất bại";
+      const errorMessage =
+        err instanceof Error ? err.message : "Gửi OTP thất bại";
       setError(errorMessage);
       throw err;
     } finally {
@@ -144,7 +150,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await authService.forgotPassword(email);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Gửi yêu cầu thất bại";
+      const errorMessage =
+        err instanceof Error ? err.message : "Gửi yêu cầu thất bại";
       setError(errorMessage);
       throw err;
     } finally {
@@ -152,19 +159,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const resetPassword = useCallback(async (email: string, otp: string, newPassword: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await authService.resetPassword(email, otp, newPassword);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Đặt lại mật khẩu thất bại";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const resetPassword = useCallback(
+    async (email: string, otp: string, newPassword: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.resetPassword(email, otp, newPassword);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Đặt lại mật khẩu thất bại";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
+
+  const changePassword = useCallback(
+    async (oldPassword: string, newPassword: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.changePassword(oldPassword, newPassword);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Đổi mật khẩu thất bại";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
 
   const updateUserProfile = useCallback(async (data: Partial<User>) => {
     const { userService } = await import("../../chat/services/user.service");
@@ -211,6 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     sendSignupOtp,
     forgotPassword,
     resetPassword,
+    changePassword,
     setApiBaseUrl,
     signOut,
     updateUserProfile,

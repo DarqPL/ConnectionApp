@@ -17,13 +17,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS } from "../../../theme";
 import { useAuth } from "../../auth/context/AuthContext";
-import { authService } from "../../auth/services/auth.service";
 import BottomNavigator from "../../../components/BottomNavigator";
 
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user, signOut, updateUserProfile } = useAuth();
+  const { user, signOut, updateUserProfile, changePassword } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || "");
@@ -57,6 +56,10 @@ const ProfileScreen = () => {
       Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin");
       return;
     }
+    if (oldPassword === newPassword) {
+      Alert.alert("Lỗi", "Mật khẩu mới phải khác mật khẩu hiện tại");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       Alert.alert("Lỗi", "Mật khẩu mới không khớp");
       return;
@@ -67,18 +70,18 @@ const ProfileScreen = () => {
     }
     setPwLoading(true);
     try {
-      const res = await authService.authFetch(
-        `/users/change-password?oldPassword=${encodeURIComponent(oldPassword)}&newPassword=${encodeURIComponent(newPassword)}`,
-        { method: "POST" }
-      );
-      if (!res.ok) throw new Error();
+      await changePassword(oldPassword, newPassword);
       Alert.alert("Thành công", "Đã đổi mật khẩu");
       setShowChangePw(false);
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch {
-      Alert.alert("Lỗi", "Không thể đổi mật khẩu. Kiểm tra lại mật khẩu cũ.");
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Không thể đổi mật khẩu. Kiểm tra lại mật khẩu cũ.";
+      Alert.alert("Lỗi", errorMessage);
     } finally {
       setPwLoading(false);
     }
@@ -113,7 +116,7 @@ const ProfileScreen = () => {
             <View style={styles.onlineDot} />
           </View>
           <Text style={styles.userName}>
-            {isEditing ? "" : (user?.displayName || "User")}
+            {isEditing ? "" : user?.displayName || "User"}
           </Text>
           <Text style={styles.userHandle}>@{user?.username}</Text>
         </LinearGradient>
@@ -136,14 +139,20 @@ const ProfileScreen = () => {
                 {loading ? (
                   <ActivityIndicator size="small" color={COLORS.primary} />
                 ) : (
-                  <Text style={styles.editBtn}>{isEditing ? "Lưu" : "Chỉnh sửa"}</Text>
+                  <Text style={styles.editBtn}>
+                    {isEditing ? "Lưu" : "Chỉnh sửa"}
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
 
             {isEditing && (
               <View style={styles.fieldRow}>
-                <Ionicons name="person-outline" size={20} color={COLORS.primary} />
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color={COLORS.primary}
+                />
                 <TextInput
                   style={styles.editInput}
                   value={displayName}
@@ -206,7 +215,9 @@ const ProfileScreen = () => {
               style={styles.settingRow}
               onPress={() => setShowChangePw(!showChangePw)}
             >
-              <View style={[styles.settingIcon, { backgroundColor: "#fef3c7" }]}>
+              <View
+                style={[styles.settingIcon, { backgroundColor: "#fef3c7" }]}
+              >
                 <Ionicons name="lock-closed" size={18} color="#d97706" />
               </View>
               <Text style={styles.settingLabel}>Đổi mật khẩu</Text>
@@ -260,7 +271,11 @@ const ProfileScreen = () => {
 
           {/* Sign out */}
           <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={20} color={COLORS.destructive} />
+            <Ionicons
+              name="log-out-outline"
+              size={20}
+              color={COLORS.destructive}
+            />
             <Text style={styles.signOutText}>Đăng xuất</Text>
           </TouchableOpacity>
 
