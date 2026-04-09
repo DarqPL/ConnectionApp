@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -35,10 +36,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = null;
         String jwt = null;
 
-        //Kiem tra ma authHeader
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            jwt = authHeader.substring(7);
-            username = jwtUtils.extractUsername(jwt);
+                if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                        try {
+                                jwt = authHeader.substring(7);
+                                username = jwtUtils.extractUsername(jwt);
+                        } catch (Exception ex) {
+                                writeUnauthorized(response, "Phiên đã hết hạn");
+                                return;
+                        }
         }
 
         if (username != null &&
@@ -47,7 +52,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             UserDetails userDetails =
                     customUserDetailsService.loadUserByUsername(username);
 
-            // 👉 BƯỚC 4: VALIDATE TOKEN
             if (jwtUtils.validateToken(jwt, userDetails)) {
 
                 UsernamePasswordAuthenticationToken authToken =
@@ -62,14 +66,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 .buildDetails(request)
                 );
 
-                // 👉 BƯỚC 5: SET AUTH VÀO CONTEXT
                 SecurityContextHolder.getContext()
                         .setAuthentication(authToken);
+                        } else {
+                                writeUnauthorized(response, "Phiên đã hết hạn");
+                                return;
             }
         }
 
-        // 👉 CHO REQUEST ĐI TIẾP
         filterChain.doFilter(request, response);
     }
+
+        private void writeUnauthorized(HttpServletResponse response, String message) throws IOException {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                response.getWriter().write("{\"message\":\"" + message + "\"}");
+        }
 
 }
