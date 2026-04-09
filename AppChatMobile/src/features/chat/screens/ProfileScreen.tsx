@@ -22,7 +22,8 @@ import BottomNavigator from "../../../components/BottomNavigator";
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user, signOut, updateUserProfile, changePassword } = useAuth();
+  const { user, signOut, updateUserProfile, changePassword, deleteAccount } =
+    useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || "");
@@ -33,6 +34,7 @@ const ProfileScreen = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const handleUpdate = async () => {
     if (!displayName.trim()) {
@@ -92,6 +94,33 @@ const ProfileScreen = () => {
       { text: "Bỏ qua", style: "cancel" },
       { text: "Đăng xuất", style: "destructive", onPress: signOut },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Xóa tài khoản",
+      "Tài khoản và dữ liệu liên quan sẽ bị xóa vĩnh viễn. Bạn có chắc muốn tiếp tục?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa tài khoản",
+          style: "destructive",
+          onPress: async () => {
+            setDeleteLoading(true);
+            try {
+              await deleteAccount();
+              Alert.alert("Thành công", "Tài khoản đã được xóa.");
+            } catch (err) {
+              const errorMessage =
+                err instanceof Error ? err.message : "Không thể xóa tài khoản.";
+              Alert.alert("Lỗi", errorMessage);
+            } finally {
+              setDeleteLoading(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const FALLBACK = "https://i.pravatar.cc/150?img=12";
@@ -268,6 +297,23 @@ const ProfileScreen = () => {
               </View>
             )}
           </View>
+
+          <TouchableOpacity
+            style={styles.deleteAccountBtn}
+            onPress={handleDeleteAccount}
+            disabled={deleteLoading}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={20}
+              color={COLORS.destructive}
+            />
+            {deleteLoading ? (
+              <ActivityIndicator size="small" color={COLORS.destructive} />
+            ) : (
+              <Text style={styles.deleteAccountText}>Xóa tài khoản</Text>
+            )}
+          </TouchableOpacity>
 
           {/* Sign out */}
           <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
@@ -481,5 +527,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.destructive,
     fontWeight: "600",
+  },
+  deleteAccountBtn: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  deleteAccountText: {
+    fontSize: 15,
+    color: COLORS.destructive,
+    fontWeight: "700",
   },
 });

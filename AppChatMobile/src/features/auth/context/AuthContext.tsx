@@ -32,6 +32,7 @@ interface AuthContextType {
     newPassword: string,
   ) => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
   setApiBaseUrl: (url: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (data: Partial<User>) => Promise<void>;
@@ -195,6 +196,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const deleteAccount = useCallback(async () => {
+    if (!user?.id) {
+      const noUserError = new Error("Không tìm thấy thông tin người dùng");
+      setError(noUserError.message);
+      throw noUserError;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.deleteAccount(user.id);
+      await authService.signOut();
+      setUser(null);
+      setAccessToken(null);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Xóa tài khoản thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
+
   const updateUserProfile = useCallback(async (data: Partial<User>) => {
     const { userService } = await import("../../chat/services/user.service");
     const updatedUser = await userService.updateProfile(data);
@@ -241,6 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     forgotPassword,
     resetPassword,
     changePassword,
+    deleteAccount,
     setApiBaseUrl,
     signOut,
     updateUserProfile,
