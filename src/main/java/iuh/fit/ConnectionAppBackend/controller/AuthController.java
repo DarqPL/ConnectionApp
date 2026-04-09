@@ -44,8 +44,8 @@ import java.util.UUID;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-        private static final String REFRESH_TOKEN_COOKIE = "refreshToken";
-        private static final Duration REFRESH_TOKEN_COOKIE_MAX_AGE = Duration.ofDays(7);
+    private static final String REFRESH_TOKEN_COOKIE = "refreshToken";
+    private static final Duration REFRESH_TOKEN_COOKIE_MAX_AGE = Duration.ofDays(7);
 
     @Autowired
     private UserRepository userRepository;
@@ -76,11 +76,42 @@ public class AuthController {
 
     @Value("${app.auth.cookie.same-site:Lax}")
     private String refreshCookieSameSite;
+  
+    @PostMapping("/signup/send-otp")
+    public ResponseEntity<?> sendSignupOtp(@RequestBody Map<String, String> req) {
+        String email = req.get("email");
+        String username = req.get("username");
+
+        if (userRepository.existsByEmail(email)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email đã được sử dụng"));
+        }
+        if (userRepository.existsByUsername(username)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Tên đăng nhập đã được sử dụng"));
+        }
+
+        String otp = otpService.generateOtp(email);
+        try {
+            emailService.sendOtpEmail(email, otp);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("message", "Không thể gửi email. Vui lòng thử lại sau."));
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Mã OTP đã được gửi đến email của bạn"));
+    }
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@RequestBody RegisterRequest req){
         if(userRepository.existsByUsername(req.getUsername())){
-            return ResponseEntity.badRequest().body("Username is already in use");
+            return ResponseEntity.badRequest().body(Map.of("message", "Tên đăng nhập đã được sử dụng"));
+        }
+        if(userRepository.existsByEmail(req.getEmail())){
+            return ResponseEntity.badRequest().body(Map.of("message", "Email đã được sử dụng"));
+        }
+
+        // Verify OTP
+        boolean valid = otpService.verifyOtp(req.getEmail(), req.getOtp());
+        if (!valid) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Mã OTP không hợp lệ hoặc đã hết hạn"));
         }
 
         User user = new User();
@@ -94,6 +125,7 @@ public class AuthController {
         user.setTokenVersion(0);
 
         userRepository.save(user);
+        otpService.invalidateOtp(req.getEmail());
 
         UserResponse response = new UserResponse(
                 user.getId(),
@@ -105,9 +137,9 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
-        @PostMapping("/signin")
-        public ResponseEntity<?> loginUser(@RequestBody LoginRequest req,
-                                                                           HttpServletRequest httpRequest) {
+    @PostMapping("/signin")
+    public ResponseEntity<?> loginUser(@RequestBody LoginRequest req,
+                                       HttpServletRequest httpRequest) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword())
         );
@@ -123,20 +155,20 @@ public class AuthController {
         boolean knownDevice = isKnownDevice(activeSessions, deviceName, userAgent, ipAddress);
         if (!activeSessions.isEmpty() && !knownDevice) {
             securityNotificationService.notifyUnknownDeviceLogin(
-                user.getId(),
-                deviceName,
-                ipAddress,
-                userAgent
+                    user.getId(),
+                    deviceName,
+                    ipAddress,
+                    userAgent
             );
         }
 
         String accessToken = jwtUtils.generateToken(userDetails);
         RefreshToken refreshToken =
                 refreshTokenService.createRefreshToken(
-                user,
-                deviceName,
-                userAgent,
-                ipAddress
+                        user,
+                        deviceName,
+                        userAgent,
+                        ipAddress
                 );
 
         ResponseCookie refreshCookie = buildRefreshTokenCookie(refreshToken.getToken());

@@ -14,12 +14,12 @@ public class EmailService {
     public void sendOtpEmail(String toEmail, String otp) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(toEmail);
-        message.setSubject("Connection App - Mã OTP đặt lại mật khẩu");
+        message.setSubject("Connection App - Mã xác nhận OTP");
         message.setText(
             "Xin chào,\n\n" +
-            "Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản Connection.\n\n" +
+            "Đây là mã xác nhận OTP cho yêu cầu của bạn tại Connection App.\n\n" +
             "Mã OTP của bạn là: " + otp + "\n\n" +
-            "Mã này sẽ hết hạn sau 10 phút.\n\n" +
+            "Mã này sẽ hết hạn sau 1 phút.\n\n" +
             "Nếu bạn không yêu cầu điều này, hãy bỏ qua email này.\n\n" +
             "Trân trọng,\nĐội ngũ Connection App"
         );

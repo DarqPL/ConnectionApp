@@ -14,7 +14,7 @@ public class OtpService {
     private final Map<String, OtpEntry> otpStore = new ConcurrentHashMap<>();
 
     private static final int OTP_LENGTH = 6;
-    private static final int OTP_EXPIRY_MINUTES = 10;
+    private static final int OTP_EXPIRY_MINUTES = 1;
 
     public String generateOtp(String email) {
         String otp = String.format("%06d", new Random().nextInt(999999));
