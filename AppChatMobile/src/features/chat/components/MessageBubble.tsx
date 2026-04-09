@@ -4,9 +4,23 @@ import { View, Text, StyleSheet } from "react-native";
 interface Props {
   message: string;
   isMe?: boolean;
+  senderName?: string;
+  createdAt?: string;
 }
 
-const MessageBubble: React.FC<Props> = ({ message, isMe }) => {
+const MessageBubble: React.FC<Props> = ({
+  message,
+  isMe,
+  senderName,
+  createdAt,
+}) => {
+  const timeLabel = createdAt
+    ? new Date(createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+
   return (
     <View
       style={[
@@ -14,9 +28,17 @@ const MessageBubble: React.FC<Props> = ({ message, isMe }) => {
         isMe ? styles.rightContainer : styles.leftContainer,
       ]}
     >
-      <Text style={isMe ? styles.rightText : styles.leftText}>
-        {message}
-      </Text>
+      {!isMe && !!senderName && (
+        <Text style={styles.senderName} numberOfLines={1}>
+          {senderName}
+        </Text>
+      )}
+      <Text style={isMe ? styles.rightText : styles.leftText}>{message}</Text>
+      {!!timeLabel && (
+        <Text style={isMe ? styles.rightTime : styles.leftTime}>
+          {timeLabel}
+        </Text>
+      )}
     </View>
   );
 };
@@ -43,5 +65,23 @@ const styles = StyleSheet.create({
   },
   rightText: {
     color: "#fff",
+  },
+  senderName: {
+    fontSize: 11,
+    color: "#666",
+    marginBottom: 4,
+    fontWeight: "600",
+  },
+  leftTime: {
+    marginTop: 6,
+    fontSize: 10,
+    color: "#777",
+    alignSelf: "flex-end",
+  },
+  rightTime: {
+    marginTop: 6,
+    fontSize: 10,
+    color: "#ddd",
+    alignSelf: "flex-end",
   },
 });

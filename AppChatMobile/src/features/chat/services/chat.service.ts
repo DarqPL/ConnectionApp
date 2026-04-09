@@ -1,183 +1,120 @@
-import { Message, Conversation } from '../types';
-
-// API Base URL - configure this based on your backend
-const API_BASE_URL = 'https://your-api.com/api';
+import { authService } from "../../auth/services/auth.service";
+import type { Conversation, Message, PageResponse } from "../types";
 
 export class ChatService {
-  private userId: string = '';
-
-  setUserId(userId: string) {
-    this.userId = userId;
-  }
-
-  // Get all conversations for current user
-  async getConversations(): Promise<Conversation[]> {
+  private async parseError(
+    response: Response,
+    fallback: string,
+  ): Promise<Error> {
     try {
-      const response = await fetch(`${API_BASE_URL}/conversations`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.userId}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch conversations');
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-      // Return mock data for demo
-      return this.getMockConversations();
+      const data = await response.json();
+      const message = data?.message || data?.error || fallback;
+      return new Error(message);
+    } catch {
+      return new Error(fallback);
     }
   }
 
-  // Get messages for a specific conversation
-  async getMessages(conversationId: string): Promise<Message[]> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/conversations/${conversationId}/messages`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.userId}`,
-          },
-        }
-      );
+  async getConversations(page = 0, size = 20): Promise<Conversation[]> {
+    const query = new URLSearchParams({
+      page: String(page),
+      size: String(size),
+      sortBy: "lastMessageAt",
+      sortDirection: "DESC",
+    });
 
-      if (!response.ok) throw new Error('Failed to fetch messages');
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      return this.getMockMessages();
+    const response = await authService.authFetch(
+      `/conversations?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(
+        response,
+        "Không tải được danh sách cuộc trò chuyện",
+      );
     }
+
+    const data = (await response.json()) as PageResponse<Conversation>;
+    return data.content ?? [];
   }
 
-  // Send a message
-  async sendMessage(conversationId: string, content: string): Promise<Message> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/conversations/${conversationId}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.userId}`,
-          },
-          body: JSON.stringify({
-            content,
-            senderId: this.userId,
-          }),
-        }
-      );
+  async getMessages(
+    conversationId: number,
+    page = 0,
+    size = 50,
+  ): Promise<Message[]> {
+    const query = new URLSearchParams({
+      page: String(page),
+      size: String(size),
+      sortBy: "createdAt",
+      sortDirection: "DESC",
+    });
 
-      if (!response.ok) throw new Error('Failed to send message');
-      return await response.json();
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // Return mock message for demo
-      return {
-        id: Date.now().toString(),
+    const response = await authService.authFetch(
+      `/messages/conversation/${conversationId}?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không tải được tin nhắn");
+    }
+
+    const data = (await response.json()) as PageResponse<Message>;
+    return (data.content ?? []).slice().reverse();
+  }
+
+  async sendMessage(conversationId: number, content: string): Promise<Message> {
+    const response = await authService.authFetch("/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
         conversationId,
-        senderId: this.userId,
         content,
-        createdAt: new Date().toISOString(),
-        isDeleted: false,
-      };
+        parentId: null,
+      }),
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Gửi tin nhắn thất bại");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async deleteMessage(messageId: string): Promise<void> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/recall`,
+      {
+        method: "PUT",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Thu hồi tin nhắn thất bại");
     }
   }
 
-  // Create a new conversation
-  async createConversation(name: string, participantId: string): Promise<Conversation> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/conversations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.userId}`,
-        },
-        body: JSON.stringify({
-          name,
-          participantId,
-        }),
-      });
+  async markAsRead(conversationId: number): Promise<void> {
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/read`,
+      {
+        method: "PUT",
+      },
+    );
 
-      if (!response.ok) throw new Error('Failed to create conversation');
-      return await response.json();
-    } catch (error) {
-      console.error('Error creating conversation:', error);
-      throw error;
-    }
-  }
-
-  // Delete a message
-  async deleteMessage(conversationId: string, messageId: string): Promise<void> {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/conversations/${conversationId}/messages/${messageId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${this.userId}`,
-          },
-        }
+    if (!response.ok) {
+      throw await this.parseError(
+        response,
+        "Không thể cập nhật trạng thái đã đọc",
       );
-
-      if (!response.ok) throw new Error('Failed to delete message');
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      throw error;
     }
-  }
-
-  // Mock data for demo/offline mode
-  private getMockConversations(): Conversation[] {
-    return [
-      {
-        id: '1',
-        name: 'Hội Bạn Thân 💖',
-        avatarUrl: 'https://i.pravatar.cc/150?img=1',
-        lastMessage: 'Cuối tuần đi cà phê không?',
-        lastMessageAt: new Date(Date.now() - 86400000).toISOString(),
-        unreadCount: 0,
-      },
-      {
-        id: '2',
-        name: 'Trần Thị Bình',
-        avatarUrl: 'https://i.pravatar.cc/150?img=2',
-        lastMessage: 'Anh ơi bài tập khó quá 🥲',
-        lastMessageAt: new Date(Date.now() - 82800000).toISOString(),
-        unreadCount: 2,
-      },
-    ];
-  }
-
-  private getMockMessages(): Message[] {
-    return [
-      {
-        id: '1',
-        conversationId: '2',
-        senderId: 'user-2',
-        content: 'Anh ơi bài tập khó quá 🥲',
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        isDeleted: false,
-      },
-      {
-        id: '2',
-        conversationId: '2',
-        senderId: 'current-user',
-        content: 'Bài nào khó thế?',
-        createdAt: new Date(Date.now() - 1800000).toISOString(),
-        isDeleted: false,
-      },
-      {
-        id: '3',
-        conversationId: '2',
-        senderId: 'user-2',
-        content: 'Bài số 5 là khó nhất',
-        createdAt: new Date(Date.now() - 600000).toISOString(),
-        isDeleted: false,
-      },
-    ];
   }
 }
 

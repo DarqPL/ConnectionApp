@@ -14,46 +14,45 @@ import { useChat } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 
 const ChatRoomScreen = ({ route }: any) => {
-  const { name } = route.params;
+  const { conversationId, name, avatarUrl } = route.params;
   const {
     currentMessages,
-    currentConversationId,
     isLoading,
     fetchMessages,
     sendMessage,
+    setCurrentConversation,
   } = useChat();
   const { user } = useAuth();
   const flatListRef = useRef<FlatList>(null);
   const [sending, setSending] = React.useState(false);
 
   useEffect(() => {
-    if (currentConversationId) {
-      fetchMessages(currentConversationId);
-    }
-  }, [currentConversationId, fetchMessages]);
+    setCurrentConversation(conversationId);
+    fetchMessages(conversationId);
+
+    return () => {
+      setCurrentConversation(null);
+    };
+  }, [conversationId, fetchMessages, setCurrentConversation]);
 
   const handleSendMessage = async (content: string) => {
-    if (!currentConversationId || !content.trim()) return;
+    if (!content.trim()) return;
 
     setSending(true);
     try {
-      await sendMessage(currentConversationId, content);
+      await sendMessage(conversationId, content);
       // Scroll to bottom after sending
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
       Alert.alert(
-        "Error",
-        error instanceof Error ? error.message : "Failed to send message"
+        "Lỗi",
+        error instanceof Error ? error.message : "Gửi tin nhắn thất bại",
       );
     } finally {
       setSending(false);
     }
-  };
-
-  const scrollToBottom = () => {
-    flatListRef.current?.scrollToEnd({ animated: true });
   };
 
   // Filter out deleted messages for display
@@ -61,17 +60,15 @@ const ChatRoomScreen = ({ route }: any) => {
 
   const mappedMessages = displayMessages.map((msg) => ({
     id: msg.id,
-    text: msg.content,
-    isMe: msg.senderId === user?.id,
+    text: msg.content || "",
+    isMe: msg.senderInfo?.senderId === user?.id,
+    senderName: msg.senderInfo?.displayName || "Unknown",
     createdAt: msg.createdAt,
   }));
 
   return (
-    <LinearGradient
-      colors={["#8e44ad", "#6c5ce7"]}
-      style={styles.container}
-    >
-      <ChatHeader name={name} />
+    <LinearGradient colors={["#8e44ad", "#6c5ce7"]} style={styles.container}>
+      <ChatHeader name={name} avatar={avatarUrl} />
 
       {isLoading && mappedMessages.length === 0 ? (
         <View style={[styles.messageContainer, styles.centerContent]}>
@@ -83,7 +80,12 @@ const ChatRoomScreen = ({ route }: any) => {
           data={mappedMessages}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <MessageBubble message={item.text} isMe={item.isMe} />
+            <MessageBubble
+              message={item.text}
+              isMe={item.isMe}
+              senderName={item.senderName}
+              createdAt={item.createdAt}
+            />
           )}
           contentContainerStyle={styles.messageContainer}
           onContentSizeChange={() =>
