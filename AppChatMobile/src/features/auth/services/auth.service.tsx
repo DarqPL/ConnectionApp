@@ -6,12 +6,52 @@ const ACCESS_TOKEN_KEY = "accessToken";
 const API_BASE_URL_KEY = "apiBaseUrl";
 
 const normalizeApiBaseUrl = (url: string): string => {
-  const trimmed = url.trim().replace(/\/+$/, "");
-  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+  const compact = url.trim().replace(/\s+/g, "");
+
+  if (!compact) {
+    throw new Error("URL backend không hợp lệ");
+  }
+
+  const withProtocol = /^https?:\/\//i.test(compact)
+    ? compact
+    : `http://${compact}`;
+  const withoutTrailingSlash = withProtocol.replace(/\/+$/, "");
+  const withApiPath = withoutTrailingSlash.endsWith("/api")
+    ? withoutTrailingSlash
+    : `${withoutTrailingSlash}/api`;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(withApiPath);
+  } catch {
+    throw new Error("URL backend không hợp lệ");
+  }
+
+  if (!parsed.hostname) {
+    throw new Error("URL backend không hợp lệ");
+  }
+
+  return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
 };
 
 const migrateLegacyPort = (url: string): string => {
   return url.replace(":8082", ":8080");
+};
+
+const isPrivateIpv4 = (host: string): boolean => {
+  const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const match = host.match(ipv4Pattern);
+  if (!match) return false;
+
+  const octets = match.slice(1).map(Number);
+  if (octets.some((value) => value < 0 || value > 255)) return false;
+
+  const [first, second] = octets;
+  return (
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
 };
 
 const getExpoDebugHost = (): string | null => {
@@ -51,6 +91,27 @@ const getDefaultApiBaseUrl = (): string => {
   }
 
   return "http://localhost:8080/api";
+};
+
+const syncApiBaseUrlWithCurrentLanHost = (baseUrl: string): string => {
+  const expoHost = getExpoDebugHost();
+  if (!expoHost || !isPrivateIpv4(expoHost)) {
+    return baseUrl;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    return baseUrl;
+  }
+
+  if (!isPrivateIpv4(parsed.hostname) || parsed.hostname === expoHost) {
+    return baseUrl;
+  }
+
+  parsed.hostname = expoHost;
+  return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
 };
 
 export interface User {
@@ -104,9 +165,19 @@ export class AuthService {
   async initializeSession(): Promise<string | null> {
     const storedBaseUrl = await AsyncStorage.getItem(API_BASE_URL_KEY);
     if (storedBaseUrl) {
-      const migrated = migrateLegacyPort(storedBaseUrl);
-      this.apiBaseUrl = normalizeApiBaseUrl(migrated);
-      if (migrated !== storedBaseUrl) {
+      try {
+        const migrated = migrateLegacyPort(storedBaseUrl);
+        const normalized = normalizeApiBaseUrl(migrated);
+        this.apiBaseUrl = syncApiBaseUrlWithCurrentLanHost(normalized);
+        if (
+          migrated !== storedBaseUrl ||
+          this.apiBaseUrl !== storedBaseUrl ||
+          this.apiBaseUrl !== normalized
+        ) {
+          await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
+        }
+      } catch {
+        this.apiBaseUrl = getDefaultApiBaseUrl();
         await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
       }
     } else {
