@@ -1,0 +1,141 @@
+import { Client } from "@stomp/stompjs";
+import type { Conversation, Message } from "../types";
+
+export interface ChatSocketHandlers {
+  onIncomingMessage: (message: Message) => void;
+  onIncomingConversation: (conversation: Conversation) => void;
+  onRecallMessage: (message: Message) => void;
+  onSecurityNotification?: (payload: {
+    title?: string;
+    message: string;
+    deviceName?: string;
+    ipAddress?: string;
+  }) => void;
+  onConnectionError?: (error: string) => void;
+}
+
+/**
+ * Singleton WebSocket service for STOMP chat.
+ *
+ * Key design:
+ * - Handlers are stored in a mutable ref so the socket only connects ONCE
+ *   per session without needing to reconnect when React callbacks change.
+ * - Only disconnects/reconnects when user logs out or token changes.
+ */
+class ChatSocketService {
+  private client: Client | null = null;
+  private handlersRef: ChatSocketHandlers | null = null;
+
+  /** Update handlers without reconnecting. Used from React context. */
+  updateHandlers(handlers: ChatSocketHandlers) {
+    this.handlersRef = handlers;
+  }
+
+  connect(
+    wsUrl: string,
+    userId: number,
+    accessToken: string,
+    handlers: ChatSocketHandlers
+  ): void {
+    if (this.client?.active) {
+      // Just update handlers, don't reconnect
+      this.handlersRef = handlers;
+      console.log("[Socket] Already connected, handlers updated.");
+      return;
+    }
+
+    this.handlersRef = handlers;
+
+    console.log("[Socket] Connecting to:", wsUrl);
+
+    const client = new Client({
+      webSocketFactory: () => {
+        const ws = new WebSocket(wsUrl);
+        console.log("[Socket] WebSocket created, readyState:", ws.readyState);
+        return ws;
+      },
+      connectHeaders: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      reconnectDelay: 5000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+
+      onConnect: (frame) => {
+        console.log("[Socket] ✅ Connected! Session:", frame.headers?.["session"]);
+
+        // All handlers are called via ref to avoid stale closures
+        client.subscribe(`/topic/user.${userId}`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onIncomingMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse message:", e);
+          }
+        });
+
+        client.subscribe(`/topic/user.${userId}/conversations`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Conversation;
+            this.handlersRef?.onIncomingConversation(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse conversation:", e);
+          }
+        });
+
+        client.subscribe(`/topic/user.${userId}/recall`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onRecallMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse recall:", e);
+          }
+        });
+
+        client.subscribe(`/topic/user.${userId}/security`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body);
+            this.handlersRef?.onSecurityNotification?.(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse security notification:", e);
+          }
+        });
+      },
+
+      onStompError: (frame) => {
+        const msg = frame.headers?.["message"] || "Lỗi STOMP";
+        console.error("[Socket] STOMP error:", msg);
+        this.handlersRef?.onConnectionError?.(msg);
+      },
+
+      onWebSocketError: (evt) => {
+        console.error("[Socket] WebSocket error:", JSON.stringify(evt));
+        this.handlersRef?.onConnectionError?.("Không thể kết nối realtime");
+      },
+
+      onWebSocketClose: (evt) => {
+        const e = evt as any;
+        console.log(`[Socket] WebSocket closed. code=${e?.code}, reason=${e?.reason}`);
+      },
+    });
+
+    client.activate();
+    this.client = client;
+    console.log("[Socket] Client activated.");
+  }
+
+  disconnect(): void {
+    if (this.client) {
+      console.log("[Socket] Disconnecting...");
+      this.handlersRef = null;
+      this.client.deactivate();
+      this.client = null;
+    }
+  }
+
+  get isConnected(): boolean {
+    return this.client?.connected ?? false;
+  }
+}
+
+export const chatSocketService = new ChatSocketService();
