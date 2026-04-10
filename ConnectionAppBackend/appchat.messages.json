@@ -1,0 +1,159 @@
+[{
+  "_id": {
+    "$oid": "69affea23b267d8388ed243d"
+  },
+  "conversation_id": {
+    "$numberLong": "1"
+  },
+  "senderInfo": {
+    "sender_id": {
+      "$numberLong": "2"
+    },
+    "display_name": "tentest2 hotest2",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test2"
+  },
+  "content": "Tin nhan test",
+  "attachments": [],
+  "createdAt": {
+    "$date": "2026-03-10T11:21:06.832Z"
+  },
+  "is_deleted": false,
+  "_class": "iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message"
+},
+{
+  "_id": {
+    "$oid": "69affef33b267d8388ed243e"
+  },
+  "conversation_id": {
+    "$numberLong": "1"
+  },
+  "senderInfo": {
+    "sender_id": {
+      "$numberLong": "2"
+    },
+    "display_name": "tentest2 hotest2",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test2"
+  },
+  "content": "Da nhan tin test",
+  "attachments": [],
+  "createdAt": {
+    "$date": "2026-03-10T11:22:27.477Z"
+  },
+  "is_deleted": false,
+  "_class": "iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message"
+},
+{
+  "_id": {
+    "$oid": "69b00076c4d08126c99427a1"
+  },
+  "conversation_id": 1,
+  "senderInfo": {
+    "sender_id": 1,
+    "display_name": "tentest hotest",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test1"
+  },
+  "content": "Hello test2, khỏe không bạn?",
+  "attachments": [],
+  "updateAt": {
+    "$date": "2026-03-10T11:01:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T11:01:00.000Z"
+  },
+  "parent_id": null,
+  "is_deleted": false
+},
+{
+  "_id": {
+    "$oid": "69b00076c4d08126c99427a2"
+  },
+  "conversation_id": 1,
+  "senderInfo": {
+    "sender_id": 2,
+    "display_name": "tentest2 hotest2",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test2"
+  },
+  "content": "Mình khỏe, dạo này bạn code hệ thống chat đến đâu rồi?",
+  "attachments": [],
+  "updateAt": {
+    "$date": "2026-03-10T11:05:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T11:05:00.000Z"
+  },
+  "parent_id": null,
+  "is_deleted": false
+},
+{
+  "_id": {
+    "$oid": "69b00076c4d08126c99427a3"
+  },
+  "conversation_id": 2,
+  "senderInfo": {
+    "sender_id": 3,
+    "display_name": "hotest3 hotest3",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test3"
+  },
+  "content": "Dự án chuyển messages qua MongoDB tới đâu rồi?",
+  "attachments": [],
+  "updateAt": {
+    "$date": "2026-03-10T11:10:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T11:10:00.000Z"
+  },
+  "parent_id": null,
+  "is_deleted": false
+},
+{
+  "_id": {
+    "$oid": "69b00076c4d08126c99427a4"
+  },
+  "conversation_id": 2,
+  "senderInfo": {
+    "sender_id": 1,
+    "display_name": "tentest hotest",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test1"
+  },
+  "content": "Mình đang test phần Message, gửi file thiết kế DB cho bạn xem thử nhé.",
+  "attachments": [
+    {
+      "file_url": "https://example.com/files/mongodb-schema-design.png",
+      "file_type": "IMAGE"
+    }
+  ],
+  "updateAt": {
+    "$date": "2026-03-10T11:15:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T11:15:00.000Z"
+  },
+  "parent_id": null,
+  "is_deleted": false
+},
+{
+  "_id": {
+    "$oid": "69b00076c4d08126c99427a5"
+  },
+  "conversation_id": 3,
+  "senderInfo": {
+    "sender_id": 1,
+    "display_name": "tentest hotest",
+    "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=test1"
+  },
+  "content": "Chào mừng mọi người vào group nhé! Có tài liệu nội bộ mình gửi ở đây luôn.",
+  "attachments": [
+    {
+      "file_url": "https://example.com/docs/api-guidelines.pdf",
+      "file_type": "FILE"
+    }
+  ],
+  "updateAt": {
+    "$date": "2026-03-10T11:30:00.000Z"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T11:30:00.000Z"
+  },
+  "parent_id": null,
+  "is_deleted": false
+}]

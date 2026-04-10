@@ -1,0 +1,56 @@
+package iuh.fit.ConnectionAppBackend.domain.dto;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class MessageResponse {
+    private String id;
+    private Long conversationId;
+    private SenderInfoResponse senderInfo;
+    private String content;
+    private List<AttachmentResponse> attachments;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private String parentId;
+    private boolean isDeleted;
+    private LocalDateTime recalledAt;
+    private ReplyInfoResponse replyInfo;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class SenderInfoResponse {
+        private Long senderId;
+        private String displayName;
+        private String avatarUrl;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class AttachmentResponse {
+        private String fileUrl;
+        private String type;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ReplyInfoResponse {
+        private String parentId;
+        private String parentContent;
+        private String parentSenderName;
+    }
+}
