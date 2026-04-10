@@ -29,7 +29,8 @@ export default function SignInScreen({ navigation }: any) {
     }
 
     try {
-      await setApiBaseUrl(serverUrl);
+      await setApiBaseUrl(serverUrl.trim());
+      setServerUrl(serverUrl.trim());
       Alert.alert("Thành công", "Đã cập nhật Server URL");
     } catch (err) {
       Alert.alert(
@@ -80,14 +81,6 @@ export default function SignInScreen({ navigation }: any) {
           editable={!isLoading}
         />
 
-        {/* <Text style={styles.sectionTitle}>Server URL</Text>
-        <AuthInput
-          placeholder="http://192.168.1.10:8080/api"
-          value={serverUrl}
-          onChangeText={setServerUrl}
-          editable={!isLoading}
-        /> */}
-
         {/* <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleSaveServerUrl}
@@ -97,7 +90,8 @@ export default function SignInScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={styles.serverHint}>
-          Expo Go trên điện thoại: dùng IP LAN của máy chạy backend.
+          Demo ngoài LAN: dùng URL public (ngrok/cloudflare), ví dụ
+          https://xxxx.ngrok-free.app/api
         </Text> */}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
