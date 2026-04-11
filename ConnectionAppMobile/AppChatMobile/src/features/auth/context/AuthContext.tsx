@@ -76,6 +76,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     bootstrap();
   }, []);
 
+  useEffect(() => {
+    authService.setUnauthorizedHandler(() => {
+      setUser(null);
+      setAccessToken(null);
+    });
+
+    return () => {
+      authService.setUnauthorizedHandler(null);
+    };
+  }, []);
+
   const signIn = useCallback(async (username: string, password: string) => {
     setIsLoading(true);
     setError(null);

@@ -35,7 +35,7 @@ class ChatSocketService {
     wsUrl: string,
     userId: number,
     accessToken: string,
-    handlers: ChatSocketHandlers
+    handlers: ChatSocketHandlers,
   ): void {
     if (this.client?.active) {
       // Just update handlers, don't reconnect
@@ -54,15 +54,30 @@ class ChatSocketService {
         console.log("[Socket] WebSocket created, readyState:", ws.readyState);
         return ws;
       },
+      // React Native websocket may strip NULL terminator in some environments.
+      appendMissingNULLonIncoming: true,
+      forceBinaryWSFrames: true,
       connectHeaders: {
         Authorization: `Bearer ${accessToken}`,
       },
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
+      debug: (line: string) => {
+        if (
+          line.includes("ERROR") ||
+          line.includes("CONNECTED") ||
+          line.includes("RECEIPT")
+        ) {
+          console.log("[Socket][STOMP]", line);
+        }
+      },
 
       onConnect: (frame) => {
-        console.log("[Socket] ✅ Connected! Session:", frame.headers?.["session"]);
+        console.log(
+          "[Socket] ✅ Connected! Session:",
+          frame.headers?.["session"],
+        );
 
         // All handlers are called via ref to avoid stale closures
         client.subscribe(`/topic/user.${userId}`, (stompFrame) => {
@@ -74,14 +89,17 @@ class ChatSocketService {
           }
         });
 
-        client.subscribe(`/topic/user.${userId}/conversations`, (stompFrame) => {
-          try {
-            const payload = JSON.parse(stompFrame.body) as Conversation;
-            this.handlersRef?.onIncomingConversation(payload);
-          } catch (e) {
-            console.error("[Socket] Failed to parse conversation:", e);
-          }
-        });
+        client.subscribe(
+          `/topic/user.${userId}/conversations`,
+          (stompFrame) => {
+            try {
+              const payload = JSON.parse(stompFrame.body) as Conversation;
+              this.handlersRef?.onIncomingConversation(payload);
+            } catch (e) {
+              console.error("[Socket] Failed to parse conversation:", e);
+            }
+          },
+        );
 
         client.subscribe(`/topic/user.${userId}/recall`, (stompFrame) => {
           try {
@@ -115,7 +133,12 @@ class ChatSocketService {
 
       onWebSocketClose: (evt) => {
         const e = evt as any;
-        console.log(`[Socket] WebSocket closed. code=${e?.code}, reason=${e?.reason}`);
+        console.log(
+          `[Socket] WebSocket closed. code=${e?.code}, reason=${e?.reason}`,
+        );
+      },
+      onDisconnect: () => {
+        console.log("[Socket] STOMP disconnected");
       },
     });
 
