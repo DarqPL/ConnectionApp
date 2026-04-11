@@ -6,9 +6,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../theme";
+import EmojiPicker from "rn-emoji-keyboard";
 
 interface ChatInputProps {
   onSend: (message: string) => Promise<void>;
@@ -18,6 +20,7 @@ interface ChatInputProps {
 const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -35,50 +38,70 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
 
   const canSend = text.trim().length > 0 && !isSending && !disabled;
 
+  const handleOpenEmojiPicker = () => {
+    Keyboard.dismiss();
+    setIsEmojiPickerOpen(true);
+  };
+
+  const handleSelectEmoji = ({ emoji }: { emoji: string }) => {
+    if (!emoji) return;
+    setText((prev) => `${prev}${emoji}`);
+  };
+
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.iconBtn}>
-        <Ionicons name="image-outline" size={24} color={COLORS.textMuted} />
-      </TouchableOpacity>
-
-      <View style={styles.inputWrap}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Soạn tin nhắn..."
-          placeholderTextColor={COLORS.textLight}
-          style={styles.input}
-          editable={!isSending && !disabled}
-          multiline
-          maxLength={1000}
-          returnKeyType="default"
-          textAlignVertical="center"
-        />
-      </View>
-
-      {canSend ? (
-        <TouchableOpacity
-          style={styles.sendBtn}
-          onPress={handleSend}
-          disabled={!canSend}
-        >
-          {isSending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="send" size={18} color="#fff" />
-          )}
+    <>
+      <View style={styles.container}>
+        <TouchableOpacity style={styles.iconBtn}>
+          <Ionicons name="image-outline" size={24} color={COLORS.textMuted} />
         </TouchableOpacity>
-      ) : (
-        <>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="happy-outline" size={24} color={COLORS.textMuted} />
+
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={handleOpenEmojiPicker}
+        >
+          <Ionicons name="happy-outline" size={24} color={COLORS.textMuted} />
+        </TouchableOpacity>
+
+        <View style={styles.inputWrap}>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder="Soạn tin nhắn..."
+            placeholderTextColor={COLORS.textLight}
+            style={styles.input}
+            editable={!isSending && !disabled}
+            multiline
+            maxLength={1000}
+            returnKeyType="default"
+            textAlignVertical="center"
+          />
+        </View>
+
+        {canSend ? (
+          <TouchableOpacity
+            style={styles.sendBtn}
+            onPress={handleSend}
+            disabled={!canSend}
+          >
+            {isSending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={18} color="#fff" />
+            )}
           </TouchableOpacity>
+        ) : (
           <TouchableOpacity style={styles.iconBtn}>
             <Ionicons name="mic-outline" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
-        </>
-      )}
-    </View>
+        )}
+      </View>
+
+      <EmojiPicker
+        open={isEmojiPickerOpen}
+        onClose={() => setIsEmojiPickerOpen(false)}
+        onEmojiSelected={handleSelectEmoji}
+      />
+    </>
   );
 };
 

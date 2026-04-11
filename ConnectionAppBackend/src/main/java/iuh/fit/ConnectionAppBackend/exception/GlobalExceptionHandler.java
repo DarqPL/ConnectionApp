@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -39,6 +40,22 @@ public class GlobalExceptionHandler {
         .status(HttpStatus.BAD_REQUEST.value())
         .code(ex.getCode())
         .message(ex.getMessage())
+        .error("Bad Request")
+        .path(request.getDescription(false).replace("uri=", ""))
+        .timestamp(LocalDateTime.now())
+        .build();
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceededException(
+        MaxUploadSizeExceededException ex, WebRequest request) {
+
+    ErrorResponse errorResponse = ErrorResponse.builder()
+        .status(HttpStatus.BAD_REQUEST.value())
+        .code("IMG_SIZE_EXCEEDED")
+        .message("File size must not exceed 2MB")
         .error("Bad Request")
         .path(request.getDescription(false).replace("uri=", ""))
         .timestamp(LocalDateTime.now())

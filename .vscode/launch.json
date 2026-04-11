@@ -1,0 +1,14 @@
+{
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Spring Boot-ConnectionAppBackendApplication<ConnectionAppBackend>",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "mainClass": "iuh.fit.ConnectionAppBackend.ConnectionAppBackendApplication",
+      "projectName": "ConnectionAppBackend",
+      "args": "",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}

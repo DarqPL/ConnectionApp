@@ -19,19 +19,15 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.UUID;
 
 @Service
 public class S3StorageService {
 
-    private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024L * 1024L;
+    private static final long MAX_FILE_SIZE_BYTES = 2L * 1024L * 1024L;
     private static final int RANDOM_SUFFIX_LENGTH = 6;
     private static final int RANDOM_SUFFIX_BOUND = 1_000_000;
-    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
-            "jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff", "svg"
-    );
 
     @Autowired
     private S3Client s3Client;
@@ -44,7 +40,7 @@ public class S3StorageService {
     }
 
     public ImageObjectResponse uploadImage(MultipartFile file, String folder) {
-        validateImage(file);
+        validateFile(file);
         String objectKey = buildNewObjectKey(file.getOriginalFilename(), folder);
         return putImage(file, objectKey);
     }
@@ -55,7 +51,7 @@ public class S3StorageService {
         }
 
         String normalizedKey = normalizeKey(objectKey);
-        validateImage(file);
+        validateFile(file);
         assertObjectExists(normalizedKey);
 
         return putImage(file, normalizedKey);
@@ -136,7 +132,9 @@ public class S3StorageService {
     private ImageObjectResponse putImage(MultipartFile file, String objectKey) {
         try {
             byte[] payload = file.getBytes();
-            String contentType = file.getContentType();
+            String contentType = StringUtils.hasText(file.getContentType())
+                    ? file.getContentType()
+                    : "application/octet-stream";
 
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(requireBucket())
@@ -193,26 +191,13 @@ public class S3StorageService {
         return StringUtils.hasText(prefix) ? prefix + "/" + fileName : fileName;
     }
 
-    private void validateImage(MultipartFile file) {
+    private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new ImageValidationException("IMG_FILE_REQUIRED", "Image file is required");
+            throw new ImageValidationException("IMG_FILE_REQUIRED", "File is required");
         }
 
-        if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
-            throw new ImageValidationException("IMG_SIZE_EXCEEDED", "Image size must not exceed 5MB");
-        }
-
-        String contentType = file.getContentType();
-        if (!StringUtils.hasText(contentType) || !contentType.startsWith("image/")) {
-            throw new ImageValidationException("IMG_INVALID_MIME", "Only image MIME types are allowed");
-        }
-
-        String extension = extractExtensionWithoutDot(file.getOriginalFilename());
-        if (!StringUtils.hasText(extension) || !ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
-            throw new ImageValidationException(
-                    "IMG_INVALID_EXTENSION",
-                    "Only image extensions are allowed: jpg, jpeg, png, gif, webp, bmp, tif, tiff, svg"
-            );
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            throw new ImageValidationException("IMG_SIZE_EXCEEDED", "File size must not exceed 2MB");
         }
     }
 
@@ -225,14 +210,6 @@ public class S3StorageService {
             return "";
         }
         return originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase();
-    }
-
-    private String extractExtensionWithoutDot(String originalFilename) {
-        String extensionWithDot = extractExtension(originalFilename);
-        if (!StringUtils.hasText(extensionWithDot)) {
-            return "";
-        }
-        return extensionWithDot.substring(1);
     }
 
     private String requireBucket() {

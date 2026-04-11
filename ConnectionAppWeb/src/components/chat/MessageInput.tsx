@@ -14,7 +14,11 @@ interface MessageInputProps {
   onCancelReply: () => void;
 }
 
-const MessageInput = ({ selectedConvo, replyTo, onCancelReply }: MessageInputProps) => {
+const MessageInput = ({
+  selectedConvo,
+  replyTo,
+  onCancelReply,
+}: MessageInputProps) => {
   const { user } = useAuthStore();
   const { sendMessage } = useChatStore();
   const [value, setValue] = useState("");
@@ -54,7 +58,7 @@ const MessageInput = ({ selectedConvo, replyTo, onCancelReply }: MessageInputPro
             <p className="text-xs text-muted-foreground truncate">
               {replyTo.recalledAt
                 ? "Tin nhắn đã được thu hồi"
-                : replyTo.content ?? ""}
+                : (replyTo.content ?? "")}
             </p>
           </div>
           <Button
@@ -94,7 +98,9 @@ const MessageInput = ({ selectedConvo, replyTo, onCancelReply }: MessageInputPro
             >
               <div>
                 <EmojiPicker
-                  onChange={(emoji: string) => setValue(`${value}${emoji}`)}
+                  onChange={(emoji: string) =>
+                    setValue((prev) => `${prev}${emoji}`)
+                  }
                 />
               </div>
             </Button>
