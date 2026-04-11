@@ -1,15 +1,5 @@
 import api from "@/lib/axios";
 
-export interface DeviceSession {
-  id: number;
-  deviceName: string;
-  userAgent: string;
-  ipAddress: string;
-  createdAt: string;
-  lastUsedAt: string;
-  expiryDate: string;
-}
-
 export const authService = {
   /**
    * POST /api/auth/signup
@@ -22,7 +12,7 @@ export const authService = {
     email: string,
     firstName: string,
     lastName: string,
-    otp: string
+    otp: string,
   ) => {
     const res = await api.post("/auth/signup", {
       username,
@@ -48,15 +38,16 @@ export const authService = {
   /**
    * POST /api/auth/signin
    * Body: { username, password }
-   * Returns: LoginResponse { accessToken } 
+   * Returns: LoginResponse { accessToken }
    * (Assumes refreshToken is handled via HttpOnly Cookie by the backend)
    */
   signIn: async (username: string, password: string) => {
     const res = await api.post("/auth/signin", {
       username,
       password,
+      platform: "WEB",
     });
-    return res.data; 
+    return res.data;
   },
 
   /**
@@ -88,24 +79,6 @@ export const authService = {
   },
 
   /**
-   * GET /api/auth/devices
-   * Returns: { devices: DeviceSession[] }
-   */
-  getDevices: async (): Promise<DeviceSession[]> => {
-    const res = await api.get("/auth/devices");
-    return res.data.devices ?? [];
-  },
-
-  /**
-   * POST /api/auth/logout-all
-   * Revoke all active sessions of current user.
-   */
-  logoutAllDevices: async () => {
-    const res = await api.post("/auth/logout-all");
-    return res.data;
-  },
-
-  /**
    * POST /api/auth/forgot-password
    * Body: { email }
    * Gửi OTP về email để đặt lại mật khẩu
@@ -131,7 +104,11 @@ export const authService = {
    * Đặt lại mật khẩu mới
    */
   resetPassword: async (email: string, otp: string, newPassword: string) => {
-    const res = await api.post("/auth/reset-password", { email, otp, newPassword });
+    const res = await api.post("/auth/reset-password", {
+      email,
+      otp,
+      newPassword,
+    });
     return res.data;
   },
 };
