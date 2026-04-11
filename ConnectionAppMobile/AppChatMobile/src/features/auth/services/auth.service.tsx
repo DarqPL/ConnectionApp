@@ -133,6 +133,11 @@ interface SignInResponse {
 export class AuthService {
   private accessToken: string | null = null;
   private apiBaseUrl: string = getDefaultApiBaseUrl();
+  private unauthorizedHandler: (() => void) | null = null;
+
+  setUnauthorizedHandler(handler: (() => void) | null): void {
+    this.unauthorizedHandler = handler;
+  }
 
   private buildUrl(path: string): string {
     return `${this.apiBaseUrl}${path}`;
@@ -410,7 +415,13 @@ export class AuthService {
         return this.authFetch(path, init, true);
       } catch {
         await this.setAccessToken(null);
+        this.unauthorizedHandler?.();
       }
+    }
+
+    if (response.status === 401) {
+      await this.setAccessToken(null);
+      this.unauthorizedHandler?.();
     }
 
     return response;

@@ -81,12 +81,24 @@ public class MessageService {
 
         MessageResponse response = mapToMessageResponse(savedMessage);
 
+        // Broadcast to conversation topic (keep legacy destination for compatibility)
+        messagingTemplate.convertAndSend("/topic/conversation/" + request.getConversationId(), response);
         messagingTemplate.convertAndSend("/topic/conversation" + request.getConversationId(), response);
 
         // Also notify each participant via their personal topic
         List<ConversationUser> members = conversationUserRepository.findByConversationId(request.getConversationId());
+        boolean senderNotified = false;
         for (ConversationUser member : members) {
-            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId(), response);
+            Long memberUserId = member.getUser().getId();
+            messagingTemplate.convertAndSend("/topic/user." + memberUserId, response);
+            if (memberUserId.equals(senderId)) {
+                senderNotified = true;
+            }
+        }
+
+        // Ensure sender's all devices (web/mobile) receive realtime event even if membership query omits sender
+        if (!senderNotified) {
+            messagingTemplate.convertAndSend("/topic/user." + senderId, response);
         }
 
         return response;
