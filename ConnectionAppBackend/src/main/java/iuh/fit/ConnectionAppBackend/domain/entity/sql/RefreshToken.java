@@ -1,5 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
+import iuh.fit.ConnectionAppBackend.domain.common.AuthPlatform;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,6 +24,9 @@ public class RefreshToken {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @Enumerated(EnumType.STRING)
+    private AuthPlatform platform;
 
     private String deviceName;
 

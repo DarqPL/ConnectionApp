@@ -10,6 +10,8 @@ interface SecurityNotification {
   type: string;
   title: string;
   message: string;
+  targetPlatform?: string;
+  reason?: string;
   deviceName?: string;
   ipAddress?: string;
   userAgent?: string;
@@ -77,6 +79,24 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         // Subscribe to security warnings (unknown-device login).
         client.subscribe(`/topic/user.${userId}/security`, (message) => {
           const payload: SecurityNotification = JSON.parse(message.body);
+
+          if (
+            payload.type === "SESSION_REVOKED_NEW_LOGIN" &&
+            payload.targetPlatform === "WEB"
+          ) {
+            get().disconnectSocket();
+            useAuthStore.getState().clearState();
+
+            toast.error(payload.title || "Phiên đăng nhập đã kết thúc", {
+              description: payload.message,
+              duration: 5000,
+            });
+
+            if (window.location.pathname !== "/signin") {
+              window.location.href = "/signin";
+            }
+            return;
+          }
 
           toast.warning(payload.title || "Cảnh báo bảo mật", {
             description: [

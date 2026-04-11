@@ -32,10 +32,12 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { user, accessToken, isAuthenticated } = useAuth();
+  const { user, accessToken, isAuthenticated, signOut } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    number | null
+  >(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,7 +75,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const data = await chatService.getConversations();
       setConversations(sortConversations(data));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được danh sách cuộc trò chuyện");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Không tải được danh sách cuộc trò chuyện",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -82,7 +88,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   // ─── Socket handlers (stable functions, state accessed via refs/setters) ───
 
   const onIncomingMessage = useCallback((incomingMessage: Message) => {
-    console.log("[ChatContext] Incoming message:", incomingMessage.id, "convId:", incomingMessage.conversationId);
+    console.log(
+      "[ChatContext] Incoming message:",
+      incomingMessage.id,
+      "convId:",
+      incomingMessage.conversationId,
+    );
 
     // 1. Add to current chat room if it's open
     if (incomingMessage.conversationId === currentConversationRef.current) {
@@ -91,19 +102,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // 2. Update conversation list
     setConversations((prev) => {
-      const index = prev.findIndex((c) => c.id === incomingMessage.conversationId);
+      const index = prev.findIndex(
+        (c) => c.id === incomingMessage.conversationId,
+      );
 
       if (index === -1) {
         // Conversation not in list yet → refetch (new conv or first message)
         console.log("[ChatContext] Unknown conversation, refetching list...");
-        chatService.getConversations().then((data) =>
-          setConversations(sortConversations(data))
-        ).catch(console.error);
+        chatService
+          .getConversations()
+          .then((data) => setConversations(sortConversations(data)))
+          .catch(console.error);
         return prev;
       }
 
       const next = [...prev];
-      const isOpen = currentConversationRef.current === incomingMessage.conversationId;
+      const isOpen =
+        currentConversationRef.current === incomingMessage.conversationId;
       const isOwn = incomingMessage.senderInfo?.senderId === userIdRef.current;
 
       next[index] = {
@@ -134,10 +149,40 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     console.log("[ChatContext] Recalled message:", recalledMessage.id);
     if (recalledMessage.conversationId === currentConversationRef.current) {
       setCurrentMessages((prev) =>
-        prev.map((m) => m.id === recalledMessage.id ? recalledMessage : m)
+        prev.map((m) => (m.id === recalledMessage.id ? recalledMessage : m)),
       );
     }
   }, []);
+
+  const onSecurityNotification = useCallback(
+    (payload: {
+      type?: string;
+      title?: string;
+      message: string;
+      targetPlatform?: string;
+      reason?: string;
+      deviceName?: string;
+      ipAddress?: string;
+    }) => {
+      if (
+        payload.type === "SESSION_REVOKED_NEW_LOGIN" &&
+        payload.targetPlatform === "MOBILE"
+      ) {
+        Alert.alert(
+          payload.title || "Phiên đăng nhập đã kết thúc",
+          payload.message,
+        );
+        signOut().catch(() => {
+          // Fallback UX if network fails while trying to logout.
+          Alert.alert("Phiên đăng nhập đã hết hạn", "Vui lòng đăng nhập lại.");
+        });
+        return;
+      }
+
+      Alert.alert(payload.title || "Cảnh báo bảo mật", payload.message);
+    },
+    [signOut],
+  );
 
   // ─── Single socket connect effect — only depends on userId/token ───
   useEffect(() => {
@@ -147,15 +192,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const wsUrl = authService.getWebSocketUrl();
-    console.log("[ChatContext] Connecting socket, userId:", user.id, "url:", wsUrl);
+    console.log(
+      "[ChatContext] Connecting socket, userId:",
+      user.id,
+      "url:",
+      wsUrl,
+    );
 
     chatSocketService.connect(wsUrl, user.id, accessToken, {
       onIncomingMessage,
       onIncomingConversation,
       onRecallMessage,
-      onSecurityNotification: (payload) => {
-        Alert.alert(payload.title || "Cảnh báo bảo mật", payload.message);
-      },
+      onSecurityNotification,
       onConnectionError: (socketError) => {
         console.error("[ChatContext] Socket error:", socketError);
         setError(socketError);
@@ -166,7 +214,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       chatSocketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user?.id, accessToken]);
+  }, [isAuthenticated, user?.id, accessToken, onSecurityNotification]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
 
@@ -177,13 +225,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onIncomingMessage,
         onIncomingConversation,
         onRecallMessage,
-        onSecurityNotification: (payload) => {
-          Alert.alert(payload.title || "Cảnh báo bảo mật", payload.message);
-        },
+        onSecurityNotification,
         onConnectionError: setError,
       });
     }
-  }, [onIncomingMessage, onIncomingConversation, onRecallMessage]);
+  }, [
+    onIncomingMessage,
+    onIncomingConversation,
+    onRecallMessage,
+    onSecurityNotification,
+  ]);
 
   // ─── Regular methods ───────────────────────────────────────────────────────
 
@@ -197,7 +248,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       // Mark as read
       chatService.markAsRead(conversationId).catch(() => {});
       setConversations((prev) =>
-        prev.map((c) => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
+        prev.map((c) =>
+          c.id === conversationId ? { ...c, unreadCount: 0 } : c,
+        ),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải được tin nhắn");
@@ -206,44 +259,61 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const sendMessage = useCallback(async (conversationId: number, content: string) => {
-    setError(null);
-    try {
-      const newMsg = await chatService.sendMessage(conversationId, content);
-      // Optimistically add to current messages
-      setCurrentMessages((prev) => upsertMessage(prev, newMsg));
-      // Update conversation list
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conversationId
-            ? { ...c, lastMessageContent: content, lastMessageAt: new Date().toISOString(), unreadCount: 0 }
-            : c
-        )
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Gửi tin nhắn thất bại";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+  const sendMessage = useCallback(
+    async (conversationId: number, content: string) => {
+      setError(null);
+      try {
+        const newMsg = await chatService.sendMessage(conversationId, content);
+        // Optimistically add to current messages
+        setCurrentMessages((prev) => upsertMessage(prev, newMsg));
+        // Update conversation list
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  lastMessageContent: content,
+                  lastMessageAt: new Date().toISOString(),
+                  unreadCount: 0,
+                }
+              : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Gửi tin nhắn thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
 
   const deleteMessage = useCallback(async (messageId: string) => {
     setError(null);
     try {
       await chatService.deleteMessage(messageId);
       setCurrentMessages((prev) =>
-        prev.map((m) => m.id === messageId ? { ...m, recalledAt: new Date().toISOString() } : m)
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, recalledAt: new Date().toISOString() }
+            : m,
+        ),
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại";
+      const msg =
+        err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại";
       setError(msg);
       throw err;
     }
   }, []);
 
-  const setCurrentConversation = useCallback((conversationId: number | null) => {
-    setCurrentConversationId(conversationId);
-  }, []);
+  const setCurrentConversation = useCallback(
+    (conversationId: number | null) => {
+      setCurrentConversationId(conversationId);
+    },
+    [],
+  );
 
   const clearError = useCallback(() => setError(null), []);
 

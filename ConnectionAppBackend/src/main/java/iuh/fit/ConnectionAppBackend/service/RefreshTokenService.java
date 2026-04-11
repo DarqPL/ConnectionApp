@@ -1,5 +1,6 @@
 package iuh.fit.ConnectionAppBackend.service;
 
+import iuh.fit.ConnectionAppBackend.domain.common.AuthPlatform;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.RefreshToken;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
@@ -19,12 +20,14 @@ public class RefreshTokenService {
     private RefreshTokenRepository refreshTokenRepo;
 
     public RefreshToken createRefreshToken(User user,
+                                           AuthPlatform platform,
                                            String deviceName,
                                            String userAgent,
                                            String ipAddress) {
         RefreshToken refreshToken = new RefreshToken();
 
         refreshToken.setUser(user);
+        refreshToken.setPlatform(platform);
         refreshToken.setDeviceName(deviceName);
         refreshToken.setUserAgent(userAgent);
         refreshToken.setIpAddress(ipAddress);
@@ -67,6 +70,20 @@ public class RefreshTokenService {
     @Transactional
     public long revokeAllByUser(User user) {
         return refreshTokenRepo.deleteAllByUser(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RefreshToken> getActiveSessionsByPlatform(User user, AuthPlatform platform) {
+        LocalDateTime now = LocalDateTime.now();
+        return refreshTokenRepo.findAllByUserAndPlatformOrderByLastUsedAtDesc(user, platform)
+                .stream()
+                .filter(token -> token.getExpiryDate() != null && token.getExpiryDate().isAfter(now))
+                .toList();
+    }
+
+    @Transactional
+    public long revokeAllByUserAndPlatform(User user, AuthPlatform platform) {
+        return refreshTokenRepo.deleteAllByUserAndPlatform(user, platform);
     }
 
     @Transactional

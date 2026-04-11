@@ -6,8 +6,11 @@ export interface ChatSocketHandlers {
   onIncomingConversation: (conversation: Conversation) => void;
   onRecallMessage: (message: Message) => void;
   onSecurityNotification?: (payload: {
+    type?: string;
     title?: string;
     message: string;
+    targetPlatform?: string;
+    reason?: string;
     deviceName?: string;
     ipAddress?: string;
   }) => void;

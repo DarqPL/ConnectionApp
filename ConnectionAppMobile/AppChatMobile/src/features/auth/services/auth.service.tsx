@@ -357,7 +357,7 @@ export class AuthService {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, platform: "MOBILE" }),
     });
 
     if (!response.ok) {
