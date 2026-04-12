@@ -1,4 +1,4 @@
-import type { Conversation, Message } from "./chat";
+import type { Attachment, Conversation, Message } from "./chat";
 import type { Friend, User } from "./user";
 
 export interface AuthState {
@@ -53,6 +53,7 @@ export interface ChatState {
     conversationId: number,
     content: string,
     parentId?: string | null,
+    attachments?: Attachment[],
   ) => Promise<void>;
   addMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;

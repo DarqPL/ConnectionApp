@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MessageBubble from "../components/MessageBubble";
 import ChatInput from "../components/ChatInput";
 import ChatHeader from "../components/ChatHeader";
-import { useChat } from "../context/ChatContext";
+import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
 
@@ -40,12 +40,15 @@ const ChatRoomScreen = ({ route }: any) => {
     };
   }, [conversationId]);
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, files: PendingAttachment[]) => {
     setSending(true);
     try {
-      await sendMessage(conversationId, content);
+      await sendMessage(conversationId, content, files);
     } catch (error) {
-      Alert.alert("Lỗi", error instanceof Error ? error.message : "Gửi thất bại");
+      Alert.alert(
+        "Lỗi",
+        error instanceof Error ? error.message : "Gửi thất bại",
+      );
     } finally {
       setSending(false);
     }
@@ -54,7 +57,11 @@ const ChatRoomScreen = ({ route }: any) => {
   const handleLongPress = (msgId: string) => {
     Alert.alert("Thu hồi tin nhắn", "Bạn có chắc muốn thu hồi tin nhắn này?", [
       { text: "Bỏ qua", style: "cancel" },
-      { text: "Thu hồi", style: "destructive", onPress: () => deleteMessage(msgId) },
+      {
+        text: "Thu hồi",
+        style: "destructive",
+        onPress: () => deleteMessage(msgId),
+      },
     ]);
   };
 
@@ -65,8 +72,17 @@ const ChatRoomScreen = ({ route }: any) => {
     return (
       <View style={[styles.container, styles.center]}>
         <StatusBar barStyle="light-content" />
-        <ChatHeader name={name} avatar={avatarUrl} type={type} participants={participants} />
-        <ActivityIndicator size="large" color={COLORS.primary} style={{ flex: 1 }} />
+        <ChatHeader
+          name={name}
+          avatar={avatarUrl}
+          type={type}
+          participants={participants}
+        />
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={{ flex: 1 }}
+        />
       </View>
     );
   }
@@ -74,11 +90,18 @@ const ChatRoomScreen = ({ route }: any) => {
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="light-content" />
-      <ChatHeader name={name} avatar={avatarUrl} type={type} participants={participants} />
+      <ChatHeader
+        name={name}
+        avatar={avatarUrl}
+        type={type}
+        participants={participants}
+      />
 
       {displayMessages.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Chưa có tin nhắn nào.{"\n"}Hãy gửi lời chào! 👋</Text>
+          <Text style={styles.emptyText}>
+            Chưa có tin nhắn nào.{"\n"}Hãy gửi lời chào! 👋
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -88,6 +111,7 @@ const ChatRoomScreen = ({ route }: any) => {
           renderItem={({ item }) => (
             <MessageBubble
               message={item.content || ""}
+              attachments={item.attachments || []}
               isMe={item.senderInfo?.senderId === user?.id}
               senderName={item.senderInfo?.displayName}
               avatarUrl={item.senderInfo?.avatarUrl}

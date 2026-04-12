@@ -42,6 +42,7 @@ public class MessageResponse {
     public static class AttachmentResponse {
         private String fileUrl;
         private String type;
+        private String originalFileName;
     }
 
     @Data
