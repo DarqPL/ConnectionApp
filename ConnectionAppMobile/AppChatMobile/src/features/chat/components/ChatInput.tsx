@@ -18,10 +18,17 @@ import EmojiPicker from "rn-emoji-keyboard";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import type { PendingAttachment } from "../context/ChatContext";
+import type { Message } from "../types";
 
 interface ChatInputProps {
-  onSend: (message: string, files: PendingAttachment[]) => Promise<void>;
+  onSend: (
+    message: string,
+    files: PendingAttachment[],
+    parentId?: string | null,
+  ) => Promise<void>;
   disabled?: boolean;
+  replyTo?: Message | null;
+  onCancelReply?: () => void;
 }
 
 const MAX_FILES = 5;
@@ -39,7 +46,33 @@ const formatFileSize = (size?: number): string => {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 };
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
+const getReplyPreviewText = (message: Message | null | undefined): string => {
+  if (!message) return "";
+  if (message.recalledAt) {
+    return "Tin nhắn đã được thu hồi";
+  }
+
+  const normalized = (message.content ?? "").trim();
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  const attachmentCount = message.attachments?.length ?? 0;
+  if (attachmentCount === 1) {
+    return "Đính kèm 1 tệp";
+  }
+  if (attachmentCount > 1) {
+    return `Đính kèm ${attachmentCount} tệp`;
+  }
+  return "Tin nhắn";
+};
+
+const ChatInput: React.FC<ChatInputProps> = ({
+  onSend,
+  disabled = false,
+  replyTo = null,
+  onCancelReply,
+}) => {
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
@@ -147,9 +180,11 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
           mimeType: file.mimeType,
           size: file.size,
         })),
+        replyTo?.id ?? null,
       );
       setText("");
       setSelectedFiles([]);
+      onCancelReply?.();
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -175,6 +210,26 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled = false }) => {
   return (
     <>
       <View style={styles.wrapper}>
+        {replyTo && (
+          <View style={styles.replyBanner}>
+            <View style={styles.replyContent}>
+              <Text style={styles.replyTitle}>
+                Đang trả lời {replyTo.senderInfo?.displayName}
+              </Text>
+              <Text numberOfLines={1} style={styles.replyText}>
+                {getReplyPreviewText(replyTo)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.replyCloseBtn}
+              onPress={onCancelReply}
+              disabled={isSending}
+            >
+              <Ionicons name="close" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {selectedFiles.length > 0 && (
           <ScrollView
             horizontal
@@ -288,6 +343,38 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#ede9fe",
+  },
+  replyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    backgroundColor: COLORS.backgroundMuted,
+    marginHorizontal: 8,
+    marginTop: 8,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingLeft: 10,
+    paddingRight: 6,
+  },
+  replyContent: {
+    flex: 1,
+  },
+  replyTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  replyText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  replyCloseBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   previewRow: {
     paddingHorizontal: 8,

@@ -19,6 +19,7 @@ import ChatHeader from "../components/ChatHeader";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
+import type { Message } from "../types";
 
 const ChatRoomScreen = ({ route }: any) => {
   const insets = useSafeAreaInsets();
@@ -39,6 +40,7 @@ const ChatRoomScreen = ({ route }: any) => {
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const [showScrollToBottom, setShowScrollToBottom] = React.useState(false);
   const [isListReady, setIsListReady] = React.useState(false);
+  const [replyTo, setReplyTo] = React.useState<Message | null>(null);
 
   const showScrollThreshold = 120;
   const nearBottomThreshold = 24;
@@ -54,6 +56,7 @@ const ChatRoomScreen = ({ route }: any) => {
     setIsAtBottom(true);
     setShowScrollToBottom(false);
     setIsListReady(false);
+    setReplyTo(null);
 
     setCurrentConversation(conversationId);
     void fetchMessages(conversationId);
@@ -113,10 +116,15 @@ const ChatRoomScreen = ({ route }: any) => {
     setIsAtBottom(true);
   };
 
-  const handleSend = async (content: string, files: PendingAttachment[]) => {
+  const handleSend = async (
+    content: string,
+    files: PendingAttachment[],
+    parentId?: string | null,
+  ) => {
     setSending(true);
     try {
-      await sendMessage(conversationId, content, files);
+      await sendMessage(conversationId, content, files, parentId);
+      setReplyTo(null);
     } catch (error) {
       Alert.alert(
         "Lỗi",
@@ -127,7 +135,7 @@ const ChatRoomScreen = ({ route }: any) => {
     }
   };
 
-  const handleLongPress = (msgId: string) => {
+  const handleRecallMessage = (msgId: string) => {
     Alert.alert("Thu hồi tin nhắn", "Bạn có chắc muốn thu hồi tin nhắn này?", [
       { text: "Bỏ qua", style: "cancel" },
       {
@@ -136,6 +144,38 @@ const ChatRoomScreen = ({ route }: any) => {
         onPress: () => deleteMessage(msgId),
       },
     ]);
+  };
+
+  const handleMessageAction = (item: Message) => {
+    if (item.recalledAt) {
+      return;
+    }
+
+    const isOwnMessage = item.senderInfo?.senderId === user?.id;
+    const actions: Array<{
+      text: string;
+      style?: "default" | "cancel" | "destructive";
+      onPress?: () => void;
+    }> = [
+      {
+        text: "Trả lời",
+        onPress: () => setReplyTo(item),
+      },
+      {
+        text: "Hủy",
+        style: "cancel",
+      },
+    ];
+
+    if (isOwnMessage) {
+      actions.splice(1, 0, {
+        text: "Thu hồi",
+        style: "destructive",
+        onPress: () => handleRecallMessage(item.id),
+      });
+    }
+
+    Alert.alert("Tùy chọn", "Chọn hành động cho tin nhắn", actions);
   };
 
   const isGroup = type === "GROUP";
@@ -189,12 +229,9 @@ const ChatRoomScreen = ({ route }: any) => {
               avatarUrl={item.senderInfo?.avatarUrl}
               createdAt={item.createdAt}
               recalledAt={item.recalledAt}
+              replyInfo={item.replyInfo}
               isGroup={isGroup}
-              onLongPress={
-                item.senderInfo?.senderId === user?.id
-                  ? () => handleLongPress(item.id)
-                  : undefined
-              }
+              onLongPress={() => handleMessageAction(item)}
             />
           )}
           contentContainerStyle={[
@@ -226,7 +263,12 @@ const ChatRoomScreen = ({ route }: any) => {
         </TouchableOpacity>
       )}
 
-      <ChatInput onSend={handleSend} disabled={sending} />
+      <ChatInput
+        onSend={handleSend}
+        disabled={sending}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+      />
     </View>
   );
 };

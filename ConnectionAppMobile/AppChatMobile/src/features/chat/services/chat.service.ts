@@ -117,6 +117,7 @@ export class ChatService {
   async sendMessage(
     conversationId: number,
     content: string,
+    parentId?: string | null,
     attachments: Attachment[] = [],
   ): Promise<Message> {
     const response = await authService.authFetch("/messages", {
@@ -127,7 +128,7 @@ export class ChatService {
       body: JSON.stringify({
         conversationId,
         content,
-        parentId: null,
+        parentId: parentId ?? null,
         attachments,
       }),
     });
