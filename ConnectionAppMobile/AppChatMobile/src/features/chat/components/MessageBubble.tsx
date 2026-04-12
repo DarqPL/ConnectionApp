@@ -10,8 +10,11 @@ import {
   Alert,
   Linking,
   PanResponder,
+  LayoutChangeEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { ResizeMode, Video } from "expo-av";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import type { Attachment } from "../types";
 
@@ -37,6 +40,13 @@ const isImageAttachment = (attachment: Attachment): boolean => {
     return true;
   }
   return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(attachment.fileUrl);
+};
+
+const isVideoAttachment = (attachment: Attachment): boolean => {
+  if (attachment.type === "VIDEO") {
+    return true;
+  }
+  return /\.(mp4|webm|mov|m4v|ogv|mkv)(\?|$)/i.test(attachment.fileUrl);
 };
 
 const resolveFileName = (
@@ -72,6 +82,20 @@ const MessageBubble: React.FC<Props> = ({
   const [previewImage, setPreviewImage] = React.useState<Attachment | null>(
     null,
   );
+  const [previewVideo, setPreviewVideo] = React.useState<Attachment | null>(
+    null,
+  );
+  const [previewViewport, setPreviewViewport] = React.useState({
+    width: 0,
+    height: 0,
+  });
+  const [previewImageSize, setPreviewImageSize] = React.useState({
+    width: 0,
+    height: 0,
+  });
+  const [videoThumbnailByUrl, setVideoThumbnailByUrl] = React.useState<
+    Record<string, string>
+  >({});
   const previewScale = React.useRef(new Animated.Value(1)).current;
   const previewTranslateX = React.useRef(new Animated.Value(0)).current;
   const previewTranslateY = React.useRef(new Animated.Value(0)).current;
@@ -80,8 +104,50 @@ const MessageBubble: React.FC<Props> = ({
   const panStartRef = React.useRef({ x: 0, y: 0 });
   const pinchStartDistanceRef = React.useRef<number | null>(null);
   const pinchStartScaleRef = React.useRef(1);
+  const thumbnailLoadingRef = React.useRef<Record<string, boolean>>({});
+  const isMountedRef = React.useRef(true);
 
   const clampScale = (value: number): number => Math.max(1, Math.min(4, value));
+
+  const getPanBounds = React.useCallback(
+    (scale: number) => {
+      const viewportWidth = previewViewport.width;
+      const viewportHeight = previewViewport.height;
+
+      if (scale <= 1 || viewportWidth <= 0 || viewportHeight <= 0) {
+        return { maxX: 0, maxY: 0 };
+      }
+
+      let renderedWidth = viewportWidth;
+      let renderedHeight = viewportHeight;
+
+      if (previewImageSize.width > 0 && previewImageSize.height > 0) {
+        const fitScale = Math.min(
+          viewportWidth / previewImageSize.width,
+          viewportHeight / previewImageSize.height,
+        );
+        renderedWidth = previewImageSize.width * fitScale;
+        renderedHeight = previewImageSize.height * fitScale;
+      }
+
+      return {
+        maxX: Math.max(0, (renderedWidth * scale - viewportWidth) / 2),
+        maxY: Math.max(0, (renderedHeight * scale - viewportHeight) / 2),
+      };
+    },
+    [previewViewport, previewImageSize],
+  );
+
+  const clampPanOffset = React.useCallback(
+    (x: number, y: number, scale = previewScaleRef.current) => {
+      const bounds = getPanBounds(scale);
+      return {
+        x: Math.min(bounds.maxX, Math.max(-bounds.maxX, x)),
+        y: Math.min(bounds.maxY, Math.max(-bounds.maxY, y)),
+      };
+    },
+    [getPanBounds],
+  );
 
   const resetPreviewTransform = React.useCallback(() => {
     previewScaleRef.current = 1;
@@ -103,6 +169,12 @@ const MessageBubble: React.FC<Props> = ({
         speed: 18,
       }).start();
 
+      const clampedOffset = clampPanOffset(
+        panOffsetRef.current.x,
+        panOffsetRef.current.y,
+        nextScale,
+      );
+
       if (nextScale <= 1.01) {
         panOffsetRef.current = { x: 0, y: 0 };
         Animated.spring(previewTranslateX, {
@@ -117,9 +189,13 @@ const MessageBubble: React.FC<Props> = ({
           bounciness: 0,
           speed: 18,
         }).start();
+      } else {
+        panOffsetRef.current = clampedOffset;
+        previewTranslateX.setValue(clampedOffset.x);
+        previewTranslateY.setValue(clampedOffset.y);
       }
     },
-    [previewScale, previewTranslateX, previewTranslateY],
+    [previewScale, previewTranslateX, previewTranslateY, clampPanOffset],
   );
 
   const getTouchDistance = (
@@ -180,6 +256,15 @@ const MessageBubble: React.FC<Props> = ({
               panOffsetRef.current = { x: 0, y: 0 };
               previewTranslateX.setValue(0);
               previewTranslateY.setValue(0);
+            } else {
+              const clampedOffset = clampPanOffset(
+                panOffsetRef.current.x,
+                panOffsetRef.current.y,
+                nextScale,
+              );
+              panOffsetRef.current = clampedOffset;
+              previewTranslateX.setValue(clampedOffset.x);
+              previewTranslateY.setValue(clampedOffset.y);
             }
 
             return;
@@ -191,9 +276,10 @@ const MessageBubble: React.FC<Props> = ({
 
           const nextX = panStartRef.current.x + gestureState.dx;
           const nextY = panStartRef.current.y + gestureState.dy;
-          panOffsetRef.current = { x: nextX, y: nextY };
-          previewTranslateX.setValue(nextX);
-          previewTranslateY.setValue(nextY);
+          const clampedOffset = clampPanOffset(nextX, nextY);
+          panOffsetRef.current = clampedOffset;
+          previewTranslateX.setValue(clampedOffset.x);
+          previewTranslateY.setValue(clampedOffset.y);
         },
         onPanResponderRelease: () => {
           pinchStartDistanceRef.current = null;
@@ -218,18 +304,122 @@ const MessageBubble: React.FC<Props> = ({
           pinchStartDistanceRef.current = null;
         },
       }),
-    [previewImage, previewScale, previewTranslateX, previewTranslateY],
+    [
+      previewImage,
+      previewScale,
+      previewTranslateX,
+      previewTranslateY,
+      clampPanOffset,
+    ],
   );
 
   const openImagePreview = (attachment: Attachment) => {
+    setPreviewVideo(null);
+    setPreviewImageSize({ width: 0, height: 0 });
     resetPreviewTransform();
     setPreviewImage(attachment);
+    Image.getSize(
+      attachment.fileUrl,
+      (width, height) => setPreviewImageSize({ width, height }),
+      () => setPreviewImageSize({ width: 0, height: 0 }),
+    );
   };
 
-  const closePreview = () => {
+  const ensureVideoThumbnail = React.useCallback(
+    async (videoUrl: string) => {
+      if (!videoUrl || videoThumbnailByUrl[videoUrl]) {
+        return;
+      }
+
+      if (thumbnailLoadingRef.current[videoUrl]) {
+        return;
+      }
+
+      thumbnailLoadingRef.current[videoUrl] = true;
+
+      try {
+        const { uri } = await VideoThumbnails.getThumbnailAsync(videoUrl, {
+          time: 1000,
+          quality: 0.6,
+        });
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setVideoThumbnailByUrl((prev) => ({
+          ...prev,
+          [videoUrl]: uri,
+        }));
+      } catch {
+        // Keep the fallback placeholder when thumbnail generation fails.
+      } finally {
+        thumbnailLoadingRef.current[videoUrl] = false;
+      }
+    },
+    [videoThumbnailByUrl],
+  );
+
+  const openVideoPreview = (attachment: Attachment) => {
+    void ensureVideoThumbnail(attachment.fileUrl);
     setPreviewImage(null);
     resetPreviewTransform();
+    setPreviewVideo(attachment);
   };
+
+  const closeImagePreview = () => {
+    setPreviewImage(null);
+    setPreviewImageSize({ width: 0, height: 0 });
+    setPreviewViewport({ width: 0, height: 0 });
+    resetPreviewTransform();
+  };
+
+  const closeVideoPreview = () => {
+    setPreviewVideo(null);
+  };
+
+  const handlePreviewLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setPreviewViewport({ width, height });
+  };
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    attachments.forEach((attachment) => {
+      if (isVideoAttachment(attachment)) {
+        void ensureVideoThumbnail(attachment.fileUrl);
+      }
+    });
+  }, [attachments, ensureVideoThumbnail]);
+
+  React.useEffect(() => {
+    if (!previewImage || previewScaleRef.current <= 1.01) {
+      return;
+    }
+
+    const clampedOffset = clampPanOffset(
+      panOffsetRef.current.x,
+      panOffsetRef.current.y,
+      previewScaleRef.current,
+    );
+    panOffsetRef.current = clampedOffset;
+    previewTranslateX.setValue(clampedOffset.x);
+    previewTranslateY.setValue(clampedOffset.y);
+  }, [
+    previewImage,
+    previewViewport,
+    previewImageSize,
+    clampPanOffset,
+    previewTranslateX,
+    previewTranslateY,
+  ]);
 
   const handleOpenAttachment = async (attachment: Attachment) => {
     try {
@@ -293,6 +483,45 @@ const MessageBubble: React.FC<Props> = ({
                           style={styles.attachmentImage}
                         />
                       </TouchableOpacity>
+                    ) : isVideoAttachment(attachment) ? (
+                      <TouchableOpacity
+                        key={`${attachment.fileUrl}-${index}`}
+                        onPress={() => openVideoPreview(attachment)}
+                        style={styles.videoCard}
+                        activeOpacity={0.85}
+                      >
+                        <View style={styles.videoThumb}>
+                          {videoThumbnailByUrl[attachment.fileUrl] ? (
+                            <Image
+                              source={{
+                                uri: videoThumbnailByUrl[attachment.fileUrl],
+                              }}
+                              style={styles.videoThumbImage}
+                            />
+                          ) : (
+                            <View style={styles.videoThumbFallback} />
+                          )}
+                          <View style={styles.videoThumbOverlay}>
+                            <Ionicons
+                              name="play-circle"
+                              size={40}
+                              color="#fff"
+                            />
+                          </View>
+                        </View>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.videoLabel,
+                            isMe ? styles.sentText : styles.receivedText,
+                          ]}
+                        >
+                          {resolveFileName(
+                            attachment.originalFileName,
+                            attachment.fileUrl,
+                          )}
+                        </Text>
+                      </TouchableOpacity>
                     ) : (
                       <TouchableOpacity
                         key={`${attachment.fileUrl}-${index}`}
@@ -350,60 +579,43 @@ const MessageBubble: React.FC<Props> = ({
         visible={!!previewImage}
         transparent
         animationType="fade"
-        onRequestClose={closePreview}
+        onRequestClose={closeImagePreview}
       >
         <View style={styles.previewOverlay}>
           <View style={styles.previewFrameWrap}>
             <TouchableOpacity
               style={styles.previewCloseFloating}
-              onPress={closePreview}
+              onPress={closeImagePreview}
             >
               <Ionicons name="close" size={20} color="#fff" />
             </TouchableOpacity>
 
             <View style={styles.previewContainer}>
-              <View
-                style={styles.previewImageWrap}
-                {...panResponder.panHandlers}
-              >
-                {previewImage && (
-                  <Animated.Image
-                    source={{ uri: previewImage.fileUrl }}
-                    style={[
-                      styles.previewImage,
-                      {
-                        transform: [
-                          { translateX: previewTranslateX },
-                          { translateY: previewTranslateY },
-                          { scale: previewScale },
-                        ],
-                      },
-                    ]}
-                  />
-                )}
+              <View style={styles.previewMediaWrap}>
+                <View
+                  style={styles.previewImageWrap}
+                  onLayout={handlePreviewLayout}
+                  {...panResponder.panHandlers}
+                >
+                  {previewImage && (
+                    <Animated.Image
+                      source={{ uri: previewImage.fileUrl }}
+                      style={[
+                        styles.previewImage,
+                        {
+                          transform: [
+                            { translateX: previewTranslateX },
+                            { translateY: previewTranslateY },
+                            { scale: previewScale },
+                          ],
+                        },
+                      ]}
+                    />
+                  )}
+                </View>
               </View>
 
               <View style={styles.previewBottomActions}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.disabledActionBtn]}
-                  disabled
-                >
-                  <Ionicons
-                    name="chevron-back-outline"
-                    size={20}
-                    color="#8f8f8f"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.disabledActionBtn]}
-                  disabled
-                >
-                  <Ionicons
-                    name="chevron-forward-outline"
-                    size={20}
-                    color="#8f8f8f"
-                  />
-                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionBtn}
                   onPress={() =>
@@ -424,6 +636,49 @@ const MessageBubble: React.FC<Props> = ({
                   <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={() => handleOpenAttachment(previewImage)}
+                  >
+                    <Ionicons name="download-outline" size={20} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!previewVideo}
+        transparent
+        animationType="fade"
+        onRequestClose={closeVideoPreview}
+      >
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewFrameWrap}>
+            <TouchableOpacity
+              style={styles.previewCloseFloating}
+              onPress={closeVideoPreview}
+            >
+              <Ionicons name="close" size={20} color="#fff" />
+            </TouchableOpacity>
+
+            <View style={styles.previewContainer}>
+              <View style={styles.previewMediaWrap}>
+                {previewVideo && (
+                  <Video
+                    source={{ uri: previewVideo.fileUrl }}
+                    style={styles.previewVideo}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay
+                  />
+                )}
+              </View>
+
+              <View style={styles.previewBottomActions}>
+                {previewVideo && (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => handleOpenAttachment(previewVideo)}
                   >
                     <Ionicons name="download-outline" size={20} color="#fff" />
                   </TouchableOpacity>
@@ -494,6 +749,40 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: COLORS.backgroundMuted,
   },
+  videoCard: {
+    width: 220,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+    overflow: "hidden",
+  },
+  videoThumb: {
+    position: "relative",
+    height: 120,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoThumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+  videoThumbFallback: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  videoThumbOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.28)",
+  },
+  videoLabel: {
+    fontSize: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
   fileCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -530,6 +819,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#0f0f0f",
     borderRadius: 12,
     overflow: "hidden",
+    justifyContent: "space-between",
+  },
+  previewMediaWrap: {
+    flex: 1,
+    overflow: "hidden",
   },
   previewCloseFloating: {
     position: "absolute",
@@ -554,16 +848,20 @@ const styles = StyleSheet.create({
     height: "100%",
     resizeMode: "contain",
   },
+  previewVideo: {
+    width: "100%",
+    height: "100%",
+  },
   previewBottomActions: {
-    position: "absolute",
-    bottom: 12,
-    left: 0,
-    right: 0,
-    zIndex: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(0,0,0,0.88)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    paddingTop: 10,
+    paddingBottom: 16,
   },
   actionBtn: {
     width: 36,
@@ -572,9 +870,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.75)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  disabledActionBtn: {
-    backgroundColor: "rgba(0,0,0,0.5)",
   },
   bubbleSent: {
     backgroundColor: COLORS.primary,

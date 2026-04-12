@@ -8,11 +8,10 @@ import type {
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
 import {
-  ChevronLeft,
-  ChevronRight,
   CornerUpLeft,
   Download,
   FileText,
+  PlayCircle,
   Undo2,
   X,
   ZoomIn,
@@ -28,6 +27,13 @@ const isImageAttachment = (attachment: Attachment): boolean => {
     return true;
   }
   return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(attachment.fileUrl);
+};
+
+const isVideoAttachment = (attachment: Attachment): boolean => {
+  if (attachment.type === "VIDEO") {
+    return true;
+  }
+  return /\.(mp4|webm|mov|m4v|ogv|mkv)(\?|$)/i.test(attachment.fileUrl);
 };
 
 const resolveFileName = (
@@ -61,16 +67,25 @@ const MessageItem = ({
   index,
   messages,
   selectedConvo,
-  lastMessageStatus,
   onReply,
 }: MessageItemProps) => {
   const { recallMessage } = useChatStore();
   const [showMenu, setShowMenu] = useState(false);
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
+  const [previewVideo, setPreviewVideo] = useState<Attachment | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
+  const [previewViewport, setPreviewViewport] = useState({
+    width: 0,
+    height: 0,
+  });
+  const [previewImageSize, setPreviewImageSize] = useState({
+    width: 0,
+    height: 0,
+  });
   const [isPanning, setIsPanning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const previewViewportRef = useRef<HTMLDivElement>(null);
   const panStartRef = useRef({ x: 0, y: 0 });
   const pointerStartRef = useRef({ x: 0, y: 0 });
 
@@ -151,25 +166,79 @@ const MessageItem = ({
   };
 
   const openImagePreview = (attachment: Attachment) => {
+    setPreviewVideo(null);
+    setPreviewImageSize({ width: 0, height: 0 });
     setPreviewZoom(1);
     setPreviewPan({ x: 0, y: 0 });
     setPreviewImage(attachment);
   };
 
-  const closePreview = () => {
-    setIsPanning(false);
+  const openVideoPreview = (attachment: Attachment) => {
     setPreviewImage(null);
+    setIsPanning(false);
     setPreviewZoom(1);
     setPreviewPan({ x: 0, y: 0 });
+    setPreviewVideo(attachment);
+  };
+
+  const closeImagePreview = () => {
+    setIsPanning(false);
+    setPreviewImage(null);
+    setPreviewImageSize({ width: 0, height: 0 });
+    setPreviewViewport({ width: 0, height: 0 });
+    setPreviewZoom(1);
+    setPreviewPan({ x: 0, y: 0 });
+  };
+
+  const closeVideoPreview = () => {
+    setPreviewVideo(null);
   };
 
   const clampZoom = (value: number): number =>
     Math.max(1, Math.min(4, Number(value.toFixed(2))));
 
+  const getPanBounds = (zoom: number) => {
+    const viewportWidth = previewViewport.width;
+    const viewportHeight = previewViewport.height;
+
+    if (zoom <= 1 || viewportWidth <= 0 || viewportHeight <= 0) {
+      return { maxX: 0, maxY: 0 };
+    }
+
+    let renderedWidth = viewportWidth;
+    let renderedHeight = viewportHeight;
+
+    if (previewImageSize.width > 0 && previewImageSize.height > 0) {
+      const fitScale = Math.min(
+        viewportWidth / previewImageSize.width,
+        viewportHeight / previewImageSize.height,
+      );
+      renderedWidth = previewImageSize.width * fitScale;
+      renderedHeight = previewImageSize.height * fitScale;
+    }
+
+    return {
+      maxX: Math.max(0, (renderedWidth * zoom - viewportWidth) / 2),
+      maxY: Math.max(0, (renderedHeight * zoom - viewportHeight) / 2),
+    };
+  };
+
+  const clampPan = (pan: { x: number; y: number }, zoom = previewZoom) => {
+    const bounds = getPanBounds(zoom);
+    return {
+      x: Math.min(bounds.maxX, Math.max(-bounds.maxX, pan.x)),
+      y: Math.min(bounds.maxY, Math.max(-bounds.maxY, pan.y)),
+    };
+  };
+
   const handlePreviewWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
     const delta = event.deltaY < 0 ? 0.15 : -0.15;
-    setPreviewZoom((prev) => clampZoom(prev + delta));
+    setPreviewZoom((prev) => {
+      const next = clampZoom(prev + delta);
+      setPreviewPan((current) => clampPan(current, next));
+      return next;
+    });
   };
 
   const handlePreviewMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -192,10 +261,12 @@ const MessageItem = ({
       const deltaX = event.clientX - pointerStartRef.current.x;
       const deltaY = event.clientY - pointerStartRef.current.y;
 
-      setPreviewPan({
-        x: panStartRef.current.x + deltaX,
-        y: panStartRef.current.y + deltaY,
-      });
+      setPreviewPan(
+        clampPan({
+          x: panStartRef.current.x + deltaX,
+          y: panStartRef.current.y + deltaY,
+        }),
+      );
     };
 
     const handleMouseUp = () => {
@@ -214,8 +285,37 @@ const MessageItem = ({
   useEffect(() => {
     if (previewZoom <= 1) {
       setPreviewPan({ x: 0, y: 0 });
+      return;
     }
-  }, [previewZoom]);
+
+    setPreviewPan((current) => clampPan(current, previewZoom));
+  }, [previewZoom, previewViewport, previewImageSize]);
+
+  useEffect(() => {
+    if (!previewImage) {
+      return;
+    }
+
+    const updateViewport = () => {
+      const rect = previewViewportRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      setPreviewViewport({
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    const rafId = window.requestAnimationFrame(updateViewport);
+    window.addEventListener("resize", updateViewport);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, [previewImage]);
 
   return (
     <>
@@ -317,6 +417,41 @@ const MessageItem = ({
                           );
                         }
 
+                        if (isVideoAttachment(attachment)) {
+                          return (
+                            <button
+                              type="button"
+                              key={`${attachment.fileUrl}-${idx}`}
+                              onClick={() => openVideoPreview(attachment)}
+                              className="block w-full overflow-hidden rounded-md border border-border/40 bg-zinc-900/70"
+                            >
+                              <div className="relative h-36 w-full bg-zinc-900">
+                                <video
+                                  src={attachment.fileUrl}
+                                  preload="metadata"
+                                  muted
+                                  playsInline
+                                  className="pointer-events-none h-full w-full object-cover"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+                                  <PlayCircle className="size-10 text-white" />
+                                </div>
+                              </div>
+                              <div className="min-w-0 bg-black/35 px-2 py-1.5 text-left">
+                                <p className="truncate text-xs font-medium text-white">
+                                  {resolveFileName(
+                                    attachment.originalFileName,
+                                    attachment.fileUrl,
+                                  )}
+                                </p>
+                                <p className="text-[11px] text-zinc-300">
+                                  Nhấn để xem video
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        }
+
                         return (
                           <button
                             type="button"
@@ -380,7 +515,7 @@ const MessageItem = ({
         open={!!previewImage}
         onOpenChange={(open) => {
           if (!open) {
-            closePreview();
+            closeImagePreview();
           }
         }}
       >
@@ -392,16 +527,17 @@ const MessageItem = ({
             <div className="relative pt-2">
               <button
                 type="button"
-                onClick={closePreview}
+                onClick={closeImagePreview}
                 className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
                 title="Close"
               >
                 <X className="size-4" />
               </button>
 
-              <div className="relative rounded-lg border-4 border-black bg-black">
+              <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
                 <div
-                  className="relative h-[80vh] overflow-hidden rounded-[4px] bg-zinc-900"
+                  ref={previewViewportRef}
+                  className="relative h-[72vh] overflow-hidden bg-zinc-900"
                   onWheel={handlePreviewWheel}
                   onMouseDown={handlePreviewMouseDown}
                 >
@@ -412,6 +548,12 @@ const MessageItem = ({
                       previewImage.fileUrl,
                     )}
                     draggable={false}
+                    onLoad={(event) => {
+                      setPreviewImageSize({
+                        width: event.currentTarget.naturalWidth,
+                        height: event.currentTarget.naturalHeight,
+                      });
+                    }}
                     className="mx-auto h-full w-full select-none object-contain"
                     style={{
                       transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
@@ -429,25 +571,7 @@ const MessageItem = ({
                   />
                 </div>
 
-                <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-zinc-700 bg-black/85 px-2 py-1.5 text-white">
-                  <button
-                    type="button"
-                    disabled
-                    className="rounded-full p-2 text-zinc-400"
-                    title="Previous"
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="rounded-full p-2 text-zinc-400"
-                    title="Next"
-                    aria-label="Next image"
-                  >
-                    <ChevronRight className="size-4" />
-                  </button>
+                <div className="flex items-center justify-center gap-2 border-t border-zinc-700 bg-black/90 px-3 pb-3 pt-2 text-white">
                   <button
                     type="button"
                     onClick={() =>
@@ -471,6 +595,56 @@ const MessageItem = ({
                   <button
                     type="button"
                     onClick={() => handleDownloadAttachment(previewImage)}
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Download"
+                  >
+                    <Download className="size-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!previewVideo}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeVideoPreview();
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-4xl border-none bg-transparent p-0 shadow-none"
+        >
+          {previewVideo && (
+            <div className="relative pt-2">
+              <button
+                type="button"
+                onClick={closeVideoPreview}
+                className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
+                title="Close"
+              >
+                <X className="size-4" />
+              </button>
+
+              <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
+                <div className="relative h-[72vh] overflow-hidden bg-zinc-900">
+                  <video
+                    className="h-full w-full"
+                    src={previewVideo.fileUrl}
+                    controls
+                    autoPlay
+                    preload="metadata"
+                  />
+                </div>
+
+                <div className="flex items-center justify-center gap-2 border-t border-zinc-700 bg-black/90 px-3 pb-3 pt-2 text-white">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment(previewVideo)}
                     className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
                     title="Download"
                   >
