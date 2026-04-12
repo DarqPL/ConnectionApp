@@ -7,7 +7,11 @@ import {
   Alert,
   Text,
   StatusBar,
+  TouchableOpacity,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MessageBubble from "../components/MessageBubble";
 import ChatInput from "../components/ChatInput";
@@ -29,16 +33,85 @@ const ChatRoomScreen = ({ route }: any) => {
   } = useChat();
   const { user } = useAuth();
   const flatListRef = useRef<FlatList>(null);
+  const userInteractedRef = useRef(false);
+  const initialAnchorDoneRef = useRef(false);
   const [sending, setSending] = React.useState(false);
+  const [isAtBottom, setIsAtBottom] = React.useState(true);
+  const [showScrollToBottom, setShowScrollToBottom] = React.useState(false);
+  const [isListReady, setIsListReady] = React.useState(false);
+
+  const showScrollThreshold = 120;
+  const nearBottomThreshold = 24;
+  const displayMessages = currentMessages;
+
+  const scrollToBottom = React.useCallback((animated = true) => {
+    flatListRef.current?.scrollToEnd({ animated });
+  }, []);
 
   useEffect(() => {
+    userInteractedRef.current = false;
+    initialAnchorDoneRef.current = false;
+    setIsAtBottom(true);
+    setShowScrollToBottom(false);
+    setIsListReady(false);
+
     setCurrentConversation(conversationId);
-    fetchMessages(conversationId);
+    void fetchMessages(conversationId);
 
     return () => {
-      setCurrentConversation(null);
+      setCurrentConversation(null, conversationId);
+      setShowScrollToBottom(false);
     };
-  }, [conversationId]);
+  }, [conversationId, fetchMessages, setCurrentConversation]);
+
+  useEffect(() => {
+    if (!isLoading && displayMessages.length === 0) {
+      setIsListReady(true);
+    }
+  }, [displayMessages.length, isLoading]);
+
+  const handleListScroll = React.useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
+
+      const distanceFromBottom = Math.max(
+        0,
+        contentSize.height - layoutMeasurement.height - contentOffset.y,
+      );
+      const atBottom = distanceFromBottom <= nearBottomThreshold;
+
+      setIsAtBottom(atBottom);
+      setShowScrollToBottom(distanceFromBottom > showScrollThreshold);
+    },
+    [],
+  );
+
+  const handleContentSizeChange = React.useCallback(() => {
+    if (!displayMessages.length) {
+      return;
+    }
+
+    if (!initialAnchorDoneRef.current) {
+      initialAnchorDoneRef.current = true;
+      scrollToBottom(false);
+      setIsAtBottom(true);
+      setShowScrollToBottom(false);
+      setIsListReady(true);
+      return;
+    }
+
+    if (isAtBottom) {
+      scrollToBottom(false);
+    }
+  }, [displayMessages.length, isAtBottom, scrollToBottom]);
+
+  const handleScrollToBottomPress = () => {
+    scrollToBottom(true);
+    userInteractedRef.current = false;
+    setShowScrollToBottom(false);
+    setIsAtBottom(true);
+  };
 
   const handleSend = async (content: string, files: PendingAttachment[]) => {
     setSending(true);
@@ -66,7 +139,6 @@ const ChatRoomScreen = ({ route }: any) => {
   };
 
   const isGroup = type === "GROUP";
-  const displayMessages = currentMessages.filter((m) => !m.isDeleted);
 
   if (isLoading && displayMessages.length === 0) {
     return (
@@ -125,13 +197,33 @@ const ChatRoomScreen = ({ route }: any) => {
               }
             />
           )}
-          contentContainerStyle={styles.msgList}
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: false })
-          }
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          contentContainerStyle={[
+            styles.msgList,
+            !isListReady && styles.msgListHidden,
+          ]}
+          onContentSizeChange={handleContentSizeChange}
+          onScrollBeginDrag={() => {
+            userInteractedRef.current = true;
+          }}
+          onScroll={handleListScroll}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         />
+      )}
+
+      {displayMessages.length > 0 && showScrollToBottom && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[
+            styles.scrollToBottomFab,
+            {
+              bottom: insets.bottom + 78,
+            },
+          ]}
+          onPress={handleScrollToBottomPress}
+        >
+          <Ionicons name="chevron-down" size={24} color="#fff" />
+        </TouchableOpacity>
       )}
 
       <ChatInput onSend={handleSend} disabled={sending} />
@@ -152,6 +244,25 @@ const styles = StyleSheet.create({
   msgList: {
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  msgListHidden: {
+    opacity: 0,
+  },
+  scrollToBottomFab: {
+    position: "absolute",
+    right: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 6,
+    zIndex: 8,
   },
   emptyContainer: {
     flex: 1,
