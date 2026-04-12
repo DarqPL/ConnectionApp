@@ -39,6 +39,12 @@ export interface Attachment {
   originalFileName?: string | null;
 }
 
+export interface ReplyInfo {
+  parentId: string;
+  parentContent: string | null;
+  parentSenderName: string;
+}
+
 export interface Message {
   id: string;
   conversationId: number;
@@ -50,6 +56,7 @@ export interface Message {
   parentId: string | null;
   isDeleted: boolean;
   recalledAt: string | null;
+  replyInfo?: ReplyInfo | null;
 }
 
 export interface PageResponse<T> {

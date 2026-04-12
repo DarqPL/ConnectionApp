@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
-import type { Attachment } from "../types";
+import type { Attachment, ReplyInfo } from "../types";
 
 interface Props {
   message: string;
@@ -28,6 +28,7 @@ interface Props {
   recalledAt?: string | null;
   isGroup?: boolean;
   onLongPress?: () => void;
+  replyInfo?: ReplyInfo | null;
 }
 
 const formatTime = (dateStr: string) => {
@@ -76,6 +77,7 @@ const MessageBubble: React.FC<Props> = ({
   recalledAt,
   isGroup = false,
   onLongPress,
+  replyInfo,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
@@ -449,12 +451,13 @@ const MessageBubble: React.FC<Props> = ({
         )}
 
         <TouchableOpacity
-          activeOpacity={isMe && !isRecalled ? 0.75 : 1}
-          onLongPress={isMe && !isRecalled ? onLongPress : undefined}
+          activeOpacity={onLongPress && !isRecalled ? 0.75 : 1}
+          onLongPress={!isRecalled ? onLongPress : undefined}
           style={[
             styles.bubble,
             isMe ? styles.bubbleSent : styles.bubbleReceived,
             isRecalled && styles.bubbleRecalled,
+            replyInfo && !isRecalled && styles.bubbleWithReply,
           ]}
         >
           {isRecalled ? (
@@ -469,6 +472,40 @@ const MessageBubble: React.FC<Props> = ({
             </Text>
           ) : (
             <View style={styles.contentWrap}>
+              {replyInfo && (
+                <View
+                  style={[
+                    styles.replyPreviewWrap,
+                    isMe
+                      ? styles.replyPreviewWrapSent
+                      : styles.replyPreviewWrapReceived,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.replySender,
+                      isMe
+                        ? styles.replySenderSent
+                        : styles.replySenderReceived,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {replyInfo.parentSenderName}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.replyContent,
+                      isMe
+                        ? styles.replyContentSent
+                        : styles.replyContentReceived,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {replyInfo.parentContent ?? "Tin nhắn đã được thu hồi"}
+                  </Text>
+                </View>
+              )}
+
               {attachments.length > 0 && (
                 <View style={styles.attachmentsWrap}>
                   {attachments.map((attachment, index) =>
@@ -737,8 +774,46 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     maxWidth: "100%",
   },
+  bubbleWithReply: {
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
   contentWrap: {
     gap: 8,
+  },
+  replyPreviewWrap: {
+    borderLeftWidth: 2,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  replyPreviewWrapSent: {
+    borderLeftColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  replyPreviewWrapReceived: {
+    borderLeftColor: COLORS.primary,
+    backgroundColor: COLORS.backgroundMuted,
+  },
+  replySender: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  replySenderSent: {
+    color: "rgba(255,255,255,0.95)",
+  },
+  replySenderReceived: {
+    color: COLORS.primary,
+  },
+  replyContent: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  replyContentSent: {
+    color: "rgba(255,255,255,0.86)",
+  },
+  replyContentReceived: {
+    color: COLORS.textMuted,
   },
   attachmentsWrap: {
     gap: 8,

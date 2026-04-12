@@ -25,6 +25,7 @@ interface ChatContextType {
     conversationId: number,
     content: string,
     files?: PendingAttachment[],
+    parentId?: string | null,
   ) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   setCurrentConversation: (
@@ -324,6 +325,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       conversationId: number,
       content: string,
       files: PendingAttachment[] = [],
+      parentId?: string | null,
     ) => {
       setError(null);
       try {
@@ -344,6 +346,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         const newMsg = await chatService.sendMessage(
           conversationId,
           normalizedContent,
+          parentId,
           attachments,
         );
         const preview = buildMessagePreview(newMsg.content, newMsg.attachments);
