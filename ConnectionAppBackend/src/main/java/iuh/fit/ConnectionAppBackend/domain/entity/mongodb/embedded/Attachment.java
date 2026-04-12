@@ -17,4 +17,7 @@ public class Attachment {
 
     @Field("file_type")
     private AttachmentType type;
+
+    @Field("original_file_name")
+    private String originalFileName;
 }

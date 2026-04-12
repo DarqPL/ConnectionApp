@@ -7,7 +7,16 @@ import type {
 } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
-import { CornerUpLeft, FileText, Undo2 } from "lucide-react";
+import {
+  CornerUpLeft,
+  Download,
+  FileText,
+  Undo2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import { Dialog, DialogContent } from "../ui/dialog";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
@@ -19,7 +28,14 @@ const isImageAttachment = (attachment: Attachment): boolean => {
   return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(attachment.fileUrl);
 };
 
-const resolveFileName = (url: string): string => {
+const resolveFileName = (
+  originalFileName: string | null | undefined,
+  url: string,
+): string => {
+  if (originalFileName && originalFileName.trim().length > 0) {
+    return originalFileName;
+  }
+
   try {
     const parsed = new URL(url);
     const segments = parsed.pathname.split("/").filter(Boolean);
@@ -48,6 +64,8 @@ const MessageItem = ({
 }: MessageItemProps) => {
   const { recallMessage } = useChatStore();
   const [showMenu, setShowMenu] = useState(false);
+  const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const prev = index + 1 < messages.length ? messages[index + 1] : undefined;
@@ -93,6 +111,47 @@ const MessageItem = ({
   const handleReply = () => {
     setShowMenu(false);
     onReply(message);
+  };
+
+  const handleDownloadAttachment = async (attachment: Attachment) => {
+    const fileName = resolveFileName(
+      attachment.originalFileName,
+      attachment.fileUrl,
+    );
+
+    try {
+      const response = await fetch(attachment.fileUrl);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      const anchor = document.createElement("a");
+      anchor.href = attachment.fileUrl;
+      anchor.download = fileName;
+      anchor.target = "_blank";
+      anchor.rel = "noreferrer";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
+  };
+
+  const openImagePreview = (attachment: Attachment) => {
+    setPreviewZoom(1);
+    setPreviewImage(attachment);
+  };
+
+  const closePreview = () => {
+    setPreviewImage(null);
+    setPreviewZoom(1);
   };
 
   return (
@@ -180,11 +239,10 @@ const MessageItem = ({
                       {attachments.map((attachment, idx) => {
                         if (isImageAttachment(attachment)) {
                           return (
-                            <a
+                            <button
+                              type="button"
                               key={`${attachment.fileUrl}-${idx}`}
-                              href={attachment.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                              onClick={() => openImagePreview(attachment)}
                               className="block"
                             >
                               <img
@@ -192,23 +250,25 @@ const MessageItem = ({
                                 alt="attachment"
                                 className="rounded-md max-h-52 w-auto object-cover border border-border/40"
                               />
-                            </a>
+                            </button>
                           );
                         }
 
                         return (
-                          <a
+                          <button
+                            type="button"
                             key={`${attachment.fileUrl}-${idx}`}
-                            href={attachment.fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 hover:bg-muted/40"
+                            onClick={() => handleDownloadAttachment(attachment)}
+                            className="flex w-full items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 hover:bg-muted/40"
                           >
                             <FileText className="size-4 shrink-0" />
-                            <span className="text-xs truncate">
-                              {resolveFileName(attachment.fileUrl)}
+                            <span className="text-xs truncate text-left">
+                              {resolveFileName(
+                                attachment.originalFileName,
+                                attachment.fileUrl,
+                              )}
                             </span>
-                          </a>
+                          </button>
                         );
                       })}
                     </div>
@@ -252,6 +312,82 @@ const MessageItem = ({
           )}
         </div>
       </div>
+
+      <Dialog
+        open={!!previewImage}
+        onOpenChange={(open) => {
+          if (!open) {
+            closePreview();
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-4xl p-2 border-4 border-black bg-black"
+        >
+          {previewImage && (
+            <div className="relative">
+              <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewZoom((prev) =>
+                      Math.max(0.5, Number((prev - 0.25).toFixed(2))),
+                    )
+                  }
+                  className="rounded-full bg-black/80 p-2 text-white hover:bg-black"
+                  title="Zoom out"
+                >
+                  <ZoomOut className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewZoom((prev) =>
+                      Math.min(4, Number((prev + 0.25).toFixed(2))),
+                    )
+                  }
+                  className="rounded-full bg-black/80 p-2 text-white hover:bg-black"
+                  title="Zoom in"
+                >
+                  <ZoomIn className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadAttachment(previewImage)}
+                  className="rounded-full bg-black/80 p-2 text-white hover:bg-black"
+                  title="Download"
+                >
+                  <Download className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="rounded-full bg-black p-2 text-white hover:bg-zinc-800"
+                  title="Close"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="max-h-[80vh] overflow-auto rounded border border-black bg-zinc-900 p-4">
+                <img
+                  src={previewImage.fileUrl}
+                  alt={resolveFileName(
+                    previewImage.originalFileName,
+                    previewImage.fileUrl,
+                  )}
+                  className="mx-auto max-h-[72vh] w-auto object-contain transition-transform"
+                  style={{
+                    transform: `scale(${previewZoom})`,
+                    transformOrigin: "center center",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

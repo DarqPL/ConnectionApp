@@ -73,6 +73,7 @@ export type AttachmentType = "IMAGE" | "VIDEO" | "DOCUMENT" | "AUDIO" | "FILE";
 export interface Attachment {
   fileUrl: string;
   type: AttachmentType;
+  originalFileName?: string | null;
 }
 
 export interface ReplyInfo {

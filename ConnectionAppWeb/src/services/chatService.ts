@@ -120,6 +120,7 @@ export const chatService = {
     return {
       fileUrl: data.imageUrl,
       type: resolveAttachmentType(data.contentType || file.type, file.name),
+      originalFileName: file.name,
     };
   },
 

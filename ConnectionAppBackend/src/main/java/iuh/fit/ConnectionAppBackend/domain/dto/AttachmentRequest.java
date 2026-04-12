@@ -10,4 +10,5 @@ import lombok.NoArgsConstructor;
 public class AttachmentRequest {
     private String fileUrl;
     private String type;
+    private String originalFileName;
 }

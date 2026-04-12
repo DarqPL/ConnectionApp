@@ -165,6 +165,7 @@ export class ChatService {
     return {
       fileUrl: data.imageUrl,
       type: resolveAttachmentType(data.contentType || file.mimeType, file.name),
+      originalFileName: file.name,
     };
   }
 

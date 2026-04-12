@@ -23,6 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -267,6 +270,7 @@ public class MessageService {
                 .map(a -> MessageResponse.AttachmentResponse.builder()
                         .fileUrl(a.getFileUrl())
                 .type(a.getType() == null ? AttachmentType.FILE.name() : a.getType().name())
+                .originalFileName(resolveOriginalFileName(a.getOriginalFileName(), a.getFileUrl()))
                         .build())
                 .collect(Collectors.toList());
 
@@ -316,6 +320,7 @@ public class MessageService {
                     Attachment.builder()
                             .fileUrl(req.getFileUrl().trim())
                             .type(resolveAttachmentType(req.getType()))
+                        .originalFileName(resolveOriginalFileName(req.getOriginalFileName(), req.getFileUrl()))
                             .build()
             );
         }
@@ -332,6 +337,34 @@ public class MessageService {
             return AttachmentType.valueOf(rawType.trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException("Unsupported attachment type: " + rawType);
+        }
+    }
+
+    private String resolveOriginalFileName(String rawFileName, String fileUrl) {
+        if (StringUtils.hasText(rawFileName)) {
+            return rawFileName.trim();
+        }
+
+        if (!StringUtils.hasText(fileUrl)) {
+            return "attached-file";
+        }
+
+        try {
+            URI parsed = URI.create(fileUrl);
+            String path = parsed.getPath();
+            if (!StringUtils.hasText(path)) {
+                return "attached-file";
+            }
+
+            int index = path.lastIndexOf('/');
+            String value = index >= 0 ? path.substring(index + 1) : path;
+            if (!StringUtils.hasText(value)) {
+                return "attached-file";
+            }
+
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            return "attached-file";
         }
     }
 }

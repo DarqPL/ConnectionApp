@@ -5,6 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Modal,
+  Pressable,
+  Alert,
   Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,7 +38,14 @@ const isImageAttachment = (attachment: Attachment): boolean => {
   return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(attachment.fileUrl);
 };
 
-const resolveFileName = (url: string): string => {
+const resolveFileName = (
+  originalFileName: string | null | undefined,
+  url: string,
+): string => {
+  if (originalFileName && originalFileName.trim().length > 0) {
+    return originalFileName;
+  }
+
   try {
     const pathname = new URL(url).pathname;
     const segments = pathname.split("/").filter(Boolean);
@@ -58,15 +68,32 @@ const MessageBubble: React.FC<Props> = ({
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
+  const [previewImage, setPreviewImage] = React.useState<Attachment | null>(
+    null,
+  );
+  const [previewZoom, setPreviewZoom] = React.useState(1);
 
-  const openAttachment = async (url: string) => {
+  const openImagePreview = (attachment: Attachment) => {
+    setPreviewZoom(1);
+    setPreviewImage(attachment);
+  };
+
+  const closePreview = () => {
+    setPreviewImage(null);
+    setPreviewZoom(1);
+  };
+
+  const handleOpenAttachment = async (attachment: Attachment) => {
     try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Linking.openURL(url);
+      const canOpen = await Linking.canOpenURL(attachment.fileUrl);
+      if (!canOpen) {
+        Alert.alert("Loi", "Khong the tai tep nay tren thiet bi.");
+        return;
       }
+      await Linking.openURL(attachment.fileUrl);
     } catch (error) {
       console.error("Cannot open attachment", error);
+      Alert.alert("Loi", "Tai tep that bai.");
     }
   };
 
@@ -110,7 +137,7 @@ const MessageBubble: React.FC<Props> = ({
                     isImageAttachment(attachment) ? (
                       <TouchableOpacity
                         key={`${attachment.fileUrl}-${index}`}
-                        onPress={() => openAttachment(attachment.fileUrl)}
+                        onPress={() => openImagePreview(attachment)}
                         activeOpacity={0.85}
                       >
                         <Image
@@ -121,7 +148,7 @@ const MessageBubble: React.FC<Props> = ({
                     ) : (
                       <TouchableOpacity
                         key={`${attachment.fileUrl}-${index}`}
-                        onPress={() => openAttachment(attachment.fileUrl)}
+                        onPress={() => handleOpenAttachment(attachment)}
                         style={styles.fileCard}
                         activeOpacity={0.85}
                       >
@@ -137,7 +164,10 @@ const MessageBubble: React.FC<Props> = ({
                             isMe ? styles.sentText : styles.receivedText,
                           ]}
                         >
-                          {resolveFileName(attachment.fileUrl)}
+                          {resolveFileName(
+                            attachment.originalFileName,
+                            attachment.fileUrl,
+                          )}
                         </Text>
                       </TouchableOpacity>
                     ),
@@ -167,6 +197,66 @@ const MessageBubble: React.FC<Props> = ({
           </Text>
         )}
       </View>
+
+      <Modal
+        visible={!!previewImage}
+        transparent
+        animationType="fade"
+        onRequestClose={closePreview}
+      >
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewContainer}>
+            <View style={styles.previewActions}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() =>
+                  setPreviewZoom((prev) =>
+                    Math.max(0.5, Number((prev - 0.25).toFixed(2))),
+                  )
+                }
+              >
+                <Ionicons name="remove" size={20} color="#fff" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() =>
+                  setPreviewZoom((prev) =>
+                    Math.min(4, Number((prev + 0.25).toFixed(2))),
+                  )
+                }
+              >
+                <Ionicons name="add" size={20} color="#fff" />
+              </TouchableOpacity>
+
+              {previewImage && (
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => handleOpenAttachment(previewImage)}
+                >
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={styles.closeBtn} onPress={closePreview}>
+                <Ionicons name="close" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <Pressable style={styles.previewImageWrap} onPress={closePreview}>
+              {previewImage && (
+                <Image
+                  source={{ uri: previewImage.fileUrl }}
+                  style={[
+                    styles.previewImage,
+                    { transform: [{ scale: previewZoom }] },
+                  ]}
+                />
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -242,6 +332,57 @@ const styles = StyleSheet.create({
   fileName: {
     fontSize: 13,
     flexShrink: 1,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  previewContainer: {
+    width: "100%",
+    height: "82%",
+    borderWidth: 4,
+    borderColor: "#000",
+    backgroundColor: "#0f0f0f",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  previewActions: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewImageWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
   },
   bubbleSent: {
     backgroundColor: COLORS.primary,
