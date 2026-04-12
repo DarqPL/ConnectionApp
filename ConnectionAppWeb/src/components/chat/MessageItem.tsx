@@ -1,11 +1,33 @@
 import { cn, formatMessageTime } from "@/lib/utils";
-import type { Conversation, Message, Participant } from "@/types/chat";
+import type {
+  Attachment,
+  Conversation,
+  Message,
+  Participant,
+} from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
-import { CornerUpLeft, Undo2 } from "lucide-react";
+import { CornerUpLeft, FileText, Undo2 } from "lucide-react";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
+
+const isImageAttachment = (attachment: Attachment): boolean => {
+  if (attachment.type === "IMAGE") {
+    return true;
+  }
+  return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(attachment.fileUrl);
+};
+
+const resolveFileName = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return decodeURIComponent(segments[segments.length - 1] || "attached-file");
+  } catch {
+    return "attached-file";
+  }
+};
 
 interface MessageItemProps {
   message: Message;
@@ -33,18 +55,18 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-    new Date(prev?.createdAt || 0).getTime() >
-    300000; // 5 phút
+      new Date(prev?.createdAt || 0).getTime() >
+      300000; // 5 phút
 
   const isGroupBreak =
-    isShowTime ||
-    message.senderInfo.senderId !== prev?.senderInfo.senderId;
+    isShowTime || message.senderInfo.senderId !== prev?.senderInfo.senderId;
 
   const participant = selectedConvo.participants.find(
-    (p: Participant) => p.userId === message.senderInfo.senderId
+    (p: Participant) => p.userId === message.senderInfo.senderId,
   );
 
   const isRecalled = !!message.recalledAt;
+  const attachments = message.attachments ?? [];
 
   // Close menu on outside click
   useEffect(() => {
@@ -85,17 +107,25 @@ const MessageItem = ({
       <div
         className={cn(
           "flex gap-2 message-bounce mt-1 group",
-          message.isOwn ? "justify-end" : "justify-start"
+          message.isOwn ? "justify-end" : "justify-start",
         )}
       >
         {/* avatar */}
         {!message.isOwn && (
-          <div className="w-8 flex-shrink-0">
+          <div className="w-8 shrink-0">
             {isGroupBreak && (
               <UserAvatar
                 type="chat"
-                name={participant?.displayName ?? message.senderInfo.displayName ?? "User"}
-                avatarUrl={participant?.avatarUrl ?? message.senderInfo.avatarUrl ?? undefined}
+                name={
+                  participant?.displayName ??
+                  message.senderInfo.displayName ??
+                  "User"
+                }
+                avatarUrl={
+                  participant?.avatarUrl ??
+                  message.senderInfo.avatarUrl ??
+                  undefined
+                }
               />
             )}
           </div>
@@ -105,14 +135,14 @@ const MessageItem = ({
         <div
           className={cn(
             "flex items-center gap-1",
-            message.isOwn ? "flex-row-reverse" : "flex-row"
+            message.isOwn ? "flex-row-reverse" : "flex-row",
           )}
         >
           {/* Bubble column */}
           <div
             className={cn(
               "max-w-xs lg:max-w-md space-y-0 flex flex-col",
-              message.isOwn ? "items-end" : "items-start"
+              message.isOwn ? "items-end" : "items-start",
             )}
           >
             {/* Reply preview */}
@@ -122,7 +152,8 @@ const MessageItem = ({
                   {message.replyInfo.parentSenderName}
                 </span>
                 <p className="truncate text-muted-foreground text-[11px]">
-                  {message.replyInfo.parentContent ?? "Tin nhắn đã được thu hồi"}
+                  {message.replyInfo.parentContent ??
+                    "Tin nhắn đã được thu hồi"}
                 </p>
               </div>
             )}
@@ -132,8 +163,10 @@ const MessageItem = ({
                 "p-3",
                 isRecalled
                   ? "bg-muted/30 border-dashed border-muted-foreground/30"
-                  : message.isOwn ? "chat-bubble-sent border-0" : "chat-bubble-received",
-                message.replyInfo && !isRecalled ? "rounded-t-none" : ""
+                  : message.isOwn
+                    ? "chat-bubble-sent border-0"
+                    : "chat-bubble-received",
+                message.replyInfo && !isRecalled ? "rounded-t-none" : "",
               )}
             >
               {isRecalled ? (
@@ -141,7 +174,52 @@ const MessageItem = ({
                   Tin nhắn đã được thu hồi
                 </p>
               ) : (
-                <p className="text-sm leading-relaxed break-words">{message.content}</p>
+                <div className="space-y-2">
+                  {attachments.length > 0 && (
+                    <div className="space-y-2">
+                      {attachments.map((attachment, idx) => {
+                        if (isImageAttachment(attachment)) {
+                          return (
+                            <a
+                              key={`${attachment.fileUrl}-${idx}`}
+                              href={attachment.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block"
+                            >
+                              <img
+                                src={attachment.fileUrl}
+                                alt="attachment"
+                                className="rounded-md max-h-52 w-auto object-cover border border-border/40"
+                              />
+                            </a>
+                          );
+                        }
+
+                        return (
+                          <a
+                            key={`${attachment.fileUrl}-${idx}`}
+                            href={attachment.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 hover:bg-muted/40"
+                          >
+                            <FileText className="size-4 shrink-0" />
+                            <span className="text-xs truncate">
+                              {resolveFileName(attachment.fileUrl)}
+                            </span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {message.content && (
+                    <p className="text-sm leading-relaxed wrap-break-word">
+                      {message.content}
+                    </p>
+                  )}
+                </div>
               )}
             </Card>
           </div>
@@ -150,7 +228,7 @@ const MessageItem = ({
           {!isRecalled && (
             <div
               ref={menuRef}
-              className="relative flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <div className="flex items-center gap-0.5">
                 <button

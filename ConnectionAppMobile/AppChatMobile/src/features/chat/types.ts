@@ -31,11 +31,19 @@ export interface SenderInfo {
   avatarUrl?: string | null;
 }
 
+export type AttachmentType = "IMAGE" | "VIDEO" | "DOCUMENT" | "AUDIO" | "FILE";
+
+export interface Attachment {
+  fileUrl: string;
+  type: AttachmentType;
+}
+
 export interface Message {
   id: string;
   conversationId: number;
   senderInfo: SenderInfo;
   content: string | null;
+  attachments: Attachment[];
   createdAt: string;
   updatedAt: string | null;
   parentId: string | null;

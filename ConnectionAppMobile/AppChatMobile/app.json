@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow access to photos so you can send images in chat.",
+        "NSPhotoLibraryAddUsageDescription": "Allow saving selected chat media to your library."
+      }
     },
     "android": {
       "adaptiveIcon": {

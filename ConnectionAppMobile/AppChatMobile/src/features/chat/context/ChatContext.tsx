@@ -7,7 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { Alert } from "react-native";
-import type { Message, Conversation } from "../types";
+import type { Attachment, Message, Conversation } from "../types";
 import { chatService } from "../services/chat.service";
 import { chatSocketService } from "../services/socket.service";
 import { useAuth } from "../../auth/context/AuthContext";
@@ -21,10 +21,21 @@ interface ChatContextType {
   error: string | null;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
-  sendMessage: (conversationId: number, content: string) => Promise<void>;
+  sendMessage: (
+    conversationId: number,
+    content: string,
+    files?: PendingAttachment[],
+  ) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   setCurrentConversation: (conversationId: number | null) => void;
   clearError: () => void;
+}
+
+export interface PendingAttachment {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  size?: number;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -66,6 +77,25 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const next = [...messages];
     next[index] = incoming;
     return next;
+  };
+
+  const buildMessagePreview = (
+    content: string | null | undefined,
+    attachments: Attachment[] | undefined,
+  ): string => {
+    const normalized = (content ?? "").trim();
+    if (normalized) {
+      return normalized;
+    }
+
+    const total = attachments?.length ?? 0;
+    if (total === 1) {
+      return "Da gui 1 tep dinh kem";
+    }
+    if (total > 1) {
+      return `Da gui ${total} tep dinh kem`;
+    }
+    return "";
   };
 
   const fetchConversations = useCallback(async () => {
@@ -123,7 +153,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       next[index] = {
         ...next[index],
-        lastMessageContent: incomingMessage.content,
+        lastMessageContent: buildMessagePreview(
+          incomingMessage.content,
+          incomingMessage.attachments,
+        ),
         lastMessageAt: incomingMessage.createdAt,
         unreadCount: isOpen || isOwn ? 0 : (next[index].unreadCount || 0) + 1,
       };
@@ -260,10 +293,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const sendMessage = useCallback(
-    async (conversationId: number, content: string) => {
+    async (
+      conversationId: number,
+      content: string,
+      files: PendingAttachment[] = [],
+    ) => {
       setError(null);
       try {
-        const newMsg = await chatService.sendMessage(conversationId, content);
+        const attachments =
+          files.length === 0
+            ? []
+            : await Promise.all(
+                files.map((file) =>
+                  chatService.uploadAttachment({
+                    uri: file.uri,
+                    name: file.name,
+                    mimeType: file.mimeType,
+                  }),
+                ),
+              );
+
+        const normalizedContent = content.trim();
+        const newMsg = await chatService.sendMessage(
+          conversationId,
+          normalizedContent,
+          attachments,
+        );
+        const preview = buildMessagePreview(newMsg.content, newMsg.attachments);
+
         // Optimistically add to current messages
         setCurrentMessages((prev) => upsertMessage(prev, newMsg));
         // Update conversation list
@@ -272,7 +329,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             c.id === conversationId
               ? {
                   ...c,
-                  lastMessageContent: content,
+                  lastMessageContent: preview,
                   lastMessageAt: new Date().toISOString(),
                   unreadCount: 0,
                 }

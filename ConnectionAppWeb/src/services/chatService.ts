@@ -1,5 +1,52 @@
 import api from "@/lib/axios";
-import type { Conversation, Message, PageResponse, ConversationRequest } from "@/types/chat";
+import type {
+  Attachment,
+  AttachmentType,
+  Conversation,
+  ConversationRequest,
+  Message,
+  MessageRequest,
+  PageResponse,
+} from "@/types/chat";
+
+interface UploadedObjectResponse {
+  objectKey: string;
+  imageUrl: string;
+  contentType?: string;
+  size?: number;
+}
+
+const resolveAttachmentType = (
+  mimeType?: string,
+  fileName?: string,
+): AttachmentType => {
+  const mime = (mimeType ?? "").toLowerCase();
+  const name = (fileName ?? "").toLowerCase();
+
+  if (
+    mime.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)
+  ) {
+    return "IMAGE";
+  }
+  if (mime.startsWith("video/")) {
+    return "VIDEO";
+  }
+  if (mime.startsWith("audio/")) {
+    return "AUDIO";
+  }
+  if (
+    mime.includes("pdf") ||
+    mime.includes("word") ||
+    mime.includes("excel") ||
+    mime.includes("powerpoint") ||
+    mime.startsWith("text/") ||
+    /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|rtf)$/.test(name)
+  ) {
+    return "DOCUMENT";
+  }
+  return "FILE";
+};
 
 export const chatService = {
   /**
@@ -8,7 +55,7 @@ export const chatService = {
    */
   async fetchConversations(
     page: number = 0,
-    size: number = 20
+    size: number = 20,
   ): Promise<PageResponse<Conversation>> {
     const res = await api.get("/conversations", {
       params: { page, size, sortBy: "lastMessageAt", sortDirection: "DESC" },
@@ -32,7 +79,7 @@ export const chatService = {
   async fetchMessages(
     conversationId: number,
     page: number = 0,
-    size: number = 50
+    size: number = 50,
   ): Promise<PageResponse<Message>> {
     const res = await api.get(`/messages/conversation/${conversationId}`, {
       params: { page, size, sortBy: "createdAt", sortDirection: "DESC" },
@@ -48,14 +95,32 @@ export const chatService = {
   async sendMessage(
     conversationId: number,
     content: string,
-    parentId?: string | null
+    parentId?: string | null,
+    attachments?: Attachment[],
   ): Promise<Message> {
-    const res = await api.post("/messages", {
+    const payload: MessageRequest = {
       conversationId,
       content,
       parentId: parentId ?? null,
-    });
+      attachments: attachments ?? [],
+    };
+
+    const res = await api.post("/messages", payload);
     return res.data;
+  },
+
+  async uploadAttachment(file: File): Promise<Attachment> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", "messages");
+
+    const res = await api.post("/images", formData);
+    const data = res.data as UploadedObjectResponse;
+
+    return {
+      fileUrl: data.imageUrl,
+      type: resolveAttachmentType(data.contentType || file.type, file.name),
+    };
   },
 
   /**
@@ -89,7 +154,9 @@ export const chatService = {
    * Body: ConversationRequest { name, type, participantIds }
    * Returns: ConversationResponse
    */
-  async createConversation(request: ConversationRequest): Promise<Conversation> {
+  async createConversation(
+    request: ConversationRequest,
+  ): Promise<Conversation> {
     const res = await api.post("/conversations", request);
     return res.data;
   },
@@ -100,7 +167,7 @@ export const chatService = {
    */
   async searchMessages(
     conversationId: number,
-    searchTerm: string
+    searchTerm: string,
   ): Promise<Message[]> {
     const res = await api.get("/messages/search", {
       params: { conversationId, searchTerm },
