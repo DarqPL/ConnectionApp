@@ -27,7 +27,10 @@ interface ChatContextType {
     files?: PendingAttachment[],
   ) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
-  setCurrentConversation: (conversationId: number | null) => void;
+  setCurrentConversation: (
+    conversationId: number | null,
+    sourceConversationId?: number,
+  ) => void;
   clearError: () => void;
 }
 
@@ -55,6 +58,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   // Ref so socket handlers always access latest state without reconnecting
   const currentConversationRef = useRef<number | null>(null);
   const userIdRef = useRef<number | null>(null);
+  const messageFetchVersionRef = useRef(0);
 
   useEffect(() => {
     currentConversationRef.current = currentConversationId;
@@ -272,10 +276,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   // ─── Regular methods ───────────────────────────────────────────────────────
 
   const fetchMessages = useCallback(async (conversationId: number) => {
+    const fetchVersion = ++messageFetchVersionRef.current;
+    currentConversationRef.current = conversationId;
+    setCurrentConversationId(conversationId);
     setIsLoading(true);
     setError(null);
     try {
       const data = await chatService.getMessages(conversationId);
+
+      if (
+        fetchVersion !== messageFetchVersionRef.current ||
+        currentConversationRef.current !== conversationId
+      ) {
+        return;
+      }
+
       setCurrentMessages(data);
       setCurrentConversationId(conversationId);
       // Mark as read
@@ -286,9 +301,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         ),
       );
     } catch (err) {
+      if (
+        fetchVersion !== messageFetchVersionRef.current ||
+        currentConversationRef.current !== conversationId
+      ) {
+        return;
+      }
+
       setError(err instanceof Error ? err.message : "Không tải được tin nhắn");
     } finally {
-      setIsLoading(false);
+      if (
+        fetchVersion === messageFetchVersionRef.current &&
+        currentConversationRef.current === conversationId
+      ) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -366,8 +393,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const setCurrentConversation = useCallback(
-    (conversationId: number | null) => {
+    (conversationId: number | null, sourceConversationId?: number) => {
+      if (
+        conversationId === null &&
+        sourceConversationId != null &&
+        currentConversationRef.current !== sourceConversationId
+      ) {
+        return;
+      }
+
+      messageFetchVersionRef.current += 1;
+      currentConversationRef.current = conversationId;
       setCurrentConversationId(conversationId);
+      setCurrentMessages([]);
+      setError(null);
+
+      if (conversationId === null) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
     },
     [],
   );
