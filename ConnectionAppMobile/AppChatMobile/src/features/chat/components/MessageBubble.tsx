@@ -5,10 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Animated,
   Modal,
-  Pressable,
   Alert,
   Linking,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../theme";
@@ -71,16 +72,163 @@ const MessageBubble: React.FC<Props> = ({
   const [previewImage, setPreviewImage] = React.useState<Attachment | null>(
     null,
   );
-  const [previewZoom, setPreviewZoom] = React.useState(1);
+  const previewScale = React.useRef(new Animated.Value(1)).current;
+  const previewTranslateX = React.useRef(new Animated.Value(0)).current;
+  const previewTranslateY = React.useRef(new Animated.Value(0)).current;
+  const previewScaleRef = React.useRef(1);
+  const panOffsetRef = React.useRef({ x: 0, y: 0 });
+  const panStartRef = React.useRef({ x: 0, y: 0 });
+  const pinchStartDistanceRef = React.useRef<number | null>(null);
+  const pinchStartScaleRef = React.useRef(1);
+
+  const clampScale = (value: number): number => Math.max(1, Math.min(4, value));
+
+  const resetPreviewTransform = React.useCallback(() => {
+    previewScaleRef.current = 1;
+    panOffsetRef.current = { x: 0, y: 0 };
+    previewScale.setValue(1);
+    previewTranslateX.setValue(0);
+    previewTranslateY.setValue(0);
+  }, [previewScale, previewTranslateX, previewTranslateY]);
+
+  const applyPreviewScale = React.useCallback(
+    (value: number) => {
+      const nextScale = clampScale(value);
+      previewScaleRef.current = nextScale;
+
+      Animated.spring(previewScale, {
+        toValue: nextScale,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 18,
+      }).start();
+
+      if (nextScale <= 1.01) {
+        panOffsetRef.current = { x: 0, y: 0 };
+        Animated.spring(previewTranslateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 0,
+          speed: 18,
+        }).start();
+        Animated.spring(previewTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 0,
+          speed: 18,
+        }).start();
+      }
+    },
+    [previewScale, previewTranslateX, previewTranslateY],
+  );
+
+  const getTouchDistance = (
+    touches: readonly { pageX: number; pageY: number }[],
+  ) => {
+    if (touches.length < 2) {
+      return 0;
+    }
+
+    const a = touches[0];
+    const b = touches[1];
+    return Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+  };
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !!previewImage,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          !!previewImage &&
+          (gestureState.numberActiveTouches === 2 ||
+            Math.abs(gestureState.dx) > 2 ||
+            Math.abs(gestureState.dy) > 2),
+        onPanResponderGrant: (event) => {
+          const touches = event.nativeEvent.touches;
+
+          if (touches.length >= 2) {
+            pinchStartDistanceRef.current = getTouchDistance(touches);
+            pinchStartScaleRef.current = previewScaleRef.current;
+          } else {
+            pinchStartDistanceRef.current = null;
+          }
+
+          panStartRef.current = { ...panOffsetRef.current };
+        },
+        onPanResponderMove: (event, gestureState) => {
+          if (!previewImage) {
+            return;
+          }
+
+          const touches = event.nativeEvent.touches;
+
+          if (touches.length >= 2) {
+            const currentDistance = getTouchDistance(touches);
+            const startDistance = pinchStartDistanceRef.current;
+
+            if (!startDistance || startDistance <= 0 || currentDistance <= 0) {
+              return;
+            }
+
+            const nextScale = clampScale(
+              (pinchStartScaleRef.current * currentDistance) / startDistance,
+            );
+            previewScaleRef.current = nextScale;
+            previewScale.setValue(nextScale);
+
+            if (nextScale <= 1.01) {
+              panOffsetRef.current = { x: 0, y: 0 };
+              previewTranslateX.setValue(0);
+              previewTranslateY.setValue(0);
+            }
+
+            return;
+          }
+
+          if (previewScaleRef.current <= 1) {
+            return;
+          }
+
+          const nextX = panStartRef.current.x + gestureState.dx;
+          const nextY = panStartRef.current.y + gestureState.dy;
+          panOffsetRef.current = { x: nextX, y: nextY };
+          previewTranslateX.setValue(nextX);
+          previewTranslateY.setValue(nextY);
+        },
+        onPanResponderRelease: () => {
+          pinchStartDistanceRef.current = null;
+
+          if (previewScaleRef.current <= 1.01) {
+            panOffsetRef.current = { x: 0, y: 0 };
+            Animated.spring(previewTranslateX, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 0,
+              speed: 18,
+            }).start();
+            Animated.spring(previewTranslateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 0,
+              speed: 18,
+            }).start();
+          }
+        },
+        onPanResponderTerminate: () => {
+          pinchStartDistanceRef.current = null;
+        },
+      }),
+    [previewImage, previewScale, previewTranslateX, previewTranslateY],
+  );
 
   const openImagePreview = (attachment: Attachment) => {
-    setPreviewZoom(1);
+    resetPreviewTransform();
     setPreviewImage(attachment);
   };
 
   const closePreview = () => {
     setPreviewImage(null);
-    setPreviewZoom(1);
+    resetPreviewTransform();
   };
 
   const handleOpenAttachment = async (attachment: Attachment) => {
@@ -205,55 +353,83 @@ const MessageBubble: React.FC<Props> = ({
         onRequestClose={closePreview}
       >
         <View style={styles.previewOverlay}>
-          <View style={styles.previewContainer}>
-            <View style={styles.previewActions}>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() =>
-                  setPreviewZoom((prev) =>
-                    Math.max(0.5, Number((prev - 0.25).toFixed(2))),
-                  )
-                }
-              >
-                <Ionicons name="remove" size={20} color="#fff" />
-              </TouchableOpacity>
+          <View style={styles.previewFrameWrap}>
+            <TouchableOpacity
+              style={styles.previewCloseFloating}
+              onPress={closePreview}
+            >
+              <Ionicons name="close" size={20} color="#fff" />
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() =>
-                  setPreviewZoom((prev) =>
-                    Math.min(4, Number((prev + 0.25).toFixed(2))),
-                  )
-                }
+            <View style={styles.previewContainer}>
+              <View
+                style={styles.previewImageWrap}
+                {...panResponder.panHandlers}
               >
-                <Ionicons name="add" size={20} color="#fff" />
-              </TouchableOpacity>
+                {previewImage && (
+                  <Animated.Image
+                    source={{ uri: previewImage.fileUrl }}
+                    style={[
+                      styles.previewImage,
+                      {
+                        transform: [
+                          { translateX: previewTranslateX },
+                          { translateY: previewTranslateY },
+                          { scale: previewScale },
+                        ],
+                      },
+                    ]}
+                  />
+                )}
+              </View>
 
-              {previewImage && (
+              <View style={styles.previewBottomActions}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.disabledActionBtn]}
+                  disabled
+                >
+                  <Ionicons
+                    name="chevron-back-outline"
+                    size={20}
+                    color="#8f8f8f"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.disabledActionBtn]}
+                  disabled
+                >
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={20}
+                    color="#8f8f8f"
+                  />
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionBtn}
-                  onPress={() => handleOpenAttachment(previewImage)}
+                  onPress={() =>
+                    applyPreviewScale(previewScaleRef.current - 0.25)
+                  }
                 >
-                  <Ionicons name="download-outline" size={20} color="#fff" />
+                  <Ionicons name="remove" size={20} color="#fff" />
                 </TouchableOpacity>
-              )}
-
-              <TouchableOpacity style={styles.closeBtn} onPress={closePreview}>
-                <Ionicons name="close" size={20} color="#fff" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() =>
+                    applyPreviewScale(previewScaleRef.current + 0.25)
+                  }
+                >
+                  <Ionicons name="add" size={20} color="#fff" />
+                </TouchableOpacity>
+                {previewImage && (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => handleOpenAttachment(previewImage)}
+                  >
+                    <Ionicons name="download-outline" size={20} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-
-            <Pressable style={styles.previewImageWrap} onPress={closePreview}>
-              {previewImage && (
-                <Image
-                  source={{ uri: previewImage.fileUrl }}
-                  style={[
-                    styles.previewImage,
-                    { transform: [{ scale: previewZoom }] },
-                  ]}
-                />
-              )}
-            </Pressable>
           </View>
         </View>
       </Modal>
@@ -340,33 +516,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
   },
-  previewContainer: {
+  previewFrameWrap: {
     width: "100%",
     height: "82%",
+    position: "relative",
+    paddingTop: 8,
+  },
+  previewContainer: {
+    width: "100%",
+    height: "100%",
     borderWidth: 4,
     borderColor: "#000",
     backgroundColor: "#0f0f0f",
     borderRadius: 12,
     overflow: "hidden",
   },
-  previewActions: {
+  previewCloseFloating: {
     position: "absolute",
-    top: 10,
-    right: 10,
-    zIndex: 5,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeBtn: {
+    top: -14,
+    right: -6,
+    zIndex: 10,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -378,11 +547,34 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   previewImage: {
     width: "100%",
     height: "100%",
     resizeMode: "contain",
+  },
+  previewBottomActions: {
+    position: "absolute",
+    bottom: 12,
+    left: 0,
+    right: 0,
+    zIndex: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disabledActionBtn: {
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   bubbleSent: {
     backgroundColor: COLORS.primary,

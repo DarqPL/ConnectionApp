@@ -8,6 +8,8 @@ import type {
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
 import {
+  ChevronLeft,
+  ChevronRight,
   CornerUpLeft,
   Download,
   FileText,
@@ -66,7 +68,11 @@ const MessageItem = ({
   const [showMenu, setShowMenu] = useState(false);
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const pointerStartRef = useRef({ x: 0, y: 0 });
 
   const prev = index + 1 < messages.length ? messages[index + 1] : undefined;
 
@@ -146,13 +152,70 @@ const MessageItem = ({
 
   const openImagePreview = (attachment: Attachment) => {
     setPreviewZoom(1);
+    setPreviewPan({ x: 0, y: 0 });
     setPreviewImage(attachment);
   };
 
   const closePreview = () => {
+    setIsPanning(false);
     setPreviewImage(null);
     setPreviewZoom(1);
+    setPreviewPan({ x: 0, y: 0 });
   };
+
+  const clampZoom = (value: number): number =>
+    Math.max(1, Math.min(4, Number(value.toFixed(2))));
+
+  const handlePreviewWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 0.15 : -0.15;
+    setPreviewZoom((prev) => clampZoom(prev + delta));
+  };
+
+  const handlePreviewMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (previewZoom <= 1) {
+      return;
+    }
+
+    event.preventDefault();
+    setIsPanning(true);
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    panStartRef.current = { ...previewPan };
+  };
+
+  useEffect(() => {
+    if (!isPanning) {
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const deltaX = event.clientX - pointerStartRef.current.x;
+      const deltaY = event.clientY - pointerStartRef.current.y;
+
+      setPreviewPan({
+        x: panStartRef.current.x + deltaX,
+        y: panStartRef.current.y + deltaY,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsPanning(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isPanning]);
+
+  useEffect(() => {
+    if (previewZoom <= 1) {
+      setPreviewPan({ x: 0, y: 0 });
+    }
+  }, [previewZoom]);
 
   return (
     <>
@@ -323,66 +386,97 @@ const MessageItem = ({
       >
         <DialogContent
           showCloseButton={false}
-          className="max-w-4xl p-2 border-4 border-black bg-black"
+          className="max-w-4xl border-none bg-transparent p-0 shadow-none"
         >
           {previewImage && (
-            <div className="relative">
-              <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreviewZoom((prev) =>
-                      Math.max(0.5, Number((prev - 0.25).toFixed(2))),
-                    )
-                  }
-                  className="rounded-full bg-black/80 p-2 text-white hover:bg-black"
-                  title="Zoom out"
-                >
-                  <ZoomOut className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPreviewZoom((prev) =>
-                      Math.min(4, Number((prev + 0.25).toFixed(2))),
-                    )
-                  }
-                  className="rounded-full bg-black/80 p-2 text-white hover:bg-black"
-                  title="Zoom in"
-                >
-                  <ZoomIn className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadAttachment(previewImage)}
-                  className="rounded-full bg-black/80 p-2 text-white hover:bg-black"
-                  title="Download"
-                >
-                  <Download className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  className="rounded-full bg-black p-2 text-white hover:bg-zinc-800"
-                  title="Close"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
+            <div className="relative pt-2">
+              <button
+                type="button"
+                onClick={closePreview}
+                className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
+                title="Close"
+              >
+                <X className="size-4" />
+              </button>
 
-              <div className="max-h-[80vh] overflow-auto rounded border border-black bg-zinc-900 p-4">
-                <img
-                  src={previewImage.fileUrl}
-                  alt={resolveFileName(
-                    previewImage.originalFileName,
-                    previewImage.fileUrl,
-                  )}
-                  className="mx-auto max-h-[72vh] w-auto object-contain transition-transform"
-                  style={{
-                    transform: `scale(${previewZoom})`,
-                    transformOrigin: "center center",
-                  }}
-                />
+              <div className="relative rounded-lg border-4 border-black bg-black">
+                <div
+                  className="relative h-[80vh] overflow-hidden rounded-[4px] bg-zinc-900"
+                  onWheel={handlePreviewWheel}
+                  onMouseDown={handlePreviewMouseDown}
+                >
+                  <img
+                    src={previewImage.fileUrl}
+                    alt={resolveFileName(
+                      previewImage.originalFileName,
+                      previewImage.fileUrl,
+                    )}
+                    draggable={false}
+                    className="mx-auto h-full w-full select-none object-contain"
+                    style={{
+                      transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
+                      transformOrigin: "center center",
+                      transition: isPanning
+                        ? "none"
+                        : "transform 140ms ease-out",
+                      cursor:
+                        previewZoom > 1
+                          ? isPanning
+                            ? "grabbing"
+                            : "grab"
+                          : "default",
+                    }}
+                  />
+                </div>
+
+                <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-zinc-700 bg-black/85 px-2 py-1.5 text-white">
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-full p-2 text-zinc-400"
+                    title="Previous"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-full p-2 text-zinc-400"
+                    title="Next"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewZoom((prev) => clampZoom(prev - 0.25))
+                    }
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Zoom out"
+                  >
+                    <ZoomOut className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewZoom((prev) => clampZoom(prev + 0.25))
+                    }
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Zoom in"
+                  >
+                    <ZoomIn className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment(previewImage)}
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Download"
+                  >
+                    <Download className="size-4" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
