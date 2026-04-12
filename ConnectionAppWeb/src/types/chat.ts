@@ -68,9 +68,12 @@ export interface SenderInfo {
   avatarUrl?: string | null;
 }
 
+export type AttachmentType = "IMAGE" | "VIDEO" | "DOCUMENT" | "AUDIO" | "FILE";
+
 export interface Attachment {
   fileUrl: string;
-  type: string; // IMAGE, VIDEO, FILE, AUDIO
+  type: AttachmentType;
+  originalFileName?: string | null;
 }
 
 export interface ReplyInfo {
@@ -86,6 +89,7 @@ export interface MessageRequest {
   conversationId: number;
   content: string;
   parentId?: string | null;
+  attachments?: Attachment[];
 }
 
 /**

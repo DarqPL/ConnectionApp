@@ -1,5 +1,7 @@
 package iuh.fit.ConnectionAppBackend.service;
 
+import iuh.fit.ConnectionAppBackend.domain.common.AttachmentType;
+import iuh.fit.ConnectionAppBackend.domain.dto.AttachmentRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
@@ -15,18 +17,25 @@ import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class MessageService {
+
+    private static final int MAX_ATTACHMENTS_PER_MESSAGE = 5;
 
     @Autowired
     private MessageRepository messageRepository;
@@ -45,6 +54,10 @@ public class MessageService {
      */
     @Transactional
     public MessageResponse sendMessage(Long senderId, MessageRequest request) {
+        if (request.getConversationId() == null) {
+            throw new BadRequestException("Conversation ID is required");
+        }
+
         // Verify sender is member of conversation
         boolean isMember = conversationUserRepository.isMember(request.getConversationId(), senderId);
         if (!isMember) {
@@ -54,8 +67,11 @@ public class MessageService {
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + senderId));
 
-        if (request.getContent() == null || request.getContent().isEmpty()) {
-            throw new BadRequestException("Message content cannot be empty");
+        String normalizedContent = request.getContent() == null ? "" : request.getContent().trim();
+        List<Attachment> normalizedAttachments = mapAndValidateAttachments(request.getAttachments());
+
+        if (!StringUtils.hasText(normalizedContent) && normalizedAttachments.isEmpty()) {
+            throw new BadRequestException("Message must contain text or attachments");
         }
 
         SenderInfo senderInfo = SenderInfo.builder()
@@ -67,7 +83,8 @@ public class MessageService {
         Message message = Message.builder()
                 .conversationId(request.getConversationId())
                 .senderInfo(senderInfo)
-                .content(request.getContent())
+            .content(StringUtils.hasText(normalizedContent) ? normalizedContent : null)
+            .attachments(normalizedAttachments)
                 .parentId(request.getParentId())
                 .isDeleted(false)
                 .createdAt(LocalDateTime.now())
@@ -81,12 +98,24 @@ public class MessageService {
 
         MessageResponse response = mapToMessageResponse(savedMessage);
 
+        // Broadcast to conversation topic (keep legacy destination for compatibility)
+        messagingTemplate.convertAndSend("/topic/conversation/" + request.getConversationId(), response);
         messagingTemplate.convertAndSend("/topic/conversation" + request.getConversationId(), response);
 
         // Also notify each participant via their personal topic
         List<ConversationUser> members = conversationUserRepository.findByConversationId(request.getConversationId());
+        boolean senderNotified = false;
         for (ConversationUser member : members) {
-            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId(), response);
+            Long memberUserId = member.getUser().getId();
+            messagingTemplate.convertAndSend("/topic/user." + memberUserId, response);
+            if (memberUserId.equals(senderId)) {
+                senderNotified = true;
+            }
+        }
+
+        // Ensure sender's all devices (web/mobile) receive realtime event even if membership query omits sender
+        if (!senderNotified) {
+            messagingTemplate.convertAndSend("/topic/user." + senderId, response);
         }
 
         return response;
@@ -234,10 +263,14 @@ public class MessageService {
                 .avatarUrl(message.getSenderInfo().getAvatarUrl())
                 .build();
 
-        List<MessageResponse.AttachmentResponse> attachments = message.getAttachments().stream()
+        List<Attachment> messageAttachments =
+            message.getAttachments() == null ? Collections.emptyList() : message.getAttachments();
+
+        List<MessageResponse.AttachmentResponse> attachments = messageAttachments.stream()
                 .map(a -> MessageResponse.AttachmentResponse.builder()
                         .fileUrl(a.getFileUrl())
-                        .type(a.getType().name())
+                .type(a.getType() == null ? AttachmentType.FILE.name() : a.getType().name())
+                .originalFileName(resolveOriginalFileName(a.getOriginalFileName(), a.getFileUrl()))
                         .build())
                 .collect(Collectors.toList());
 
@@ -266,5 +299,72 @@ public class MessageService {
                 .recalledAt(message.getRecalledAt())
                 .replyInfo(replyInfo)
                 .build();
+    }
+
+    private List<Attachment> mapAndValidateAttachments(List<AttachmentRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        if (requests.size() > MAX_ATTACHMENTS_PER_MESSAGE) {
+            throw new BadRequestException("Maximum 5 attachments per message");
+        }
+
+        List<Attachment> attachments = new ArrayList<>();
+        for (AttachmentRequest req : requests) {
+            if (req == null || !StringUtils.hasText(req.getFileUrl())) {
+                throw new BadRequestException("Attachment URL is required");
+            }
+
+            attachments.add(
+                    Attachment.builder()
+                            .fileUrl(req.getFileUrl().trim())
+                            .type(resolveAttachmentType(req.getType()))
+                        .originalFileName(resolveOriginalFileName(req.getOriginalFileName(), req.getFileUrl()))
+                            .build()
+            );
+        }
+
+        return attachments;
+    }
+
+    private AttachmentType resolveAttachmentType(String rawType) {
+        if (!StringUtils.hasText(rawType)) {
+            return AttachmentType.FILE;
+        }
+
+        try {
+            return AttachmentType.valueOf(rawType.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Unsupported attachment type: " + rawType);
+        }
+    }
+
+    private String resolveOriginalFileName(String rawFileName, String fileUrl) {
+        if (StringUtils.hasText(rawFileName)) {
+            return rawFileName.trim();
+        }
+
+        if (!StringUtils.hasText(fileUrl)) {
+            return "attached-file";
+        }
+
+        try {
+            URI parsed = URI.create(fileUrl);
+            String path = parsed.getPath();
+            if (!StringUtils.hasText(path)) {
+                return "attached-file";
+            }
+
+            int index = path.lastIndexOf('/');
+            String value = index >= 0 ? path.substring(index + 1) : path;
+            if (!StringUtils.hasText(value)) {
+                return "attached-file";
+            }
+
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            return "attached-file";
+        }
     }
 }

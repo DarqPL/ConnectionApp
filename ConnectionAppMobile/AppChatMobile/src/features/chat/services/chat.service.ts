@@ -1,5 +1,51 @@
 import { authService } from "../../auth/services/auth.service";
-import type { Conversation, Message, PageResponse } from "../types";
+import type {
+  Attachment,
+  AttachmentType,
+  Conversation,
+  Message,
+  PageResponse,
+} from "../types";
+
+interface UploadResponse {
+  objectKey: string;
+  imageUrl: string;
+  contentType?: string;
+  size?: number;
+}
+
+const resolveAttachmentType = (
+  mimeType?: string | null,
+  fileName?: string,
+): AttachmentType => {
+  const mime = (mimeType ?? "").toLowerCase();
+  const name = (fileName ?? "").toLowerCase();
+
+  if (
+    mime.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)
+  ) {
+    return "IMAGE";
+  }
+  if (mime.startsWith("video/")) {
+    return "VIDEO";
+  }
+  if (mime.startsWith("audio/")) {
+    return "AUDIO";
+  }
+  if (
+    mime.includes("pdf") ||
+    mime.includes("word") ||
+    mime.includes("excel") ||
+    mime.includes("powerpoint") ||
+    mime.startsWith("text/") ||
+    /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|rtf)$/.test(name)
+  ) {
+    return "DOCUMENT";
+  }
+
+  return "FILE";
+};
 
 export class ChatService {
   private async parseError(
@@ -68,7 +114,11 @@ export class ChatService {
     return (data.content ?? []).slice().reverse();
   }
 
-  async sendMessage(conversationId: number, content: string): Promise<Message> {
+  async sendMessage(
+    conversationId: number,
+    content: string,
+    attachments: Attachment[] = [],
+  ): Promise<Message> {
     const response = await authService.authFetch("/messages", {
       method: "POST",
       headers: {
@@ -78,6 +128,7 @@ export class ChatService {
         conversationId,
         content,
         parentId: null,
+        attachments,
       }),
     });
 
@@ -86,6 +137,36 @@ export class ChatService {
     }
 
     return (await response.json()) as Message;
+  }
+
+  async uploadAttachment(file: {
+    uri: string;
+    name: string;
+    mimeType?: string | null;
+  }): Promise<Attachment> {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType || "application/octet-stream",
+    } as any);
+    formData.append("folder", "messages");
+
+    const response = await authService.authFetch("/images", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Tải tệp lên thất bại");
+    }
+
+    const data = (await response.json()) as UploadResponse;
+    return {
+      fileUrl: data.imageUrl,
+      type: resolveAttachmentType(data.contentType || file.mimeType, file.name),
+      originalFileName: file.name,
+    };
   }
 
   async deleteMessage(messageId: string): Promise<void> {

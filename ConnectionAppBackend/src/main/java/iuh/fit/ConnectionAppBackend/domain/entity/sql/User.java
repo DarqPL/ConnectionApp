@@ -55,6 +55,12 @@ public class User {
     @Column(nullable = false)
     private Integer tokenVersion = 0;
 
+    @Column(nullable = false)
+    private Integer webTokenVersion = 0;
+
+    @Column(nullable = false)
+    private Integer mobileTokenVersion = 0;
+
     @LastModifiedDate
     private LocalDateTime updateAt;
 

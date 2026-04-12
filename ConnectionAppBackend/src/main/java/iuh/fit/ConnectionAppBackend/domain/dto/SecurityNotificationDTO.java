@@ -13,6 +13,8 @@ public class SecurityNotificationDTO {
     private String type;
     private String title;
     private String message;
+    private String targetPlatform;
+    private String reason;
     private String deviceName;
     private String ipAddress;
     private String userAgent;

@@ -1,8 +1,8 @@
 package iuh.fit.ConnectionAppBackend.controller;
 
+import iuh.fit.ConnectionAppBackend.domain.common.AuthPlatform;
 import iuh.fit.ConnectionAppBackend.domain.common.Role;
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
-import iuh.fit.ConnectionAppBackend.domain.dto.DeviceSessionResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.ForgotPasswordRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.LoginRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.LoginResponse;
@@ -34,11 +34,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -122,7 +119,8 @@ public class AuthController {
         user.setRole(Role.USER);
         user.setCreatedAt(LocalDateTime.now());
         user.setStatus(UserStatus.OFFLINE);
-        user.setTokenVersion(0);
+        user.setWebTokenVersion(0);
+        user.setMobileTokenVersion(0);
 
         userRepository.save(user);
         otpService.invalidateOtp(req.getEmail());
@@ -148,24 +146,27 @@ public class AuthController {
         User user = userDetails.getUser();
 
         String userAgent = httpRequest.getHeader("User-Agent");
+        AuthPlatform platform = resolvePlatform(req.getPlatform(), userAgent);
         String deviceName = resolveDeviceName(userAgent);
         String ipAddress = extractClientIp(httpRequest);
 
-        List<RefreshToken> activeSessions = refreshTokenService.getActiveSessions(user);
-        boolean knownDevice = isKnownDevice(activeSessions, deviceName, userAgent, ipAddress);
-        if (!activeSessions.isEmpty() && !knownDevice) {
-            securityNotificationService.notifyUnknownDeviceLogin(
-                    user.getId(),
-                    deviceName,
-                    ipAddress,
-                    userAgent
-            );
-        }
+        refreshTokenService.revokeAllByUserAndPlatform(user, platform);
+        bumpTokenVersionByPlatform(user, platform);
+        userRepository.save(user);
 
-        String accessToken = jwtUtils.generateToken(userDetails);
+        securityNotificationService.notifySessionRevokedByNewLogin(
+            user.getId(),
+            platform,
+            deviceName,
+            ipAddress,
+            userAgent
+        );
+
+        String accessToken = jwtUtils.generateToken(new CustomerUserDetails(user), platform);
         RefreshToken refreshToken =
                 refreshTokenService.createRefreshToken(
                         user,
+                platform,
                         deviceName,
                         userAgent,
                         ipAddress
@@ -190,9 +191,12 @@ public class AuthController {
 
         refreshTokenService.touch(token);
 
+        AuthPlatform platform = token.getPlatform() == null ? AuthPlatform.WEB : token.getPlatform();
+
         String newAccessToken =
                 jwtUtils.generateToken(
-                        new CustomerUserDetails(token.getUser())
+                new CustomerUserDetails(token.getUser()),
+                platform
                 );
 
         return ResponseEntity.ok(Map.of(
@@ -213,54 +217,6 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, expiredCookie.toString())
                 .body(Map.of("message", "Logged out"));
-    }
-
-    @GetMapping("/devices")
-    public ResponseEntity<?> getLoggedInDevices(Authentication authentication) {
-        User user = extractAuthenticatedUser(authentication);
-
-        List<DeviceSessionResponse> devices = refreshTokenService.getActiveSessions(user)
-                .stream()
-                .map(this::toDeviceSessionResponse)
-                .toList();
-
-        return ResponseEntity.ok(Map.of("devices", devices));
-    }
-
-    @PostMapping("/logout-all")
-    public ResponseEntity<?> logoutAllDevices(Authentication authentication) {
-        User user = extractAuthenticatedUser(authentication);
-
-        Integer currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
-        user.setTokenVersion(currentVersion + 1);
-        userRepository.save(user);
-
-        refreshTokenService.revokeAllByUser(user);
-
-        ResponseCookie expiredCookie = buildExpiredRefreshTokenCookie();
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, expiredCookie.toString())
-                .body(Map.of("message", "Đã đăng xuất tất cả thiết bị"));
-    }
-
-    private User extractAuthenticatedUser(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof CustomerUserDetails userDetails)) {
-            throw new UnauthorizedException("Phiên đã hết hạn");
-        }
-        return userDetails.getUser();
-    }
-
-    private DeviceSessionResponse toDeviceSessionResponse(RefreshToken token) {
-        return new DeviceSessionResponse(
-                token.getId(),
-                token.getDeviceName(),
-                token.getUserAgent(),
-                token.getIpAddress(),
-                token.getCreatedAt(),
-                token.getLastUsedAt(),
-                token.getExpiryDate()
-        );
     }
 
     private String extractClientIp(HttpServletRequest request) {
@@ -296,19 +252,29 @@ public class AuthController {
         return "Unknown device";
     }
 
-    private boolean isKnownDevice(List<RefreshToken> activeSessions,
-                                  String deviceName,
-                                  String userAgent,
-                                  String ipAddress) {
-        return activeSessions.stream().anyMatch(session ->
-                Objects.equals(normalize(session.getDeviceName()), normalize(deviceName))
-                        && Objects.equals(normalize(session.getIpAddress()), normalize(ipAddress))
-                        && Objects.equals(normalize(session.getUserAgent()), normalize(userAgent))
-        );
+    private AuthPlatform resolvePlatform(String platformFromRequest, String userAgent) {
+        if (platformFromRequest != null && !platformFromRequest.isBlank()) {
+            return AuthPlatform.fromValue(platformFromRequest);
+        }
+
+        if (userAgent != null) {
+            String lower = userAgent.toLowerCase();
+            if (lower.contains("android") || lower.contains("iphone") || lower.contains("ios")) {
+                return AuthPlatform.MOBILE;
+            }
+        }
+        return AuthPlatform.WEB;
     }
 
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase();
+    private void bumpTokenVersionByPlatform(User user, AuthPlatform platform) {
+        if (platform == AuthPlatform.MOBILE) {
+            Integer current = user.getMobileTokenVersion() == null ? 0 : user.getMobileTokenVersion();
+            user.setMobileTokenVersion(current + 1);
+            return;
+        }
+
+        Integer current = user.getWebTokenVersion() == null ? 0 : user.getWebTokenVersion();
+        user.setWebTokenVersion(current + 1);
     }
 
     private ResponseCookie buildRefreshTokenCookie(String token) {

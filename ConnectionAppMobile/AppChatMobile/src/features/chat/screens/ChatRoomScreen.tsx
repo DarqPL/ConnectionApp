@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MessageBubble from "../components/MessageBubble";
 import ChatInput from "../components/ChatInput";
 import ChatHeader from "../components/ChatHeader";
-import { useChat } from "../context/ChatContext";
+import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
 
@@ -117,10 +117,10 @@ const ChatRoomScreen = ({ route }: any) => {
     setIsAtBottom(true);
   };
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, files: PendingAttachment[]) => {
     setSending(true);
     try {
-      await sendMessage(conversationId, content);
+      await sendMessage(conversationId, content, files);
     } catch (error) {
       Alert.alert(
         "Lỗi",
@@ -188,6 +188,7 @@ const ChatRoomScreen = ({ route }: any) => {
           renderItem={({ item }) => (
             <MessageBubble
               message={item.content || ""}
+              attachments={item.attachments || []}
               isMe={item.senderInfo?.senderId === user?.id}
               senderName={item.senderInfo?.displayName}
               avatarUrl={item.senderInfo?.avatarUrl}
