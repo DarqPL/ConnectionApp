@@ -15,9 +15,8 @@ export interface AuthState {
     email: string,
     firstName: string,
     lastName: string,
-    otp: string,
   ) => Promise<void>;
-  sendSignupOtp: (email: string, username: string) => Promise<void>;
+  sendSignupOtp: (email: string, username?: string) => Promise<void>;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
