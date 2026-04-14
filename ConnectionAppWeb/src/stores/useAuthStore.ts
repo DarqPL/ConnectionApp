@@ -18,16 +18,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ accessToken: null, user: null, loading: false });
   },
 
-  signUp: async (username, password, email, firstName, lastName, otp) => {
+  signUp: async (username, password, email, firstName, lastName) => {
     set({ loading: true });
     try {
-      await authService.signUp(username, password, email, firstName, lastName, otp);
+      await authService.signUp(username, password, email, firstName, lastName);
     } finally {
       set({ loading: false });
     }
   },
 
-  sendSignupOtp: async (email, username) => {
+
+  sendSignupOtp: async (email, username?) => {
     set({ loading: true });
     try {
       await authService.sendSignupOtp(email, username);

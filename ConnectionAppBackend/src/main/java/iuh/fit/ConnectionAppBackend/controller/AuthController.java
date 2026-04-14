@@ -79,10 +79,14 @@ public class AuthController {
         String email = req.get("email");
         String username = req.get("username");
 
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email không được để trống"));
+        }
         if (userRepository.existsByEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of("message", "Email đã được sử dụng"));
         }
-        if (userRepository.existsByUsername(username)) {
+        // Chỉ kiểm tra username nếu được cung cấp (luồng mới chỉ gửi email ở bước 1)
+        if (username != null && !username.isBlank() && userRepository.existsByUsername(username)) {
             return ResponseEntity.badRequest().body(Map.of("message", "Tên đăng nhập đã được sử dụng"));
         }
 
@@ -105,10 +109,9 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("message", "Email đã được sử dụng"));
         }
 
-        // Verify OTP
-        boolean valid = otpService.verifyOtp(req.getEmail(), req.getOtp());
-        if (!valid) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Mã OTP không hợp lệ hoặc đã hết hạn"));
+        // Kiểm tra trạng thái "đã xác minh email" thay vì OTP (tránh hết hạn khi điền form)
+        if (!otpService.isEmailVerified(req.getEmail())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email chưa được xác minh hoặc phiên xác minh đã hết hạn. Vui lòng xác minh lại."));
         }
 
         User user = new User();
@@ -123,7 +126,7 @@ public class AuthController {
         user.setMobileTokenVersion(0);
 
         userRepository.save(user);
-        otpService.invalidateOtp(req.getEmail());
+        otpService.invalidateOtp(req.getEmail()); // xóa cả OTP lẫn verified state
 
         UserResponse response = new UserResponse(
                 user.getId(),
@@ -330,6 +333,9 @@ public class AuthController {
         if (!valid) {
             return ResponseEntity.badRequest().body(Map.of("message", "Mã OTP không hợp lệ hoặc đã hết hạn"));
         }
+        // Đánh dấu email đã xác minh — trạng thái này tồn tại 10 phút
+        // để người dùng có đủ thời gian điền thông tin tài khoản
+        otpService.markEmailVerified(req.getEmail());
         return ResponseEntity.ok(Map.of("message", "Mã OTP hợp lệ"));
     }
 
@@ -340,9 +346,10 @@ public class AuthController {
      */
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest req) {
-        boolean valid = otpService.verifyOtp(req.getEmail(), req.getOtp());
-        if (!valid) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Mã OTP không hợp lệ hoặc đã hết hạn"));
+        // Sử dụng isEmailVerified thay vì verifyOtp — nhất quán với luồng signup
+        // và tránh lỗi do OTP đã bị xóa khi markEmailVerified được gọi
+        if (!otpService.isEmailVerified(req.getEmail())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Phiên xác minh đã hết hạn. Vui lòng yêu cầu OTP mới."));
         }
 
         Optional<User> userOpt = userRepository.findByEmail(req.getEmail());

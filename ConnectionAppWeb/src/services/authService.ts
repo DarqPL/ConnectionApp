@@ -4,6 +4,7 @@ export const authService = {
   /**
    * POST /api/auth/signup
    * Body: { username, password, email, firstName, lastName }
+   * Backend kiểm tra trạng thái "email đã xác minh" thay vì OTP.
    * Returns: UserResponse { id, username, role, status }
    */
   signUp: async (
@@ -12,7 +13,6 @@ export const authService = {
     email: string,
     firstName: string,
     lastName: string,
-    otp: string,
   ) => {
     const res = await api.post("/auth/signup", {
       username,
@@ -20,18 +20,20 @@ export const authService = {
       email,
       firstName,
       lastName,
-      otp,
     });
     return res.data;
   },
 
+
   /**
    * POST /api/auth/signup/send-otp
-   * Body: { email, username }
-   * Gửi OTP để xác nhận đăng ký
+   * Body: { email, username? }
+   * Gửi OTP để xác nhận đăng ký (username là optional trong luồng mới)
    */
-  sendSignupOtp: async (email: string, username: string) => {
-    const res = await api.post("/auth/signup/send-otp", { email, username });
+  sendSignupOtp: async (email: string, username?: string) => {
+    const body: Record<string, string> = { email };
+    if (username && username.trim()) body.username = username;
+    const res = await api.post("/auth/signup/send-otp", body);
     return res.data;
   },
 
