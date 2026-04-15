@@ -120,6 +120,7 @@ export interface User {
   displayName: string;
   email: string;
   phone?: string;
+  bio?: string;
   avatarUrl?: string;
   gender?: string;
   role: string;
@@ -245,7 +246,6 @@ export class AuthService {
     username: string,
     email: string,
     password: string,
-    otp: string,
   ): Promise<void> {
     const response = await this.safeFetch(this.buildUrl("/auth/signup"), {
       method: "POST",
@@ -258,7 +258,6 @@ export class AuthService {
         username,
         email,
         password,
-        otp,
       }),
     });
 
@@ -341,6 +340,27 @@ export class AuthService {
     }
   }
 
+  async requestDeleteOtp(): Promise<void> {
+    const response = await this.authFetch("/users/delete/request-otp", {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể gửi mã OTP");
+    }
+  }
+
+  async confirmDeleteAccount(otp: string): Promise<void> {
+    const params = new URLSearchParams({ otp });
+    const response = await this.authFetch(`/users/delete/confirm?${params.toString()}`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Mã OTP không chính xác hoặc đã hết hạn");
+    }
+  }
+
   async deleteAccount(userId: number): Promise<void> {
     const response = await this.authFetch(`/users/${userId}`, {
       method: "DELETE",
@@ -398,16 +418,45 @@ export class AuthService {
     init: RequestInit = {},
     retried = false,
   ): Promise<Response> {
-    const headers = new Headers(init.headers ?? {});
+    // When body is FormData, do NOT touch the headers object.
+    // fetch() needs to set Content-Type: multipart/form-data; boundary=... automatically.
+    // Manually constructing a Headers object breaks this.
+    // Use duck-typing to detect FormData in both web and React Native environments.
+    // Check if body is FormData (compatible with both web and React Native)
+    const isFormData =
+      init.body instanceof FormData ||
+      (init.body !== null &&
+        typeof init.body === 'object' &&
+        typeof (init.body as any).append === 'function');
 
-    if (this.accessToken) {
-      headers.set("Authorization", `Bearer ${this.accessToken}`);
+    console.log(`[AuthService] authFetch(${path}) - isFormData:`, isFormData);
+    console.log(`[AuthService] body type:`, typeof init.body);
+    if (init.body && typeof init.body === 'object') {
+      console.log(`[AuthService] body instanceof FormData:`, init.body instanceof FormData);
+      console.log(`[AuthService] body.append fn:`, typeof (init.body as any).append);
     }
 
-    const response = await this.safeFetch(this.buildUrl(path), {
-      ...init,
-      headers,
-    });
+    let requestInit: RequestInit;
+
+    if (isFormData) {
+      // Only inject Authorization, leave everything else (especially Content-Type) to fetch
+      requestInit = {
+        ...init,
+        headers: {
+          ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+        },
+      };
+      console.log(`[AuthService] Using FormData headers with auth token`);
+    } else {
+      const headers = new Headers(init.headers ?? {});
+      if (this.accessToken) {
+        headers.set("Authorization", `Bearer ${this.accessToken}`);
+      }
+      requestInit = { ...init, headers };
+      console.log(`[AuthService] Using regular headers`);
+    }
+
+    const response = await this.safeFetch(this.buildUrl(path), requestInit);
 
     if (response.status === 401 && !retried) {
       try {

@@ -25,10 +25,21 @@ public class UserService {
     private UserRepository userRepository;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private iuh.fit.ConnectionAppBackend.repo.MessageRepository messageRepository;
+
+    @Autowired
+    private OtpService otpService;
+
+    @Autowired
+    private EmailService emailService;
 
     @Autowired
     private S3StorageService s3StorageService;
+    @Autowired
+    private RefreshTokenService refreshTokenService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     /**
      * Get user profile by user ID
@@ -55,6 +66,9 @@ public class UserService {
         }
         if (profileRequest.getPhone() != null && !profileRequest.getPhone().isEmpty()) {
             user.setPhone(profileRequest.getPhone());
+        }
+        if (profileRequest.getBio() != null) {
+            user.setBio(profileRequest.getBio());
         }
         if (profileRequest.getAvatarUrl() != null && !profileRequest.getAvatarUrl().isEmpty()) {
             user.setAvatarUrl(profileRequest.getAvatarUrl());
@@ -98,36 +112,41 @@ public class UserService {
         return userRepository.findByUsername(username);
     }
 
+    /**
+     * Upsert avatar — upload if user has no avatar, replace if user already has one.
+     * This is the single entry point for all avatar upload operations.
+     */
     @Transactional
-    public UserProfileResponse createCurrentUserAvatar(Long userId, MultipartFile avatarFile) {
+    public UserProfileResponse upsertCurrentUserAvatar(Long userId, MultipartFile avatarFile) {
         User user = getRequiredUser(userId);
-        if (StringUtils.hasText(user.getAvatarUrl())) {
-            throw new BadRequestException("Avatar already exists. Use PUT /api/users/profile/avatar to replace.");
-        }
 
-        ImageObjectResponse upload = s3StorageService.uploadImage(avatarFile, "avatars/" + userId);
-        user.setAvatarUrl(upload.getImageUrl());
-        return mapToUserProfileResponse(userRepository.save(user));
-    }
+        String existingKey = StringUtils.hasText(user.getAvatarUrl())
+                ? s3StorageService.extractObjectKeyFromUrl(user.getAvatarUrl())
+                : null;
 
-    @Transactional
-    public UserProfileResponse updateCurrentUserAvatar(Long userId, MultipartFile avatarFile) {
-        User user = getRequiredUser(userId);
-        if (!StringUtils.hasText(user.getAvatarUrl())) {
-            throw new ResourceNotFoundException("Avatar not found. Use POST /api/users/profile/avatar to create.");
-        }
-
-        String existingKey = s3StorageService.extractObjectKeyFromUrl(user.getAvatarUrl());
         ImageObjectResponse upload;
-
         if (StringUtils.hasText(existingKey)) {
+            // Replace the existing object in S3
             upload = s3StorageService.replaceImage(existingKey, avatarFile);
         } else {
+            // No avatar yet — upload as new
             upload = s3StorageService.uploadImage(avatarFile, "avatars/" + userId);
         }
 
         user.setAvatarUrl(upload.getImageUrl());
         return mapToUserProfileResponse(userRepository.save(user));
+    }
+
+    /** @deprecated Use upsertCurrentUserAvatar instead */
+    @Transactional
+    public UserProfileResponse createCurrentUserAvatar(Long userId, MultipartFile avatarFile) {
+        return upsertCurrentUserAvatar(userId, avatarFile);
+    }
+
+    /** @deprecated Use upsertCurrentUserAvatar instead */
+    @Transactional
+    public UserProfileResponse updateCurrentUserAvatar(Long userId, MultipartFile avatarFile) {
+        return upsertCurrentUserAvatar(userId, avatarFile);
     }
 
     @Transactional
@@ -172,6 +191,7 @@ public class UserService {
                 .displayName(user.getDisplayName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
+                .bio(user.getBio())
                 .avatarUrl(user.getAvatarUrl())
                 .gender(user.getGender() != null ? user.getGender().name() : null)
                 .role(user.getRole().name())
@@ -229,19 +249,69 @@ public class UserService {
     }
 
     /**
-     * Delete account (soft delete)
+     * Request OTP for account deletion
+     */
+    public void requestDeleteOtp(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+        
+        String otp = otpService.generateOtp(user.getEmail());
+        emailService.sendOtpEmail(user.getEmail(), otp);
+    }
+
+    /**
+     * Confirm account deletion with OTP
+     */
+    @Transactional
+    public String confirmDeleteAccount(Long userId, String otp) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (!otpService.verifyOtp(user.getEmail(), otp)) {
+            throw new BadRequestException("Mã OTP không chính xác hoặc đã hết hạn");
+        }
+
+        // Delete avatar from S3 if exists
+        if (StringUtils.hasText(user.getAvatarUrl())) {
+            try {
+                String existingKey = s3StorageService.extractObjectKeyFromUrl(user.getAvatarUrl());
+                if (StringUtils.hasText(existingKey)) {
+                    s3StorageService.deleteImage(existingKey);
+                }
+            } catch (Exception e) {
+                // Log error but continue deletion
+            }
+        }
+
+        // Revoke all tokens before deletion
+        refreshTokenService.revokeAllByUser(user);
+
+        // Nullify createdBy in conversations to avoid FK constraint error
+        if (user.getCreatedConversations() != null) {
+            for (iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation conv : user.getCreatedConversations()) {
+                conv.setCreatedBy(null);
+            }
+        }
+
+        // Delete messages in MongoDB
+        messageRepository.deleteBySenderInfo_SenderId(user.getId());
+
+        // Permanent delete
+        userRepository.delete(user);
+        otpService.invalidateOtp(user.getEmail());
+
+        return "Account deleted permanently";
+    }
+
+    /**
+     * Delete account (permanently - updated from soft delete)
      */
     @Transactional
     public String deleteAccount(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        if (user.getStatus() == UserStatus.DELETED) {
-            return "Account already deleted";
-        }
-
-        user.setStatus(UserStatus.DELETED);
-        userRepository.save(user);
+        userRepository.delete(user);
 
         return "Account deleted successfully";
     }

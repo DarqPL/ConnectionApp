@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { cn } from "@/lib/utils";
 import AvatarUploader from "./AvatarUploader";
+import { useState, useEffect, useRef } from "react";
 
 
 
@@ -13,6 +14,20 @@ interface ProfileCardProps {
 
 
 const ProfileCard = ({ user }: ProfileCardProps) => {
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl);
+  const prevAvatarUrlRef = useRef<string | undefined>(user?.avatarUrl);
+
+  // Force re-fetch avatar when URL changes by adding cache-busting query param
+  useEffect(() => {
+    if (user?.avatarUrl && user.avatarUrl !== prevAvatarUrlRef.current) {
+      prevAvatarUrlRef.current = user.avatarUrl;
+      // Add timestamp to avatar URL to bust browser cache
+      setAvatarUrl(`${user.avatarUrl}?v=${Date.now()}`);
+    } else if (!user?.avatarUrl && avatarUrl !== undefined) {
+      setAvatarUrl(undefined);
+    }
+  }, [user?.avatarUrl]);
+
   if (!user) return;
 
   if (!user.bio) {
@@ -27,7 +42,7 @@ const ProfileCard = ({ user }: ProfileCardProps) => {
       <CardContent className="mt-20 pb-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
         <div className="relative">
           <Avatar className="h-24 w-24 ring-4 ring-white shadow-lg">
-            <AvatarImage src={user.avatarUrl ?? undefined} alt={user.displayName} />
+            <AvatarImage src={avatarUrl ?? undefined} alt={user.displayName} />
             <AvatarFallback className="text-2xl font-bold">
               {user.displayName.charAt(0)}
             </AvatarFallback>

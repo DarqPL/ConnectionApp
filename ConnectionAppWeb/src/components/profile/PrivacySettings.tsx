@@ -19,6 +19,8 @@ type Props = {
 const PrivacySettings = ({ user }: Props) => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(user?.status);
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [otp, setOtp] = useState("");
 
   useEffect(() => {
     if (user?.status) {
@@ -47,13 +49,36 @@ const PrivacySettings = ({ user }: Props) => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Bạn có chắc muốn xoá tài khoản không?")) return;
+    if (!window.confirm("Tài khoản của bạn sẽ bị xóa vĩnh viễn và không thể khôi phục. Bạn có chắc muốn tiếp tục?")) return;
 
     try {
       setLoading(true);
-      await userService.deleteAccount(user.id);
+      await userService.requestDeleteOtp();
+      setShowOtpInput(true);
+      alert("Mã OTP đã được gửi đến email của bạn.");
     } catch (err) {
       console.error(err);
+      alert("Không thể gửi mã OTP. Vui lòng thử lại sau.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!otp || otp.length < 6) {
+      alert("Vui lòng nhập mã OTP 6 chữ số.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await userService.confirmDeleteAccount(otp);
+      alert("Tài khoản đã được xóa vĩnh viễn.");
+      localStorage.clear(); // Clear all auth data
+      window.location.href = "/signin";
+    } catch (err) {
+      console.error(err);
+      alert("Mã OTP không xác thực hoặc đã hết hạn.");
     } finally {
       setLoading(false);
     }
@@ -122,14 +147,35 @@ const PrivacySettings = ({ user }: Props) => {
           <h4 className="font-medium mb-3 text-destructive">
             Khu vực nguy hiểm
           </h4>
-          <Button
-            variant="destructive"
-            className="w-full"
-            onClick={handleDelete}
-            disabled={loading}
-          >
-            Xoá tài khoản
-          </Button>
+          {showOtpInput ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Nhập mã OTP 6 số"
+                className="w-full p-2 rounded-md border bg-background text-center text-lg font-bold tracking-widest"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setShowOtpInput(false)}>
+                  Hủy
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={handleConfirmDelete} disabled={loading}>
+                  {loading ? "Đang xử lý..." : "Xác nhận xóa vĩnh viễn"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={handleDelete}
+              disabled={loading}
+            >
+              Xoá tài khoản
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

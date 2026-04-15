@@ -22,9 +22,8 @@ interface AuthContextType {
     username: string,
     email: string,
     password: string,
-    otp: string,
   ) => Promise<void>;
-  sendSignupOtp: (username: string, email: string) => Promise<void>;
+  sendSignupOtp: (email: string, username?: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (
     email: string,
@@ -32,10 +31,14 @@ interface AuthContextType {
     newPassword: string,
   ) => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
-  deleteAccount: () => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
+  requestDeleteOtp: () => Promise<void>;
+  confirmDeleteAccount: (otp: string) => Promise<void>;
+  deleteAccount: (otp: string) => Promise<void>;
   setApiBaseUrl: (url: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (data: Partial<User>) => Promise<void>;
+  updateAvatar: (formData: FormData) => Promise<void>;
   clearError: () => void;
 }
 
@@ -105,11 +108,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const sendSignupOtp = useCallback(async (username: string, email: string) => {
+  const sendSignupOtp = useCallback(async (email: string, username?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      await authService.sendSignupOtp(username, email);
+      await authService.sendSignupOtp(username || "", email);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Gửi OTP thất bại";
@@ -127,7 +130,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       username: string,
       email: string,
       password: string,
-      otp: string,
     ) => {
       setIsLoading(true);
       setError(null);
@@ -138,12 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           username,
           email,
           password,
-          otp,
         );
-        await authService.signIn(username, password);
-        const profile = await authService.fetchMe();
-        setUser(profile);
-        setAccessToken(authService.getAccessToken());
+        // After signup, clear any error. User navigates to SignIn manually.
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Đăng ký thất bại";
@@ -207,20 +205,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  const deleteAccount = useCallback(async () => {
-    if (!user?.id) {
-      const noUserError = new Error("Không tìm thấy thông tin người dùng");
-      setError(noUserError.message);
-      throw noUserError;
-    }
-
+  const requestDeleteOtp = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      await authService.deleteAccount(user.id);
-      await authService.signOut();
+      await authService.requestDeleteOtp();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Gửi OTP thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, otp: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.verifyOtp(email, otp);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Xác minh OTP thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const confirmDeleteAccount = useCallback(async (otp: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.confirmDeleteAccount(otp);
       setUser(null);
       setAccessToken(null);
+      // signOut will clear the token and notify handlers
+      await authService.signOut();
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Xóa tài khoản thất bại";
@@ -229,12 +252,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, []);
+
+  const deleteAccount = useCallback(async (otp: string) => {
+    await confirmDeleteAccount(otp);
+  }, [confirmDeleteAccount]);
 
   const updateUserProfile = useCallback(async (data: Partial<User>) => {
     const { userService } = await import("../../chat/services/user.service");
     const updatedUser = await userService.updateProfile(data);
     setUser(updatedUser);
+  }, []);
+
+  const updateAvatar = useCallback(async (formData: FormData) => {
+    const { userService } = await import("../../chat/services/user.service");
+    try {
+      const updatedUser = await userService.updateAvatar(formData);
+      setUser(updatedUser);
+      
+      // Force refetch to ensure avatar update is synced
+      await authService.fetchMe().then((freshUser) => {
+        setUser(freshUser);
+      });
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Cập nhật ảnh đại diện thất bại";
+      setError(errorMessage);
+      throw err;
+    }
   }, []);
 
   const signOut = useCallback(async () => {
@@ -277,10 +322,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     forgotPassword,
     resetPassword,
     changePassword,
+    verifyOtp,
+    requestDeleteOtp,
+    confirmDeleteAccount,
     deleteAccount,
     setApiBaseUrl,
     signOut,
     updateUserProfile,
+    updateAvatar,
     clearError,
   };
 

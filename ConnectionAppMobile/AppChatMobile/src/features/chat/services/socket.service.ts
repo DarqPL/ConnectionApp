@@ -5,6 +5,8 @@ export interface ChatSocketHandlers {
   onIncomingMessage: (message: Message) => void;
   onIncomingConversation: (conversation: Conversation) => void;
   onRecallMessage: (message: Message) => void;
+  onUserTyping?: (data: { userId: number }) => void;
+  onUserStoppedTyping?: (data: { userId: number }) => void;
   onSecurityNotification?: (payload: {
     type?: string;
     title?: string;
@@ -113,6 +115,26 @@ class ChatSocketService {
           }
         });
 
+        // NEW: Subscribe to typing notifications
+        client.subscribe(`/topic/user.${userId}/typing`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body);
+            this.handlersRef?.onUserTyping?.(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse typing notification:", e);
+          }
+        });
+
+        // NEW: Subscribe to stopped typing notifications
+        client.subscribe(`/topic/user.${userId}/stopped-typing`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body);
+            this.handlersRef?.onUserStoppedTyping?.(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse stopped-typing notification:", e);
+          }
+        });
+
         client.subscribe(`/topic/user.${userId}/security`, (stompFrame) => {
           try {
             const payload = JSON.parse(stompFrame.body);
@@ -156,6 +178,28 @@ class ChatSocketService {
       this.handlersRef = null;
       this.client.deactivate();
       this.client = null;
+    }
+  }
+
+  // NEW: Send typing notification
+  notifyTyping(conversationId: number): void {
+    if (this.client?.active) {
+      this.client.publish({
+        destination: `/app/chat/${conversationId}/typing`,
+        body: JSON.stringify({ conversationId }),
+      });
+      console.log("[Socket] Sent typing notification for conversation:", conversationId);
+    }
+  }
+
+  // NEW: Send stopped typing notification
+  notifyStoppedTyping(conversationId: number): void {
+    if (this.client?.active) {
+      this.client.publish({
+        destination: `/app/chat/${conversationId}/stopped-typing`,
+        body: JSON.stringify({ conversationId }),
+      });
+      console.log("[Socket] Sent stopped typing notification for conversation:", conversationId);
     }
   }
 
