@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   TextInput,
@@ -18,6 +18,7 @@ import EmojiPicker from "rn-emoji-keyboard";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import type { PendingAttachment } from "../context/ChatContext";
+import { useChat } from "../context/ChatContext";
 import type { Message } from "../types";
 
 interface ChatInputProps {
@@ -26,6 +27,7 @@ interface ChatInputProps {
     files: PendingAttachment[],
     parentId?: string | null,
   ) => Promise<void>;
+  conversationId: number; // NEW
   disabled?: boolean;
   replyTo?: Message | null;
   onCancelReply?: () => void;
@@ -69,14 +71,18 @@ const getReplyPreviewText = (message: Message | null | undefined): string => {
 
 const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
+  conversationId,
   disabled = false,
   replyTo = null,
   onCancelReply,
 }) => {
+  const { notifyTyping, notifyStoppedTyping } = useChat();
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<LocalAttachment[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingStateRef = useRef(false);
 
   const appendFiles = (incoming: LocalAttachment[]) => {
     if (incoming.length === 0) return;
@@ -207,6 +213,56 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setText((prev) => `${prev}${emoji}`);
   };
 
+  // NEW: Handle text input with typing notification
+  const handleTextChange = (newText: string) => {
+    setText(newText);
+
+    // If user is typing and text is not empty
+    if (newText.trim().length > 0) {
+      // If not already in typing state, send typing notification
+      if (!typingStateRef.current) {
+        notifyTyping(conversationId);
+        typingStateRef.current = true;
+        console.log("[ChatInput] User started typing");
+      }
+
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set new timeout to send stopped typing after 1 second of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+        console.log("[ChatInput] User stopped typing");
+      }, 1000);
+    } else {
+      // Text is empty, send stopped typing
+      if (typingStateRef.current) {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+        console.log("[ChatInput] User cleared text");
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    }
+  };
+
+  // NEW: Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (typingStateRef.current) {
+        notifyStoppedTyping(conversationId);
+      }
+    };
+  }, [conversationId, notifyStoppedTyping]);
+
   return (
     <>
       <View style={styles.wrapper}>
@@ -295,7 +351,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           <View style={styles.inputWrap}>
             <TextInput
               value={text}
-              onChangeText={setText}
+              onChangeText={handleTextChange}
               placeholder="Soạn tin nhắn..."
               placeholderTextColor={COLORS.textLight}
               style={styles.input}

@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   StatusBar,
+  Modal,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,14 +20,26 @@ import { COLORS } from "../../../theme";
 import { useAuth } from "../../auth/context/AuthContext";
 import BottomNavigator from "../../../components/BottomNavigator";
 
+import * as ImagePicker from "expo-image-picker";
+
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { user, signOut, updateUserProfile, changePassword, deleteAccount } =
-    useAuth();
+  const {
+    user,
+    signOut,
+    updateUserProfile,
+    updateAvatar,
+    changePassword,
+    requestDeleteOtp,
+    confirmDeleteAccount,
+    deleteAccount,
+  } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [bio, setBio] = useState(user?.bio || "");
 
   // Change password
   const [showChangePw, setShowChangePw] = useState(false);
@@ -35,6 +48,9 @@ const ProfileScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [deleteOtp, setDeleteOtp] = useState("");
 
   const handleUpdate = async () => {
     if (!displayName.trim()) {
@@ -43,13 +59,74 @@ const ProfileScreen = () => {
     }
     setLoading(true);
     try {
-      await updateUserProfile({ displayName: displayName.trim() });
+      await updateUserProfile({
+        displayName: displayName.trim(),
+        phone: phone.trim(),
+        bio: bio.trim()
+      });
       setIsEditing(false);
       Alert.alert("Thành công", "Đã cập nhật hồ sơ");
     } catch (err) {
       Alert.alert("Lỗi", "Không thể cập nhật. Thử lại sau.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== 'granted') {
+      Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền truy cập thư viện ảnh để đổi ảnh đại diện.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      handleAvatarUpload(result.assets[0]);
+    }
+  };
+
+  const handleAvatarUpload = async (asset: ImagePicker.ImagePickerAsset) => {
+    setAvatarLoading(true);
+    try {
+      console.log("[ProfileScreen] Starting avatar upload");
+      console.log("[ProfileScreen] Asset info:", {
+        uri: asset.uri,
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+      });
+
+      const formData = new FormData();
+
+      // @ts-ignore
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.fileName || 'avatar.jpg',
+        type: asset.mimeType || 'image/jpeg',
+      });
+
+      console.log("[ProfileScreen] FormData created");
+      console.log("[ProfileScreen] FormData instanceof FormData:", formData instanceof FormData);
+      console.log("[ProfileScreen] Has append method:", typeof (formData as any).append === 'function');
+
+      console.log("[ProfileScreen] Calling updateAvatar...");
+      await updateAvatar(formData);
+      
+      console.log("[ProfileScreen] Avatar upload successful!");
+      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện');
+    } catch (err) {
+      console.error("[ProfileScreen] Avatar upload error:", err);
+      const errorMsg = err instanceof Error ? err.message : 'Không thể upload ảnh đại diện. Thử lại sau.';
+      Alert.alert('Lỗi', errorMsg);
+    } finally {
+      setAvatarLoading(false);
     }
   };
 
@@ -98,29 +175,59 @@ const ProfileScreen = () => {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      "Xóa tài khoản",
-      "Tài khoản và dữ liệu liên quan sẽ bị xóa vĩnh viễn. Bạn có chắc muốn tiếp tục?",
+      "Xác nhận xóa",
+      "Tài khoản của bạn sẽ bị xóa vĩnh viễn và không thể khôi phục. Bạn có chắc chắn muốn xóa?",
       [
-        { text: "Hủy", style: "cancel" },
+        { text: "Bỏ qua", style: "cancel" },
         {
-          text: "Xóa tài khoản",
+          text: "Tiếp tục",
           style: "destructive",
           onPress: async () => {
             setDeleteLoading(true);
             try {
-              await deleteAccount();
-              Alert.alert("Thành công", "Tài khoản đã được xóa.");
-            } catch (err) {
-              const errorMessage =
-                err instanceof Error ? err.message : "Không thể xóa tài khoản.";
-              Alert.alert("Lỗi", errorMessage);
-            } finally {
+              await requestDeleteOtp();
               setDeleteLoading(false);
+              setShowOtpModal(true);
+            } catch (err) {
+              setDeleteLoading(false);
+              Alert.alert("Lỗi", "Không thể gửi mã OTP. Thử lại sau.");
             }
           },
         },
       ],
     );
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteOtp || deleteOtp.length < 6) {
+      Alert.alert("Lỗi", "Vui lòng nhập mã OTP 6 chữ số.");
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      await deleteAccount(deleteOtp);
+      setShowOtpModal(false);
+      Alert.alert(
+        "Thành công",
+        "Tài khoản của bạn đã được xóa vĩnh viễn.",
+        [
+          {
+            text: "Đồng ý",
+            onPress: () => {
+              // Trạng thái isAuthenticated trong AuthContext thay đổi sẽ tự động 
+              // đưa người dùng về trang Đăng nhập qua AppNavigator
+            }
+          }
+        ]
+      );
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Mã OTP không chính xác.";
+      Alert.alert("Lỗi", errorMessage);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const FALLBACK = "https://i.pravatar.cc/150?img=12";
@@ -137,13 +244,25 @@ const ProfileScreen = () => {
           end={{ x: 1, y: 0 }}
           style={[styles.gradientHeader, { paddingTop: insets.top + 20 }]}
         >
-          <View style={styles.avatarWrap}>
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={handlePickImage}
+            disabled={avatarLoading}
+          >
             <Image
               source={{ uri: user?.avatarUrl || FALLBACK }}
               style={styles.avatar}
             />
+            {avatarLoading && (
+              <View style={styles.avatarLoadingOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+            <View style={styles.cameraIconBadge}>
+              <Ionicons name="camera" size={14} color="#fff" />
+            </View>
             <View style={styles.onlineDot} />
-          </View>
+          </TouchableOpacity>
           <Text style={styles.userName}>
             {isEditing ? "" : user?.displayName || "User"}
           </Text>
@@ -176,19 +295,51 @@ const ProfileScreen = () => {
             </View>
 
             {isEditing && (
-              <View style={styles.fieldRow}>
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={COLORS.primary}
-                />
-                <TextInput
-                  style={styles.editInput}
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  placeholder="Tên hiển thị..."
-                  placeholderTextColor={COLORS.textLight}
-                />
+              <View style={{ gap: 10, marginBottom: 14 }}>
+                <View style={styles.fieldRow}>
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={COLORS.primary}
+                  />
+                  <TextInput
+                    style={styles.editInput}
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                    placeholder="Tên hiển thị..."
+                    placeholderTextColor={COLORS.textLight}
+                  />
+                </View>
+                <View style={styles.fieldRow}>
+                  <Ionicons
+                    name="call-outline"
+                    size={20}
+                    color={COLORS.primary}
+                  />
+                  <TextInput
+                    style={styles.editInput}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="Số điện thoại..."
+                    placeholderTextColor={COLORS.textLight}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={styles.fieldRow}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={20}
+                    color={COLORS.primary}
+                  />
+                  <TextInput
+                    style={[styles.editInput, { minHeight: 60 }]}
+                    value={bio}
+                    onChangeText={setBio}
+                    placeholder="Giới thiệu bản thân..."
+                    placeholderTextColor={COLORS.textLight}
+                    multiline
+                  />
+                </View>
               </View>
             )}
 
@@ -199,6 +350,18 @@ const ProfileScreen = () => {
               <View style={styles.infoText}>
                 <Text style={styles.infoLabel}>Tên hiển thị</Text>
                 <Text style={styles.infoValue}>{user?.displayName || "—"}</Text>
+              </View>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={styles.infoRow}>
+              <View style={[styles.infoIcon, { backgroundColor: "#f3f4f6" }]}>
+                <Ionicons name="information-circle" size={18} color={COLORS.textMuted} />
+              </View>
+              <View style={styles.infoText}>
+                <Text style={styles.infoLabel}>Tiểu sử</Text>
+                <Text style={styles.infoValue}>{user?.bio || "Chưa cập nhật"}</Text>
               </View>
             </View>
 
@@ -330,6 +493,62 @@ const ProfileScreen = () => {
       </ScrollView>
 
       <BottomNavigator />
+
+      {/* OTP Modal for Deletion */}
+      <Modal
+        visible={showOtpModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOtpModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.warningIcon}>
+                <Ionicons name="warning" size={32} color={COLORS.destructive} />
+              </View>
+              <Text style={styles.modalTitle}>Xác nhận OTP</Text>
+              <Text style={styles.modalSubtitle}>
+                Vui lòng nhập mã OTP đã được gửi đến email {user?.email} để xác
+                nhận xóa tài khoản.
+              </Text>
+            </View>
+
+            <TextInput
+              style={styles.otpInput}
+              placeholder="Nhập mã OTP 6 số"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={deleteOtp}
+              onChangeText={setDeleteOtp}
+            />
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowOtpModal(false);
+                  setDeleteOtp("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Hủy bỏ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={handleConfirmDelete}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Xác nhận xóa</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -368,6 +587,26 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.online,
     borderWidth: 2.5,
     borderColor: "#fff",
+  },
+  cameraIconBadge: {
+    position: "absolute",
+    bottom: 2,
+    left: 2,
+    backgroundColor: COLORS.primary,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  avatarLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: 45,
+    alignItems: "center",
+    justifyContent: "center",
   },
   userName: {
     fontSize: 22,
@@ -549,5 +788,86 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.destructive,
     fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  warningIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fef2f2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  otpInput: {
+    width: "100%",
+    backgroundColor: COLORS.backgroundMuted,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+    color: COLORS.text,
+    letterSpacing: 4,
+    marginBottom: 24,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    width: "100%",
+    gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: COLORS.backgroundMuted,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: COLORS.destructive,
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
   },
 });

@@ -80,6 +80,24 @@ export const userService = {
   },
 
   /**
+   * POST /api/users/delete/request-otp
+   */
+  async requestDeleteOtp(): Promise<void> {
+    await api.post("/users/delete/request-otp");
+  },
+
+  /**
+   * POST /api/users/delete/confirm
+   * Returns: string
+   */
+  async confirmDeleteAccount(otp: string): Promise<string> {
+    const res = await api.post("/users/delete/confirm", null, {
+      params: { otp },
+    });
+    return res.data;
+  },
+
+  /**
    * DELETE /api/users/{id}
    * Returns: string
    */
@@ -88,4 +106,14 @@ export const userService = {
     return res.data;
   },
 
+  /**
+   * PUT /api/users/profile/avatar
+   * Body: FormData (multipart/form-data)
+   * IMPORTANT: Do NOT set Content-Type manually — let axios set it with the correct boundary.
+   * Returns: UserProfileResponse
+   */
+  async updateAvatar(formData: FormData): Promise<User> {
+    const res = await api.put("/users/profile/avatar", formData);
+    return res.data;
+  },
 };

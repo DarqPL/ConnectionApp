@@ -19,6 +19,7 @@ interface ChatContextType {
   currentConversationId: number | null;
   isLoading: boolean;
   error: string | null;
+  typingUsers: number[]; // NEW: Track who is typing
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
   sendMessage: (
@@ -32,6 +33,8 @@ interface ChatContextType {
     conversationId: number | null,
     sourceConversationId?: number,
   ) => void;
+  notifyTyping: (conversationId: number) => void; // NEW: Send typing notification
+  notifyStoppedTyping: (conversationId: number) => void; // NEW: Send stopped typing notification
   clearError: () => void;
 }
 
@@ -55,11 +58,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   >(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<number[]>([]); // NEW
 
   // Ref so socket handlers always access latest state without reconnecting
   const currentConversationRef = useRef<number | null>(null);
   const userIdRef = useRef<number | null>(null);
   const messageFetchVersionRef = useRef(0);
+  const typingTimeoutRef = useRef<Record<number, NodeJS.Timeout>>({}); // NEW
 
   useEffect(() => {
     currentConversationRef.current = currentConversationId;
@@ -192,6 +197,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  // NEW: Handle user typing notification
+  const onUserTyping = useCallback((data: { userId: number }) => {
+    console.log("[ChatContext] User typing:", data.userId);
+    setTypingUsers((prev) => {
+      if (prev.includes(data.userId)) return prev;
+      return [...prev, data.userId];
+    });
+
+    // Auto-clear typing indicator after 3 seconds
+    if (typingTimeoutRef.current[data.userId]) {
+      clearTimeout(typingTimeoutRef.current[data.userId]);
+    }
+    typingTimeoutRef.current[data.userId] = setTimeout(() => {
+      setTypingUsers((prev) => prev.filter((id) => id !== data.userId));
+      delete typingTimeoutRef.current[data.userId];
+    }, 3000);
+  }, []);
+
+  // NEW: Handle user stopped typing notification
+  const onUserStoppedTyping = useCallback((data: { userId: number }) => {
+    console.log("[ChatContext] User stopped typing:", data.userId);
+    if (typingTimeoutRef.current[data.userId]) {
+      clearTimeout(typingTimeoutRef.current[data.userId]);
+      delete typingTimeoutRef.current[data.userId];
+    }
+    setTypingUsers((prev) => prev.filter((id) => id !== data.userId));
+  }, []);
+
   const onSecurityNotification = useCallback(
     (payload: {
       type?: string;
@@ -241,6 +274,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onIncomingMessage,
       onIncomingConversation,
       onRecallMessage,
+      onUserTyping,
+      onUserStoppedTyping,
       onSecurityNotification,
       onConnectionError: (socketError) => {
         console.error("[ChatContext] Socket error:", socketError);
@@ -263,6 +298,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onIncomingMessage,
         onIncomingConversation,
         onRecallMessage,
+        onUserTyping,
+        onUserStoppedTyping,
         onSecurityNotification,
         onConnectionError: setError,
       });
@@ -271,6 +308,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     onIncomingMessage,
     onIncomingConversation,
     onRecallMessage,
+    onUserTyping,
+    onUserStoppedTyping,
     onSecurityNotification,
   ]);
 
@@ -423,17 +462,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearError = useCallback(() => setError(null), []);
 
+  // NEW: Notify socket that user is typing
+  const notifyTyping = useCallback((conversationId: number) => {
+    if (chatSocketService.isConnected) {
+      chatSocketService.notifyTyping(conversationId);
+    }
+  }, []);
+
+  // NEW: Notify socket that user stopped typing
+  const notifyStoppedTyping = useCallback((conversationId: number) => {
+    if (chatSocketService.isConnected) {
+      chatSocketService.notifyStoppedTyping(conversationId);
+    }
+  }, []);
+
   const value: ChatContextType = {
     conversations,
     currentMessages,
     currentConversationId,
     isLoading,
     error,
+    typingUsers,
     fetchConversations,
     fetchMessages,
     sendMessage,
     deleteMessage,
     setCurrentConversation,
+    notifyTyping,
+    notifyStoppedTyping,
     clearError,
   };
 

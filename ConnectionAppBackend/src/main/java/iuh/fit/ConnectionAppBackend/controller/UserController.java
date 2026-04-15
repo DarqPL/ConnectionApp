@@ -130,6 +130,21 @@ public class UserController {
         return ResponseEntity.ok(userService.unlockAccount(id));
     }
 
+    @PostMapping("/delete/request-otp")
+    public ResponseEntity<Void> requestDeleteOtp(Authentication authentication) {
+        Long userId = getAuthenticatedUserId(authentication);
+        userService.requestDeleteOtp(userId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/delete/confirm")
+    public ResponseEntity<String> confirmDeleteAccount(
+            Authentication authentication,
+            @RequestParam String otp) {
+        Long userId = getAuthenticatedUserId(authentication);
+        return ResponseEntity.ok(userService.confirmDeleteAccount(userId, otp));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.deleteAccount(id));
@@ -141,8 +156,8 @@ public class UserController {
             @RequestParam("file") MultipartFile avatarFile) {
 
         Long userId = getAuthenticatedUserId(authentication);
-        UserProfileResponse updatedProfile = userService.createCurrentUserAvatar(userId, avatarFile);
-        return ResponseEntity.status(HttpStatus.CREATED).body(updatedProfile);
+        UserProfileResponse result = userService.upsertCurrentUserAvatar(userId, avatarFile);
+        return ResponseEntity.ok(result);
     }
 
     @PutMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -151,8 +166,8 @@ public class UserController {
             @RequestParam("file") MultipartFile avatarFile) {
 
         Long userId = getAuthenticatedUserId(authentication);
-        UserProfileResponse updatedProfile = userService.updateCurrentUserAvatar(userId, avatarFile);
-        return ResponseEntity.ok(updatedProfile);
+        UserProfileResponse result = userService.upsertCurrentUserAvatar(userId, avatarFile);
+        return ResponseEntity.ok(result);
     }
 
     @DeleteMapping("/profile/avatar")

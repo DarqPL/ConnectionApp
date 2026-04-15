@@ -40,6 +40,8 @@ public class User {
     private String email;
 
     private String phone;
+    
+    private String bio;
 
     private String avatarUrl;
 
@@ -69,4 +71,16 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ConversationUser> conversationUsers = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RefreshToken> refreshTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "requester", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Friend> sentFriendRequests = new ArrayList<>();
+
+    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Friend> receivedFriendRequests = new ArrayList<>();
+
+    @OneToMany(mappedBy = "createdBy")
+    private List<Conversation> createdConversations = new ArrayList<>();
 }

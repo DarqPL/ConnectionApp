@@ -64,4 +64,9 @@ public interface MessageRepository extends MongoRepository<Message, String> {
      * Delete all messages in conversation (soft delete)
      */
     void deleteByConversationId(Long conversationId);
+
+    /**
+     * Delete all messages from a specific sender
+     */
+    void deleteBySenderInfo_SenderId(Long senderId);
 }

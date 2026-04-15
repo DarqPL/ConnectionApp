@@ -7,7 +7,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "refesh_tokens")
+@Table(name = "refresh_tokens")
 @Getter
 @Setter
 @NoArgsConstructor

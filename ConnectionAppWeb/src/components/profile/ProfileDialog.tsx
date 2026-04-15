@@ -13,7 +13,7 @@ interface ProfileDialogProps {
 }
 
 const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
-  const { user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
   return (
     <Dialog
       open={open}

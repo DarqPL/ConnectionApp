@@ -1,11 +1,13 @@
-// import { useUserStore } from "@/stores/useUserStore";
-import { useRef } from "react";
+import { useUserStore } from "@/stores/useUserStore";
+import { useRef, useState } from "react";
 import { Button } from "../ui/button";
-import { Camera } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 
 const AvatarUploader = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // const { updateAvatarUrl } = useUserStore();
+  const { updateAvatarUrl } = useUserStore();
+  // const user = useUserStore((state) => state.user ?? null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleClick = () => {
     fileInputRef.current?.click();
@@ -17,11 +19,21 @@ const AvatarUploader = () => {
       return;
     }
 
-    const formData = new FormData();
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-    formData.append("file", file);
-
-    // await updateAvatarUrl(formData);
+      await updateAvatarUrl(formData);
+    } catch (error) {
+      console.error("Upload failed:", error);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   return (
@@ -30,16 +42,23 @@ const AvatarUploader = () => {
         size="icon"
         variant="secondary"
         onClick={handleClick}
-        className="absolute -bottom-2 -right-2 size-9 rounded-full shadow-md hover:scale-115 transition duration-300 hover:bg-background"
+        disabled={isUploading}
+        className="absolute -bottom-2 -right-2 size-9 rounded-full shadow-md hover:scale-115 transition duration-300 hover:bg-background disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Camera className="size-4" />
+        {isUploading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Camera className="size-4" />
+        )}
       </Button>
 
       <input
         type="file"
+        accept="image/*"
         hidden
         ref={fileInputRef}
         onChange={handleUpload}
+        disabled={isUploading}
       />
     </>
   );

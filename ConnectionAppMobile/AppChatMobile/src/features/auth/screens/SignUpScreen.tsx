@@ -7,50 +7,62 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import AuthInput from "../components/AuthInput";
 import { useAuth } from "../context/AuthContext";
+import { COLORS } from "../../../theme";
+
+type Step = "email" | "otp" | "register";
 
 export default function SignUpScreen({ navigation }: any) {
-  const [step, setStep] = useState(1); // 1: Info, 2: OTP
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
+  const { signUp, sendSignupOtp, verifyOtp, isLoading, clearError } = useAuth();
+
+  // Step management
+  const [step, setStep] = useState<Step>("email");
+  const [verifiedEmail, setVerifiedEmail] = useState("");
+
+  // Step 1 - Email
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
+
+  // Step 2 - OTP
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+  const otpRefs = useRef<(TextInput | null)[]>([]);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { signUp, sendSignupOtp, isLoading, error, clearError } = useAuth();
+  // Step 3 - Register
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     if (countdown > 0) {
       timerRef.current = setTimeout(() => setCountdown(countdown - 1), 1000);
-    } else if (timerRef.current) {
-      clearTimeout(timerRef.current);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [countdown]);
 
+  // ─── STEP 1: Gửi OTP đến email ──────────────────────────────────────────────
   const handleSendOtp = async () => {
-    if (!firstName || !lastName || !username || !email || !password) {
-      Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin đăng ký");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập email");
       return;
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Alert.alert("Email không hợp lệ", "Vui lòng nhập đúng định dạng email");
       return;
     }
-
     try {
-      await sendSignupOtp(username, email);
-      setStep(2);
+      // Chỉ gửi email (không cần username ở bước này)
+      await sendSignupOtp(email, "");
+      setVerifiedEmail(email.trim());
+      setStep("otp");
       setCountdown(60);
       Alert.alert("Thành công", "Mã OTP đã được gửi đến email của bạn");
     } catch (err) {
@@ -58,131 +70,289 @@ export default function SignUpScreen({ navigation }: any) {
     }
   };
 
-  const handleVerifyAndSignUp = async () => {
-    if (!otp || otp.length < 6) {
-      Alert.alert("Thiếu thông tin", "Vui lòng nhập mã OTP 6 chữ số");
+  // ─── STEP 2: Xác minh OTP ───────────────────────────────────────────────────
+  const otp = otpDigits.join("");
+
+  const handleOtpDigit = (index: number, value: string) => {
+    if (!/^\d?$/.test(value)) return;
+    const next = [...otpDigits];
+    next[index] = value;
+    setOtpDigits(next);
+    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+  };
+
+  const handleOtpKeyDown = (index: number, key: string) => {
+    if (key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length < 6) {
+      Alert.alert("Thiếu thông tin", "Vui lòng nhập đủ 6 chữ số OTP");
       return;
     }
-
     try {
-      await signUp(firstName, lastName, username, email, password, otp);
-      // Auth state will trigger navigation
+      // Gọi /verify-otp → backend markEmailVerified → user có 10 phút để điền form
+      await verifyOtp(verifiedEmail, otp);
+      setStep("register");
+      Alert.alert("Xác minh thành công", "Vui lòng điền thông tin tài khoản");
     } catch (err) {
-      Alert.alert("Đăng ký thất bại", err instanceof Error ? err.message : "Lỗi không xác định");
+      Alert.alert("Lỗi", err instanceof Error ? err.message : "Mã OTP không hợp lệ hoặc đã hết hạn");
     }
   };
 
   const handleResendOtp = async () => {
     if (countdown > 0) return;
     try {
-      await sendSignupOtp(username, email);
+      await sendSignupOtp(verifiedEmail, "");
       setCountdown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
       Alert.alert("Thông báo", "Mã OTP mới đã được gửi");
     } catch (err) {
       Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể gửi lại OTP");
     }
   };
 
+  // ─── STEP 3: Đăng ký tài khoản ─────────────────────────────────────────────
+  const handleSignUp = async () => {
+    if (!firstName || !lastName || !username || !password || !confirmPassword) {
+      Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin");
+      return;
+    }
+    if (username.length < 3) {
+      Alert.alert("Tên đăng nhập", "Tên đăng nhập phải có ít nhất 3 ký tự");
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert("Mật khẩu", "Mật khẩu phải có ít nhất 6 ký tự");
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert("Mật khẩu", "Mật khẩu xác nhận không khớp");
+      return;
+    }
+    try {
+      // Backend sẽ kiểm tra isEmailVerified(email) thay vì OTP
+      await signUp(firstName, lastName, username, verifiedEmail, password);
+      Alert.alert("Thành công", "Đăng ký tài khoản thành công!", [
+        { text: "Đăng nhập ngay", onPress: () => navigation.navigate("SignIn") },
+      ]);
+    } catch (err) {
+      Alert.alert("Đăng ký thất bại", err instanceof Error ? err.message : "Lỗi không xác định");
+    }
+  };
+
+  // ─── Step Title ─────────────────────────────────────────────────────────────
+  const stepTitle = step === "email" ? "Tạo tài khoản" : step === "otp" ? "Xác thực email" : "Thông tin tài khoản";
+  const stepSubtitle =
+    step === "email"
+      ? "Nhập email để nhận mã xác nhận"
+      : step === "otp"
+      ? `Mã OTP đã được gửi đến ${verifiedEmail}`
+      : "Điền thông tin để hoàn tất đăng ký";
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.card}>
-        <Text style={styles.title}>
-          {step === 1 ? "Tạo tài khoản" : "Xác thực OTP"}
-        </Text>
-        <Text style={styles.subtitle}>
-          {step === 1
-            ? "Chào mừng bạn! Hãy đăng ký để bắt đầu"
-            : `Mã OTP đã được gửi đến ${email}`}
-        </Text>
+        {/* Progress indicator */}
+        <View style={styles.progressRow}>
+          {["Email", "OTP", "Tài khoản"].map((label, i) => {
+            const currentIndex = step === "email" ? 0 : step === "otp" ? 1 : 2;
+            const done = i < currentIndex;
+            const active = i === currentIndex;
+            return (
+              <View key={label} style={styles.progressStep}>
+                <View
+                  style={[
+                    styles.progressDot,
+                    done && styles.progressDotDone,
+                    active && styles.progressDotActive,
+                  ]}
+                >
+                  <Text style={[styles.progressDotText, (done || active) && styles.progressDotTextActive]}>
+                    {done ? "✓" : i + 1}
+                  </Text>
+                </View>
+                <Text style={[styles.progressLabel, active && styles.progressLabelActive]}>
+                  {label}
+                </Text>
+                {i < 2 && <View style={[styles.progressLine, done && styles.progressLineDone]} />}
+              </View>
+            );
+          })}
+        </View>
 
-        {step === 1 ? (
+        <Text style={styles.title}>{stepTitle}</Text>
+        <Text style={styles.subtitle}>{stepSubtitle}</Text>
+
+        {/* ── BƯỚC 1: EMAIL ── */}
+        {step === "email" && (
           <>
-            <AuthInput
-              placeholder="Họ"
-              value={firstName}
-              onChangeText={setFirstName}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Tên"
-              value={lastName}
-              onChangeText={setLastName}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Tên đăng nhập"
-              value={username}
-              onChangeText={setUsername}
-              editable={!isLoading}
-            />
-            <AuthInput
-              placeholder="Email"
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="you@gmail.com"
+              placeholderTextColor={COLORS.textLight}
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
               editable={!isLoading}
             />
-            <AuthInput
-              placeholder="Mật khẩu"
+            <TouchableOpacity
+              style={[styles.btnWrapper, isLoading && styles.btnDisabled]}
+              onPress={handleSendOtp}
+              disabled={isLoading}
+            >
+              <LinearGradient colors={COLORS.gradient as any} style={styles.btn}>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.btnText}>Gửi mã OTP</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate("SignIn")} disabled={isLoading}>
+              <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ── BƯỚC 2: OTP ── */}
+        {step === "otp" && (
+          <>
+            <Text style={styles.label}>Mã OTP (6 chữ số)</Text>
+            <View style={styles.otpRow}>
+              {otpDigits.map((val, i) => (
+                <TextInput
+                  key={i}
+                  ref={(el) => { otpRefs.current[i] = el; }}
+                  style={[styles.otpBox, val ? styles.otpBoxFilled : null]}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  value={val}
+                  onChangeText={(v) => handleOtpDigit(i, v)}
+                  onKeyPress={({ nativeEvent }) => handleOtpKeyDown(i, nativeEvent.key)}
+                  editable={!isLoading}
+                />
+              ))}
+            </View>
+
+            <TouchableOpacity
+              onPress={handleResendOtp}
+              disabled={countdown > 0 || isLoading}
+              style={{ marginBottom: 12 }}
+            >
+              <Text style={[styles.link, countdown > 0 && styles.linkDisabled]}>
+                {countdown > 0 ? `Gửi lại mã (${countdown}s)` : "Gửi lại mã OTP"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btnWrapper, isLoading && styles.btnDisabled]}
+              onPress={handleVerifyOtp}
+              disabled={isLoading}
+            >
+              <LinearGradient colors={COLORS.gradient as any} style={styles.btn}>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.btnText}>Xác minh OTP</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setStep("email")} disabled={isLoading}>
+              <Text style={styles.link}>← Thay đổi email</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ── BƯỚC 3: ĐĂNG KÝ ── */}
+        {step === "register" && (
+          <>
+            <View style={styles.row}>
+              <View style={styles.halfField}>
+                <Text style={styles.label}>Họ</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nguyễn"
+                  placeholderTextColor={COLORS.textLight}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  editable={!isLoading}
+                />
+              </View>
+              <View style={styles.halfField}>
+                <Text style={styles.label}>Tên</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Văn A"
+                  placeholderTextColor={COLORS.textLight}
+                  value={lastName}
+                  onChangeText={setLastName}
+                  editable={!isLoading}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.label}>Tên đăng nhập</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="connection"
+              placeholderTextColor={COLORS.textLight}
+              autoCapitalize="none"
+              value={username}
+              onChangeText={setUsername}
+              editable={!isLoading}
+            />
+
+            <Text style={styles.label}>Mật khẩu</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ít nhất 6 ký tự"
+              placeholderTextColor={COLORS.textLight}
               secureTextEntry
               value={password}
               onChangeText={setPassword}
               editable={!isLoading}
             />
-          </>
-        ) : (
-          <>
-            <AuthInput
-              placeholder="Nhập mã OTP 6 chữ số"
-              keyboardType="number-pad"
-              maxLength={6}
-              value={otp}
-              onChangeText={setOtp}
+
+            <Text style={styles.label}>Xác nhận mật khẩu</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập lại mật khẩu"
+              placeholderTextColor={COLORS.textLight}
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
               editable={!isLoading}
             />
-            <TouchableOpacity 
-              onPress={handleResendOtp} 
-              disabled={countdown > 0 || isLoading}
-              style={{ marginBottom: 15 }}
+
+            <TouchableOpacity
+              style={[styles.btnWrapper, isLoading && styles.btnDisabled]}
+              onPress={handleSignUp}
+              disabled={isLoading}
             >
-              <Text style={[styles.resendText, countdown > 0 && styles.resendDisabled]}>
-                {countdown > 0 ? `Gửi lại mã (${countdown}s)` : "Gửi lại mã OTP"}
-              </Text>
+              <LinearGradient colors={COLORS.gradient as any} style={styles.btn}>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.btnText}>Xác nhận & Đăng ký</Text>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setStep(1)} disabled={isLoading}>
-              <Text style={styles.link}>Thay đổi thông tin</Text>
+
+            <TouchableOpacity onPress={() => navigation.navigate("SignIn")} disabled={isLoading}>
+              <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
             </TouchableOpacity>
           </>
         )}
-
-        {error && <Text style={styles.errorText}>{error}</Text>}
-
-        <TouchableOpacity
-          style={{ width: "100%", marginTop: 10 }}
-          onPress={step === 1 ? handleSendOtp : handleVerifyAndSignUp}
-          disabled={isLoading}
-        >
-          <LinearGradient
-            colors={["#8E2DE2", "#4A00E0"]}
-            style={[styles.button, isLoading && styles.buttonDisabled]}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>
-                {step === 1 ? "Tiếp tục" : "Hoàn tất đăng ký"}
-              </Text>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navigation.navigate("SignIn")} disabled={isLoading}>
-          <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -205,50 +375,152 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 20,
     elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  progressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    gap: 4,
+  },
+  progressStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  progressDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "#ccc",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  progressDotDone: {
+    backgroundColor: "#8E2DE2",
+    borderColor: "#8E2DE2",
+  },
+  progressDotActive: {
+    borderColor: "#8E2DE2",
+  },
+  progressDotText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#aaa",
+  },
+  progressDotTextActive: {
+    color: "#8E2DE2",
+  },
+  progressLabel: {
+    fontSize: 11,
+    color: "#aaa",
+    marginRight: 4,
+  },
+  progressLabelActive: {
+    color: "#8E2DE2",
+    fontWeight: "600",
+  },
+  progressLine: {
+    width: 20,
+    height: 2,
+    backgroundColor: "#ccc",
+    marginHorizontal: 2,
+  },
+  progressLineDone: {
+    backgroundColor: "#8E2DE2",
   },
   title: {
     fontSize: 22,
     fontWeight: "700",
     marginBottom: 6,
     textAlign: "center",
+    color: "#1a1a2e",
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#666",
     marginBottom: 20,
     textAlign: "center",
   },
-  button: {
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#444",
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: "#e0e0e0",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#222",
+    backgroundColor: "#fafafa",
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  halfField: {
+    flex: 1,
+  },
+  btnWrapper: {
+    width: "100%",
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btn: {
     padding: 15,
     borderRadius: 12,
     alignItems: "center",
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
+  btnText: {
     color: "#fff",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 16,
   },
   link: {
     textAlign: "center",
-    marginTop: 16,
-    color: "#4A00E0",
+    color: "#8E2DE2",
     fontWeight: "500",
-  },
-  errorText: {
-    color: "#e74c3c",
     fontSize: 14,
+    marginTop: 8,
+  },
+  linkDisabled: {
+    color: "#aaa",
+  },
+  otpRow: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
     marginBottom: 12,
-    textAlign: "center",
   },
-  resendText: {
+  otpBox: {
+    width: 44,
+    height: 52,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
     textAlign: "center",
-    color: "#4A00E0",
-    fontWeight: "500",
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#222",
+    backgroundColor: "#fafafa",
   },
-  resendDisabled: {
-    color: "#999",
+  otpBoxFilled: {
+    borderColor: "#8E2DE2",
+    color: "#8E2DE2",
+    backgroundColor: "#f5f0ff",
   },
 });
