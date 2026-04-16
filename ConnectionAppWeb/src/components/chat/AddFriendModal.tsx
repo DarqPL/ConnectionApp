@@ -17,6 +17,10 @@ import UserAvatar from "./UserAvatar";
 import { userService } from "@/services/userService";
 import { friendService } from "@/services/friendService";
 
+export interface IFormValues {
+  username: string;
+}
+
 const AddFriendModal = () => {
   const [open, setOpen] = useState(false);
   const [searchUsername, setSearchUsername] = useState("");
@@ -171,7 +175,7 @@ const AddFriendModal = () => {
         </div>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[425px] border-none">
+      <DialogContent className="sm:max-w-106.25 border-none">
         <DialogHeader>
           <DialogTitle>Kết bạn</DialogTitle>
         </DialogHeader>

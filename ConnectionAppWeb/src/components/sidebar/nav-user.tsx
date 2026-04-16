@@ -94,12 +94,12 @@ export function NavUser({ user }: { user: User }) {
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-                  <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                  <UserIcon className="text-muted-foreground dark:group-focus:text-accent-foreground!" />
                   Tài Khoản
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setfriendRequestOpen(true)} className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
-                    <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                    <Bell className="text-muted-foreground dark:group-focus:text-accent-foreground!" />
                     <span>Thông Báo</span>
                   </div>
                   {pendingRequests.length > 0 && (

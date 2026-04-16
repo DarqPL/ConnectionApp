@@ -11,12 +11,91 @@ interface FilePanelProps {
   onClose: () => void;
 }
 
+interface FileWithMeta extends Attachment {
+  messageId: string;
+  createdAt: string;
+}
+
+const FileItem = ({
+  file,
+  onDownload,
+}: {
+  file: FileWithMeta;
+  onDownload: (fileUrl: string, fileName?: string) => void;
+}) => {
+  const getFileIcon = (type: string) => {
+    switch (type) {
+      case "IMAGE":
+        return <Image className="size-4" />;
+      case "VIDEO":
+        return <Video className="size-4" />;
+      case "AUDIO":
+        return <Music className="size-4" />;
+      case "DOCUMENT":
+        return <File className="size-4" />;
+      default:
+        return <File className="size-4" />;
+    }
+  };
+
+  const fileName = file.originalFileName || "Tệp không tên";
+
+  return (
+    <div className="flex items-center justify-between p-3 hover:bg-accent rounded-lg transition-colors group">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="text-muted-foreground shrink-0">
+          {getFileIcon(file.type)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate" title={fileName}>
+            {fileName}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {new Date(file.createdAt).toLocaleDateString("vi-VN")}
+          </p>
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={() => onDownload(file.fileUrl, file.originalFileName || "file")}
+      >
+        <Download className="size-4" />
+      </Button>
+    </div>
+  );
+};
+
+interface FileCategorySectionProps {
+  title: string;
+  files: FileWithMeta[];
+  onDownload: (fileUrl: string, fileName?: string) => void;
+}
+
+const FileCategorySection = ({ title, files, onDownload }: FileCategorySectionProps) => {
+  if (files.length === 0) return null;
+
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-semibold px-3 py-2 text-muted-foreground">
+        {title} ({files.length})
+      </h3>
+      <div className="space-y-1">
+        {files.map((file, idx) => (
+          <FileItem key={`${file.messageId}-${idx}`} file={file} onDownload={onDownload} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const FilePanel = ({ messages, isOpen, onClose }: FilePanelProps) => {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Lọc tất cả các file từ các message
   const allFiles = useMemo(() => {
-    const files: (Attachment & { messageId: string; createdAt: string })[] = [];
+    const files: FileWithMeta[] = [];
 
     messages.forEach((msg) => {
       if (msg.attachments && msg.attachments.length > 0) {
@@ -61,21 +140,6 @@ const FilePanel = ({ messages, isOpen, onClose }: FilePanelProps) => {
     return categories;
   }, [filteredFiles]);
 
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case "IMAGE":
-        return <Image className="size-4" />;
-      case "VIDEO":
-        return <Video className="size-4" />;
-      case "AUDIO":
-        return <Music className="size-4" />;
-      case "DOCUMENT":
-        return <File className="size-4" />;
-      default:
-        return <File className="size-4" />;
-    }
-  };
-
   const handleDownload = (fileUrl: string, fileName?: string) => {
     const link = document.createElement("a");
     link.href = fileUrl;
@@ -83,57 +147,6 @@ const FilePanel = ({ messages, isOpen, onClose }: FilePanelProps) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const FileItem = ({ file }: { file: (typeof allFiles)[0] }) => (
-    <div className="flex items-center justify-between p-3 hover:bg-accent rounded-lg transition-colors group">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="text-muted-foreground flex-shrink-0">
-          {getFileIcon(file.type)}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate" title={file.originalFileName}>
-            {file.originalFileName || "Tệp không tên"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {new Date(file.createdAt).toLocaleDateString("vi-VN")}
-          </p>
-        </div>
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={() =>
-          handleDownload(file.fileUrl, file.originalFileName || "file")
-        }
-      >
-        <Download className="size-4" />
-      </Button>
-    </div>
-  );
-
-  const FileCategorySection = ({
-    title,
-    files,
-  }: {
-    title: string;
-    files: (typeof allFiles)[0][];
-  }) => {
-    if (files.length === 0) return null;
-
-    return (
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold px-3 py-2 text-muted-foreground">
-          {title} ({files.length})
-        </h3>
-        <div className="space-y-1">
-          {files.map((file, idx) => (
-            <FileItem key={`${file.messageId}-${idx}`} file={file} />
-          ))}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -185,14 +198,28 @@ const FilePanel = ({ messages, isOpen, onClose }: FilePanelProps) => {
               <FileCategorySection
                 title="Hình ảnh"
                 files={filesByType.images}
+                onDownload={handleDownload}
               />
-              <FileCategorySection title="Video" files={filesByType.videos} />
-              <FileCategorySection title="Âm thanh" files={filesByType.audios} />
+              <FileCategorySection
+                title="Video"
+                files={filesByType.videos}
+                onDownload={handleDownload}
+              />
+              <FileCategorySection
+                title="Âm thanh"
+                files={filesByType.audios}
+                onDownload={handleDownload}
+              />
               <FileCategorySection
                 title="Tài liệu"
                 files={filesByType.documents}
+                onDownload={handleDownload}
               />
-              <FileCategorySection title="Khác" files={filesByType.others} />
+              <FileCategorySection
+                title="Khác"
+                files={filesByType.others}
+                onDownload={handleDownload}
+              />
             </>
           )}
         </div>

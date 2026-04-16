@@ -5,6 +5,7 @@ import type {
   Message,
   Participant,
 } from "@/types/chat";
+import type { User } from "@/types/user";
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
 import {
@@ -29,6 +30,15 @@ import { Button } from "../ui/button";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
+import {
+  detectEmailInMessage,
+  isValidEmailFormat,
+} from "@/lib/emailDetector";
+import { userService } from "@/services/userService";
+import { friendService } from "@/services/friendService";
+import BusinessCard from "../profile/BusinessCard";
+import { getOrFetchEmailUser } from "@/lib/userCache";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 const isImageAttachment = (attachment: Attachment): boolean => {
   if (attachment.type === "IMAGE") {
@@ -77,6 +87,7 @@ const MessageItem = ({
   selectedConvo,
   onReply,
 }: MessageItemProps) => {
+  const { user: currentUser } = useAuthStore();
   const { recallMessage } = useChatStore();
   const [showMenu, setShowMenu] = useState(false);
   const [showRecallConfirm, setShowRecallConfirm] = useState(false);
@@ -94,6 +105,14 @@ const MessageItem = ({
     height: 0,
   });
   const [isPanning, setIsPanning] = useState(false);
+
+  // Email detection & business card display
+  const [detectedEmail, setDetectedEmail] = useState<string | null>(null);
+  const [emailUser, setEmailUser] = useState<User | null>(null);
+  const [emailUserStatus, setEmailUserStatus] = useState<
+    "FRIEND" | "SENDING" | "RECEIVED" | "NONE"
+  >("NONE");
+
   const menuRef = useRef<HTMLDivElement>(null);
   const previewViewportRef = useRef<HTMLDivElement>(null);
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -104,8 +123,8 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-      new Date(prev?.createdAt || 0).getTime() >
-      300000; // 5 phút
+    new Date(prev?.createdAt || 0).getTime() >
+    300000; // 5 phút
 
   const isGroupBreak =
     isShowTime || message.senderInfo.senderId !== prev?.senderInfo.senderId;
@@ -113,6 +132,35 @@ const MessageItem = ({
   const participant = selectedConvo.participants.find(
     (p: Participant) => p.userId === message.senderInfo.senderId,
   );
+
+  // Detect email in message and load user info
+  // Trigger for all messages so both sender and receiver can see the business card
+  useEffect(() => {
+    const email = detectEmailInMessage(message.content || "");
+    setDetectedEmail(email);
+
+    // If no email detected or email format invalid, show as normal text
+    if (!email || !isValidEmailFormat(email)) {
+      setEmailUser(null);
+      setEmailUserStatus("NONE");
+      return;
+    }
+
+    // Fetch user by email via cache controller
+    const loadEmailUser = async () => {
+      try {
+        const result = await getOrFetchEmailUser(email);
+        setEmailUser(result.user);
+        setEmailUserStatus(result.status);
+      } catch (error) {
+        console.error("[EmailCard] Error loading email user:", error);
+        setEmailUser(null);
+        setEmailUserStatus("NONE");
+      }
+    };
+
+    loadEmailUser();
+  }, [message.content, message.isOwn]);
 
   const isRecalled = !!message.recalledAt;
   const attachments = message.attachments ?? [];
@@ -150,6 +198,38 @@ const MessageItem = ({
   const handleReply = () => {
     setShowMenu(false);
     onReply(message);
+  };
+
+  const handleAddFriend = async () => {
+    if (!emailUser) return;
+    try {
+      await friendService.sendFriendRequest(emailUser.id);
+      setEmailUserStatus("SENDING");
+      toast.success("Đã gửi lời mời kết bạn");
+    } catch {
+      toast.error("Không thể kết bạn lúc này");
+    }
+  };
+
+  const handleAcceptFriend = async () => {
+    if (!emailUser) return;
+    try {
+      await friendService.acceptFriendRequest(emailUser.id);
+      setEmailUserStatus("FRIEND");
+      toast.success("Đã kết bạn thành công");
+    } catch {
+      toast.error("Lỗi khi kết bạn");
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!emailUser) return;
+    try {
+      await friendService.cancelFriendRequest(emailUser.id);
+      setEmailUserStatus("NONE");
+    } catch {
+      toast.error("Lỗi khi hủy lời mời");
+    }
   };
 
   const handleDownloadAttachment = async (attachment: Attachment) => {
@@ -494,6 +574,28 @@ const MessageItem = ({
                     <p className="text-sm leading-relaxed wrap-break-word">
                       {message.content}
                     </p>
+                  )}
+
+                  {/* Display business card if email is detected and the user is found in the system */}
+                  {emailUser && (
+                    <div className="mt-3 -m-3 p-3 bg-muted/30 rounded-md">
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">
+                        Danh thiếp từ {detectedEmail}
+                      </p>
+                      <BusinessCard
+                        user={emailUser}
+                        relationshipStatus={emailUserStatus}
+                        isModal={false}
+                        variant="compact"
+                        hideActions={
+                          emailUser.id === currentUser?.id ||
+                          (message.isOwn && emailUserStatus === "FRIEND")
+                        }
+                        onAddFriend={handleAddFriend}
+                        onAccept={handleAcceptFriend}
+                        onCancel={handleCancelRequest}
+                      />
+                    </div>
                   )}
                 </div>
               )}
