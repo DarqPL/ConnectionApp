@@ -28,7 +28,7 @@ interface ChatContextType {
     files?: PendingAttachment[],
     parentId?: string | null,
   ) => Promise<void>;
-  deleteMessage: (messageId: string) => Promise<void>;
+  recallMessage: (messageId: string) => Promise<void>;
   setCurrentConversation: (
     conversationId: number | null,
     sourceConversationId?: number,
@@ -415,16 +415,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  const deleteMessage = useCallback(async (messageId: string) => {
+  const recallMessage = useCallback(async (messageId: string) => {
     setError(null);
     try {
-      await chatService.deleteMessage(messageId);
+      const updatedMsg = await chatService.recallMessage(messageId);
+      // Update UI immediately with server response (accurate recalledAt timestamp)
       setCurrentMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId
-            ? { ...m, recalledAt: new Date().toISOString() }
-            : m,
-        ),
+        prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)),
       );
     } catch (err) {
       const msg =
@@ -486,7 +483,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchConversations,
     fetchMessages,
     sendMessage,
-    deleteMessage,
+    recallMessage,
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,

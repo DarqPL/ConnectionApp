@@ -182,7 +182,7 @@ export class ChatService {
     };
   }
 
-  async deleteMessage(messageId: string): Promise<void> {
+  async recallMessage(messageId: string): Promise<Message> {
     const response = await authService.authFetch(
       `/messages/${messageId}/recall`,
       {
@@ -193,6 +193,8 @@ export class ChatService {
     if (!response.ok) {
       throw await this.parseError(response, "Thu hồi tin nhắn thất bại");
     }
+
+    return (await response.json()) as Message;
   }
 
   async markAsRead(conversationId: number): Promise<void> {

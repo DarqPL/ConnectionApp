@@ -17,7 +17,15 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Dialog, DialogContent } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../ui/dialog";
+import { Button } from "../ui/button";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
@@ -71,6 +79,8 @@ const MessageItem = ({
 }: MessageItemProps) => {
   const { recallMessage } = useChatStore();
   const [showMenu, setShowMenu] = useState(false);
+  const [showRecallConfirm, setShowRecallConfirm] = useState(false);
+  const [recalling, setRecalling] = useState(false);
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
   const [previewVideo, setPreviewVideo] = useState<Attachment | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -120,12 +130,20 @@ const MessageItem = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showMenu]);
 
-  const handleRecall = async () => {
+  const handleRecallClick = () => {
     setShowMenu(false);
+    setShowRecallConfirm(true);
+  };
+
+  const handleRecallConfirm = async () => {
+    setRecalling(true);
     try {
       await recallMessage(message.conversationId, message.id);
+      setShowRecallConfirm(false);
     } catch {
       toast.error("Không thể thu hồi tin nhắn. Vui lòng thử lại!");
+    } finally {
+      setRecalling(false);
     }
   };
 
@@ -498,7 +516,7 @@ const MessageItem = ({
                 </button>
                 {message.isOwn && (
                   <button
-                    onClick={handleRecall}
+                    onClick={handleRecallClick}
                     className="p-1.5 rounded-full hover:bg-destructive/10 transition-colors"
                     title="Thu hồi"
                   >
@@ -510,6 +528,43 @@ const MessageItem = ({
           )}
         </div>
       </div>
+
+      {/* Recall confirm dialog */}
+      <Dialog
+        open={showRecallConfirm}
+        onOpenChange={(open) => {
+          if (!open && !recalling) setShowRecallConfirm(false);
+        }}
+      >
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Undo2 className="size-4 text-destructive" />
+              Thu hồi tin nhắn
+            </DialogTitle>
+            <DialogDescription>
+              Tin nhắn sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện.
+              Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRecallConfirm(false)}
+              disabled={recalling}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRecallConfirm}
+              disabled={recalling}
+            >
+              {recalling ? "Đang thu hồi..." : "Thu hồi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!previewImage}
