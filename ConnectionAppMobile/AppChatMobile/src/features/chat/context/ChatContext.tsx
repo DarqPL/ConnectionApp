@@ -113,7 +113,39 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setError(null);
     try {
       const data = await chatService.getConversations();
-      setConversations(sortConversations(data));
+
+      // Merge server data with current realtime state:
+      // Prefer the realtime values (unreadCount, lastMessageContent, lastMessageAt)
+      // that WebSocket has already updated, as they are more up-to-date.
+      setConversations((prev) => {
+        const merged = data.map((serverConvo) => {
+          const existing = prev.find((c) => c.id === serverConvo.id);
+          if (!existing) return serverConvo;
+
+          const serverTime = serverConvo.lastMessageAt
+            ? new Date(serverConvo.lastMessageAt).getTime()
+            : 0;
+          const existingTime = existing.lastMessageAt
+            ? new Date(existing.lastMessageAt).getTime()
+            : 0;
+
+          // If realtime state is newer, keep realtime values
+          if (existingTime > serverTime) {
+            return {
+              ...serverConvo,
+              lastMessageContent: existing.lastMessageContent,
+              lastMessageAt: existing.lastMessageAt,
+              unreadCount: Math.max(existing.unreadCount, serverConvo.unreadCount),
+            };
+          }
+          return {
+            ...serverConvo,
+            unreadCount: Math.max(existing.unreadCount, serverConvo.unreadCount),
+          };
+        });
+
+        return sortConversations(merged);
+      });
     } catch (err) {
       setError(
         err instanceof Error

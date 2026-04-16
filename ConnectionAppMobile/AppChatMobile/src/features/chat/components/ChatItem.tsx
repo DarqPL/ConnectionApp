@@ -55,17 +55,29 @@ const ChatItem: React.FC<Props> = ({
     );
   };
 
+  const hasUnread = unreadCount > 0;
+
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.7}>
       {renderAvatar()}
       <View style={styles.content}>
         <View style={styles.row}>
-          <Text style={styles.name} numberOfLines={1}>{name}</Text>
-          <Text style={styles.time}>{time}</Text>
+          <Text
+            style={[styles.name, hasUnread && styles.nameUnread]}
+            numberOfLines={1}
+          >
+            {name}
+          </Text>
+          <Text style={[styles.time, hasUnread && styles.timeUnread]}>{time}</Text>
         </View>
         <View style={styles.row}>
-          <Text style={styles.message} numberOfLines={1}>{lastMessage}</Text>
-          {unreadCount > 0 && (
+          <Text
+            style={[styles.message, hasUnread && styles.messageUnread]}
+            numberOfLines={1}
+          >
+            {lastMessage}
+          </Text>
+          {hasUnread && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
             </View>
@@ -134,15 +146,27 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  nameUnread: {
+    fontWeight: "700",
+    color: COLORS.text,
+  },
   time: {
     fontSize: 12,
     color: COLORS.textLight,
+  },
+  timeUnread: {
+    color: COLORS.primary,
+    fontWeight: "600",
   },
   message: {
     fontSize: 14,
     color: COLORS.textMuted,
     flex: 1,
     marginRight: 8,
+  },
+  messageUnread: {
+    color: COLORS.text,
+    fontWeight: "600",
   },
   badge: {
     minWidth: 20,
