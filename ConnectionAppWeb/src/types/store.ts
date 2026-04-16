@@ -43,6 +43,8 @@ export interface ChatState {
   convoLoading: boolean;
   messageLoading: boolean;
   loading: boolean;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
   reset: () => void;
 
   setActiveConversation: (id: number | null) => void;

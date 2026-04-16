@@ -28,6 +28,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   convoLoading: false,
   messageLoading: false,
   loading: false,
+  searchQuery: "",
+  setSearchQuery: (query) => set({ searchQuery: query }),
 
   setActiveConversation: (id) => {
     set({ activeConversationId: id });

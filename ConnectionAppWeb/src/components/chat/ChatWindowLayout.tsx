@@ -160,7 +160,7 @@ const ChatWindowLayout = () => {
 
   return (
     <>
-      <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
+      <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden bg-transparent border-none shadow-none">
         {/* Header */}
         <ChatWindowHeader
           chat={selectedConvo}
@@ -172,7 +172,7 @@ const ChatWindowLayout = () => {
         />
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto bg-primary-foreground">
+        <div className="flex-1 overflow-y-auto bg-transparent">
           <ChatWindowBody
             onReply={(msg) => setReplyTo(msg)}
             onForward={(msg) => setMessageToForward(msg)}

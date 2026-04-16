@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Moon, Sun } from "lucide-react";
+import { useChatStore } from "@/stores/useChatStore";
 import { Switch } from "../ui/switch";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";

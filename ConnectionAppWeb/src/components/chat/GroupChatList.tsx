@@ -4,15 +4,18 @@ import GroupChatCard from "./GroupChatCard";
 const GroupChatList = () => {
   const { conversations } = useChatStore();
 
-  if (!conversations) return;
+  if (!conversations) return null;
 
-  const groupchats = conversations.filter((convo) => convo.type === "GROUP");
+  const groupConversations = conversations.filter(
+    (convo) => convo.type === "GROUP"
+  );
+
   return (
-    <div className="flex-1 overflow-y-auto p-2 space-y-2">
-      {groupchats.map((convo) => (
+    <div className="flex flex-col gap-1 p-1">
+      {groupConversations.map((convo) => (
         <GroupChatCard
-          convo={convo}
           key={convo.id}
+          convo={convo}
         />
       ))}
     </div>
