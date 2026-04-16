@@ -4,6 +4,7 @@ import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
+import FilePanel from "./FilePanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -33,6 +34,7 @@ const ChatWindowLayout = () => {
     blockedByOther: false,
   });
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
+  const [isFilesPanelOpen, setIsFilesPanelOpen] = useState(false);
 
   const selectedConvo =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -46,6 +48,7 @@ const ChatWindowLayout = () => {
       blockedByMe: false,
       blockedByOther: false,
     });
+    setIsFilesPanelOpen(false);
   }, [activeConversationId]);
 
   const peerUserId = useMemo(() => {
@@ -153,56 +156,66 @@ const ChatWindowLayout = () => {
   };
 
   return (
-    <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
-      {/* Header */}
-      <ChatWindowHeader
-        chat={selectedConvo}
-        peerUserId={peerUserId}
-        blockedByMe={isBlockedByMe}
-        blockedByOther={isBlockedByOther}
-        onBlockStatusChanged={refreshBlockStatus}
-      />
-
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto bg-primary-foreground">
-        <ChatWindowBody
-          onReply={(msg) => setReplyTo(msg)}
-          isLocked={isLocked}
-          isDeleted={isDeleted}
+    <>
+      <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
+        {/* Header */}
+        <ChatWindowHeader
+          chat={selectedConvo}
+          peerUserId={peerUserId}
+          blockedByMe={isBlockedByMe}
+          blockedByOther={isBlockedByOther}
+          onBlockStatusChanged={refreshBlockStatus}
+          onFilesOpen={() => setIsFilesPanelOpen(true)}
         />
-      </div>
 
-      {/* Footer */}
-      {!isBlockedChat ? (
-        <MessageInput
-          selectedConvo={selectedConvo}
-          replyTo={replyTo}
-          onCancelReply={() => setReplyTo(null)}
-          onBlockedDetected={refreshBlockStatus}
-        />
-      ) : (
-        <div className="p-3 text-center text-sm text-muted-foreground border-t space-y-2">
-          {isLocked && <p>Tài khoản này đã bị khóa</p>}
-          {isDeleted && <p>Tài khoản này đã bị xóa</p>}
-          {isBlockedByOther && <p>Bạn đã bị chặn</p>}
-          {isBlockedByMe && (
-            <>
-              <p>Bạn đã chặn người này</p>
-              <Button
-                type="button"
-                variant="outline"
-                className="mx-auto"
-                onClick={handleUnblock}
-                disabled={isUpdatingBlock}
-              >
-                <ShieldCheck className="size-4 mr-2" />
-                Bỏ chặn
-              </Button>
-            </>
-          )}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto bg-primary-foreground">
+          <ChatWindowBody
+            onReply={(msg) => setReplyTo(msg)}
+            isLocked={isLocked}
+            isDeleted={isDeleted}
+          />
         </div>
-      )}
-    </SidebarInset>
+
+        {/* Footer */}
+        {!isBlockedChat ? (
+          <MessageInput
+            selectedConvo={selectedConvo}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(null)}
+            onBlockedDetected={refreshBlockStatus}
+          />
+        ) : (
+          <div className="p-3 text-center text-sm text-muted-foreground border-t space-y-2">
+            {isLocked && <p>Tài khoản này đã bị khóa</p>}
+            {isDeleted && <p>Tài khoản này đã bị xóa</p>}
+            {isBlockedByOther && <p>Bạn đã bị chặn</p>}
+            {isBlockedByMe && (
+              <>
+                <p>Bạn đã chặn người này</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mx-auto"
+                  onClick={handleUnblock}
+                  disabled={isUpdatingBlock}
+                >
+                  <ShieldCheck className="size-4 mr-2" />
+                  Bỏ chặn
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </SidebarInset>
+
+      {/* File Panel */}
+      <FilePanel
+        messages={allMessages[activeConversationId]?.items || []}
+        isOpen={isFilesPanelOpen}
+        onClose={() => setIsFilesPanelOpen(false)}
+      />
+    </>
   );
 };
 

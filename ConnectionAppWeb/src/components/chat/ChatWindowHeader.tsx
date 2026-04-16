@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { Ban, MoreVertical, ShieldCheck } from "lucide-react";
+import { Ban, MoreVertical, ShieldCheck, FileText } from "lucide-react";
 import { friendService } from "@/services/friendService";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -25,6 +25,7 @@ interface ChatWindowHeaderProps {
   blockedByMe?: boolean;
   blockedByOther?: boolean;
   onBlockStatusChanged?: () => Promise<void> | void;
+  onFilesOpen?: () => void;
 }
 
 const ChatWindowHeader = ({
@@ -33,6 +34,7 @@ const ChatWindowHeader = ({
   blockedByMe = false,
   blockedByOther = false,
   onBlockStatusChanged,
+  onFilesOpen,
 }: ChatWindowHeaderProps) => {
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
@@ -134,7 +136,16 @@ const ChatWindowHeader = ({
           </h2>
 
           {showBlockActions && (
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={onFilesOpen}
+                title="Xem tập tin"
+              >
+                <FileText className="size-4" />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -165,6 +176,19 @@ const ChatWindowHeader = ({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+          )}
+          {!showBlockActions && (
+            <div className="ml-auto">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={onFilesOpen}
+                title="Xem tập tin"
+              >
+                <FileText className="size-4" />
+              </Button>
             </div>
           )}
         </div>
