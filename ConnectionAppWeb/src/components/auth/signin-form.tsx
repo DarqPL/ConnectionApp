@@ -10,7 +10,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
 
 const signInSchema = z.object({
-  username: z.string().min(3, "Tên đăng nhập phải có ít nhất 3 ký tự"),
+  username: z.string().min(3, "Tên đăng nhập hoặc email phải có ít nhất 3 ký tự"),
   password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
 });
 
@@ -22,6 +22,7 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -29,8 +30,14 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
 
   const onSubmit = async (data: SignInFormValues) => {
     const { username, password } = data;
-    await signIn(username, password);
-    navigate("/");
+    try {
+      await signIn(username, password);
+      navigate("/");
+    } catch (error: any) {
+      console.error("Login failed:", error);
+      const message = error.response?.data?.message || "Tên đăng nhập hoặc mật khẩu không chính xác";
+      setError("root", { message });
+    }
   };
 
   return (
@@ -38,112 +45,140 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
       className={cn("flex flex-col gap-6", className)}
       {...props}
     >
-      <Card className="overflow-hidden p-0 border-border">
+      <Card className="overflow-hidden p-0 border-border/40 shadow-2xl bg-background/60 backdrop-blur-xl rounded-3xl">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form
-            className="p-6 md:p-8"
+            className="p-8 md:p-12"
             onSubmit={handleSubmit(onSubmit)}
           >
-            <div className="flex flex-col gap-6">
-              {/* header - logo */}
-              <div className="flex flex-col items-center text-center gap-2">
-                <a
-                  href="/"
-                  className="mx-auto block w-fit text-center"
-                >
+            <div className="flex flex-col gap-8">
+              {/* Header */}
+              <div className="flex flex-col gap-2">
+                <div className="mb-4">
                   <img
                     src="/logo.svg"
                     alt="logo"
+                    className="size-10"
                   />
-                </a>
-
-                <h1 className="text-2xl font-bold">Chào mừng quay lại</h1>
-                <p className="text-muted-foreground text-balance">
-                  Đăng nhập vào tài khoản Connection của bạn
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
+                  Chào mừng trở lại
+                </h1>
+                <p className="text-muted-foreground text-sm">
+                  Đăng nhập để kết nối với cộng đồng Connection ngay bây giờ.
                 </p>
               </div>
 
-              {/* username */}
-              <div className="flex flex-col gap-3">
-                <Label
-                  htmlFor="username"
-                  className="block text-sm"
-                >
-                  Tên đăng nhập
-                </Label>
-                <Input
-                  type="text"
-                  id="username"
-                  placeholder="connection"
-                  {...register("username")}
-                />
-                {errors.username && (
-                  <p className="text-destructive text-sm">
-                    {errors.username.message}
-                  </p>
-                )}
-              </div>
-
-              {/* password */}
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <Label
-                    htmlFor="password"
-                    className="block text-sm"
-                  >
-                    Mật khẩu
+              <div className="grid gap-5">
+                {/* Username/Email */}
+                <div className="grid gap-2">
+                  <Label htmlFor="username" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                    Tên đăng nhập hoặc Email
                   </Label>
-                  <a
-                    href="/forgot-password"
-                    className="text-sm underline underline-offset-4 text-muted-foreground hover:text-primary"
-                  >
-                    Quên mật khẩu?
-                  </a>
+                  <Input
+                    type="text"
+                    id="username"
+                    placeholder="name@example.com"
+                    className="h-12 bg-background/50 border-border/50 focus:ring-primary/20 transition-all rounded-xl placeholder:text-muted-foreground/50"
+                    {...register("username")}
+                  />
+                  {errors.username && (
+                    <p className="text-destructive text-xs ml-1 font-medium italic">
+                      {errors.username.message}
+                    </p>
+                  )}
                 </div>
-                <Input
-                  type="password"
-                  id="password"
-                  {...register("password")}
-                />
-                {errors.password && (
-                  <p className="text-destructive text-sm">
-                    {errors.password.message}
-                  </p>
+
+                {/* Password */}
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                      Mật khẩu
+                    </Label>
+                    <a
+                      href="/forgot-password"
+                      className="text-xs font-medium text-primary hover:underline underline-offset-4"
+                    >
+                      Quên mật khẩu?
+                    </a>
+                  </div>
+                  <Input
+                    type="password"
+                    id="password"
+                    placeholder="••••••••"
+                    className="h-12 bg-background/50 border-border/50 focus:ring-primary/20 transition-all rounded-xl placeholder:text-muted-foreground/50"
+                    {...register("password")}
+                  />
+                  {errors.password && (
+                    <p className="text-destructive text-xs ml-1 font-medium italic">
+                      {errors.password.message}
+                    </p>
+                  )}
+                </div>
+
+                {errors.root && (
+                  <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm p-3 rounded-xl text-center font-medium animate-in fade-in slide-in-from-top-1">
+                    {errors.root.message}
+                  </div>
                 )}
+
+                <Button
+                  type="submit"
+                  className="h-12 w-full font-bold text-base shadow-lg shadow-primary/20 active:scale-[0.98] transition-all rounded-xl mt-2 cursor-pointer bg-primary dark:text-white"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Đang xử lý..." : "Đăng nhập ngay"}
+                </Button>
               </div>
 
-              {/* nút đăng nhập */}
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isSubmitting}
-              >
-                Đăng nhập
-              </Button>
-
-              <div className="text-center text-sm">
+              <div className="text-center text-sm text-muted-foreground">
                 Chưa có tài khoản?{" "}
                 <a
                   href="/signup"
-                  className="underline underline-offset-4"
+                  className="font-bold text-primary hover:underline underline-offset-4"
                 >
-                  Đăng ký
+                  Đăng ký miễn phí
                 </a>
               </div>
             </div>
           </form>
-          <div className="bg-muted relative hidden md:block">
-            <img
-              src="/placeholder.png"
-              alt="Image"
-              className="absolute top-1/2 -translate-y-1/2 object-cover"
-            />
+
+          {/* Side Illustration */}
+          <div className="relative hidden md:flex items-center justify-center p-8 bg-muted/30 overflow-hidden">
+            <div className="absolute inset-0 z-0">
+              <img
+                src="placeholder.png"
+                alt="Illustration"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent" />
+            </div>
+
+            <div className="relative z-10 text-center space-y-4 max-w-[280px]">
+              <div className="p-5 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl">
+                <p className="text-white text-lg font-medium italic leading-relaxed">
+                  "Connection là nơi khoảng cách không còn là rào cản giữa chúng ta."
+                </p>
+                <div className="mt-6 flex items-center justify-center gap-3">
+                  <div className="flex -space-x-2">
+                    {[
+                      "bg-blue-400",
+                      "bg-violet-400",
+                      "bg-indigo-400"
+                    ].map((color, i) => (
+                      <div key={i} className={`size-7 rounded-full border-2 border-white/30 ${color} shadow-sm`} />
+                    ))}
+                  </div>
+                  <span className="text-white/90 text-xs font-semibold tracking-wide">+10k active users</span>
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
-      <div className=" text-xs text-balance px-6 text-center *:[a]:hover:text-primary text-muted-foreground *:[a]:underline *:[a]:underline-offset-4">
-        Bằng cách tiếp tục, bạn đồng ý với <a href="#">Điều khoản dịch vụ</a> và{" "}
-        <a href="#">Chính sách bảo mật</a> của chúng tôi.
+
+      <div className="text-xs text-center text-muted-foreground/50 max-w-sm mx-auto">
+        Bằng cách tiếp tục, bạn đồng ý với <a href="#" className="underline hover:text-primary transition-colors">Điều khoản</a> và <a href="#" className="underline hover:text-primary transition-colors">Bảo mật</a> của chúng tôi.
       </div>
     </div>
   );
