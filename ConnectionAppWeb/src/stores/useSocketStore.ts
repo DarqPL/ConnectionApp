@@ -3,6 +3,7 @@ import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
+import { useFriendStore } from "./useFriendStore";
 import { toast } from "sonner";
 import api from "@/lib/axios";
 
@@ -107,6 +108,30 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               .filter(Boolean)
               .join(" • "),
             duration: 9000,
+          });
+        });
+
+        // Subscribe to friend request notifications
+        client.subscribe(`/topic/user.${userId}/friend-requests`, (message) => {
+          const newRequest = JSON.parse(message.body);
+          useFriendStore.getState().addPendingRequest(newRequest);
+          
+          // Show toast notification
+          toast.info("Bạn có lời mời kết bạn mới", {
+            description: `${newRequest.displayName} đã gửi lời mời kết bạn`,
+            duration: 4000,
+          });
+        });
+
+        // Subscribe to friend accepted notifications
+        client.subscribe(`/topic/user.${userId}/friend-accepted`, (message) => {
+          const acceptedFriend = JSON.parse(message.body);
+          useFriendStore.getState().removePendingRequest(acceptedFriend.friendId);
+          
+          // Show toast notification
+          toast.success("Lời mời được chấp nhận", {
+            description: `${acceptedFriend.displayName} đã chấp nhận lời mời kết bạn`,
+            duration: 4000,
           });
         });
 

@@ -7,6 +7,7 @@ import iuh.fit.ConnectionAppBackend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,9 @@ public class FriendController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
     /**
      * Send friend request
      */
@@ -35,6 +39,15 @@ public class FriendController {
                 .getId();
 
         FriendResponse friendRequest = friendService.sendFriendRequest(requesterId, receiverId);
+        
+        // Send WebSocket notification to receiver
+        if (friendRequest.getFriendId() != null) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + receiverId + "/friend-requests",
+                    friendRequest
+            );
+        }
+        
         return ResponseEntity.status(HttpStatus.CREATED).body(friendRequest);
     }
 
@@ -51,6 +64,13 @@ public class FriendController {
                 .getId();
 
         FriendResponse friendResponse = friendService.acceptFriendRequest(userId, requesterId);
+        
+        // Notify requester that the request was accepted
+        messagingTemplate.convertAndSend(
+                "/topic/user." + requesterId + "/friend-accepted",
+                friendResponse
+        );
+        
         return ResponseEntity.ok(friendResponse);
     }
 

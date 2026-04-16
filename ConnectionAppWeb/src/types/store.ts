@@ -85,6 +85,8 @@ export interface FriendState {
   getFriends: () => Promise<void>;
   getPendingRequests: () => Promise<void>;
   checkFriendship: (otherUserId: number) => Promise<boolean>;
+  addPendingRequest: (newRequest: Friend) => void;
+  removePendingRequest: (friendId: number) => void;
 }
 
 export interface UserState {

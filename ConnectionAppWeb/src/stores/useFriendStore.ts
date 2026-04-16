@@ -94,4 +94,26 @@ export const useFriendStore = create<FriendState>((set) => ({
       return false;
     }
   },
+
+  addPendingRequest: (newRequest) => {
+    set((state) => {
+      // Check if request already exists to avoid duplicates
+      const exists = state.pendingRequests.some(
+        (r) => r.friendId === newRequest.friendId
+      );
+      if (exists) return state;
+      
+      return {
+        pendingRequests: [newRequest, ...state.pendingRequests],
+      };
+    });
+  },
+
+  removePendingRequest: (friendId) => {
+    set((state) => ({
+      pendingRequests: state.pendingRequests.filter(
+        (r) => r.friendId !== friendId
+      ),
+    }));
+  },
 }));

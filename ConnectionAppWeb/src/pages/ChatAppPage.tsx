@@ -9,7 +9,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 
 const ChatAppPage = () => {
   const { fetchConversations } = useChatStore();
-  const { getFriends } = useFriendStore();
+  const { getFriends, getPendingRequests } = useFriendStore();
   const { fetchMe, user } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
 
@@ -21,13 +21,14 @@ const ChatAppPage = () => {
     if (user) {
       fetchConversations();
       getFriends();
+      getPendingRequests();
       connectSocket(user.id);
 
       return () => {
         disconnectSocket();
       };
     }
-  }, [user, fetchConversations, getFriends, connectSocket, disconnectSocket]);
+  }, [user, fetchConversations, getFriends, getPendingRequests, connectSocket, disconnectSocket]);
 
   return (
     <SidebarProvider>
