@@ -14,6 +14,7 @@ import {
   FileText,
   PlayCircle,
   Undo2,
+  Forward,
   X,
   ZoomIn,
   ZoomOut,
@@ -78,6 +79,7 @@ interface MessageItemProps {
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
   onReply: (message: Message) => void;
+  onForward?: (message: Message) => void;
 }
 
 const MessageItem = ({
@@ -85,7 +87,9 @@ const MessageItem = ({
   index,
   messages,
   selectedConvo,
+  lastMessageStatus,
   onReply,
+  onForward,
 }: MessageItemProps) => {
   const { user: currentUser } = useAuthStore();
   const { recallMessage } = useChatStore();
@@ -198,6 +202,13 @@ const MessageItem = ({
   const handleReply = () => {
     setShowMenu(false);
     onReply(message);
+  };
+
+  const handleForward = () => {
+    setShowMenu(false);
+    if (onForward) {
+      onForward(message);
+    }
   };
 
   const handleAddFriend = async () => {
@@ -609,6 +620,15 @@ const MessageItem = ({
               className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <div className="flex items-center gap-0.5">
+                {onForward && (
+                  <button
+                    onClick={handleForward}
+                    className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                    title="Chuyển tiếp"
+                  >
+                    <Forward className="size-3.5 text-muted-foreground" />
+                  </button>
+                )}
                 <button
                   onClick={handleReply}
                   className="p-1.5 rounded-full hover:bg-muted transition-colors"

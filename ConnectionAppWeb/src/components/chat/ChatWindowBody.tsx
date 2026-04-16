@@ -8,12 +8,14 @@ import type { Message } from "@/types/chat";
 
 interface ChatWindowBodyProps {
   onReply: (message: Message) => void;
+  onForward?: (message: Message) => void;
   isLocked?: boolean;
   isDeleted?: boolean;
 }
 
 const ChatWindowBody = ({
   onReply,
+  onForward,
   isLocked,
   isDeleted,
 }: ChatWindowBodyProps) => {
@@ -31,15 +33,16 @@ const ChatWindowBody = ({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
-  const messages = allMessages[activeConversationId!]?.items ?? [];
-  const reversedMessages = [...messages].reverse();
-  const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
-
   const selectedConvo = conversations.find(
     (c) => c.id === activeConversationId,
   );
 
   const key = `chat-scroll-${activeConversationId}`;
+
+  // Tách biệt việc lấy tin nhắn và xử lý sau khi đã có selectedConvo
+  const messages = selectedConvo ? (allMessages[selectedConvo.id]?.items ?? []) : [];
+  const reversedMessages = [...messages].reverse();
+  const hasMore = selectedConvo ? (allMessages[selectedConvo.id]?.hasMore ?? false) : false;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -186,6 +189,7 @@ const ChatWindowBody = ({
               selectedConvo={selectedConvo}
               lastMessageStatus={lastMessageStatus}
               onReply={onReply}
+              onForward={onForward}
             />
           ))}
 
