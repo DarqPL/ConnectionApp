@@ -30,7 +30,7 @@ const ChatRoomScreen = ({ route }: any) => {
     isLoading,
     fetchMessages,
     sendMessage,
-    deleteMessage,
+    recallMessage,
     setCurrentConversation,
   } = useChat();
   const { user } = useAuth();
@@ -248,7 +248,14 @@ const ChatRoomScreen = ({ route }: any) => {
       {
         text: "Thu hồi",
         style: "destructive",
-        onPress: () => deleteMessage(msgId),
+        onPress: () => {
+          recallMessage(msgId).catch((err) => {
+            Alert.alert(
+              "Lỗi",
+              err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại",
+            );
+          });
+        },
       },
     ]);
   };
