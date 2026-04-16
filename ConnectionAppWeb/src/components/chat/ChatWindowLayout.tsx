@@ -8,6 +8,7 @@ import FilePanel from "./FilePanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { ForwardMessageModal } from "./ForwardMessageModal";
 import { userService } from "@/services/userService";
 import type { User } from "@/types/user";
 import { friendService, type BlockStatus } from "@/services/friendService";
@@ -27,6 +28,7 @@ const ChatWindowLayout = () => {
   const { getUserById } = userService;
 
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [messageToForward, setMessageToForward] = useState<Message | null>(null);
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [blockStatus, setBlockStatus] = useState<BlockStatus>({
     blocked: false,
@@ -42,6 +44,7 @@ const ChatWindowLayout = () => {
   // 🔥 reset khi đổi conversation
   useEffect(() => {
     setReplyTo(null);
+    setMessageToForward(null);
     setOtherUser(null);
     setBlockStatus({
       blocked: false,
@@ -172,6 +175,7 @@ const ChatWindowLayout = () => {
         <div className="flex-1 overflow-y-auto bg-primary-foreground">
           <ChatWindowBody
             onReply={(msg) => setReplyTo(msg)}
+            onForward={(msg) => setMessageToForward(msg)}
             isLocked={isLocked}
             isDeleted={isDeleted}
           />
@@ -211,9 +215,15 @@ const ChatWindowLayout = () => {
 
       {/* File Panel */}
       <FilePanel
-        messages={allMessages[activeConversationId]?.items || []}
+        messages={allMessages[selectedConvo.id]?.items || []}
         isOpen={isFilesPanelOpen}
         onClose={() => setIsFilesPanelOpen(false)}
+      />
+
+      {/* Forward Modal */}
+      <ForwardMessageModal
+        message={messageToForward}
+        onClose={() => setMessageToForward(null)}
       />
     </>
   );
