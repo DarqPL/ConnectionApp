@@ -1,6 +1,7 @@
 package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.domain.common.FriendStatus;
+import iuh.fit.ConnectionAppBackend.domain.dto.BlockStatusResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.FriendResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Friend;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
@@ -137,6 +138,8 @@ public class FriendService {
         // Check if friendship exists
         if (friendRepository.findFriendship(userId, blockedUserId).isPresent()) {
             Friend friend = friendRepository.findFriendship(userId, blockedUserId).get();
+            friend.setRequester(blocker);
+            friend.setReceiver(blockedUser);
             friend.setStatus(FriendStatus.BLOCKED);
             friend.setUpdateAt(LocalDateTime.now());
             friendRepository.save(friend);
@@ -156,12 +159,27 @@ public class FriendService {
      */
     @Transactional
     public void unblockUser(Long userId, Long blockedUserId) {
-        Friend friend = friendRepository.findFriendship(userId, blockedUserId)
+        Friend friend = friendRepository.findDirectionalBlocked(userId, blockedUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Block does not exist"));
 
-        if (friend.getStatus().equals(FriendStatus.BLOCKED)) {
-            friendRepository.delete(friend);
-        }
+        friendRepository.delete(friend);
+    }
+
+    /**
+     * Get directional block status between current user and other user.
+     */
+    public BlockStatusResponse getBlockStatus(Long userId, Long otherUserId) {
+        userRepository.findById(otherUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + otherUserId));
+
+        boolean blockedByMe = friendRepository.isBlockedBy(userId, otherUserId);
+        boolean blockedByOther = friendRepository.isBlockedBy(otherUserId, userId);
+
+        return BlockStatusResponse.builder()
+                .blocked(blockedByMe || blockedByOther)
+                .blockedByMe(blockedByMe)
+                .blockedByOther(blockedByOther)
+                .build();
     }
 
     /**

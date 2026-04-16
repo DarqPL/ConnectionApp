@@ -1,18 +1,23 @@
 package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.domain.common.AttachmentType;
+import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
 import iuh.fit.ConnectionAppBackend.domain.dto.AttachmentRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
+import iuh.fit.ConnectionAppBackend.exception.ChatBlockedException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
+import iuh.fit.ConnectionAppBackend.repo.ConversationRepository;
 import iuh.fit.ConnectionAppBackend.repo.ConversationUserRepository;
+import iuh.fit.ConnectionAppBackend.repo.FriendRepository;
 import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +52,12 @@ public class MessageService {
     private ConversationUserRepository conversationUserRepository;
 
     @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
+    private FriendRepository friendRepository;
+
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     /**
@@ -63,6 +74,8 @@ public class MessageService {
         if (!isMember) {
             throw new UnauthorizedException("User is not a member of this conversation");
         }
+
+        validatePrivateConversationBlock(request.getConversationId(), senderId);
 
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + senderId));
@@ -119,6 +132,37 @@ public class MessageService {
         }
 
         return response;
+    }
+
+    private void validatePrivateConversationBlock(Long conversationId, Long senderId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        if (conversation.getType() != ConversationType.PRIVATE) {
+            return;
+        }
+
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);
+        Long otherUserId = members.stream()
+                .map(member -> member.getUser().getId())
+                .filter(memberId -> !memberId.equals(senderId))
+                .findFirst()
+                .orElse(null);
+
+        if (otherUserId == null) {
+            return;
+        }
+
+        boolean blockedByOther = friendRepository.isBlockedBy(otherUserId, senderId);
+        boolean blockedByMe = friendRepository.isBlockedBy(senderId, otherUserId);
+
+        if (blockedByOther) {
+            throw new ChatBlockedException("Bạn đã bị chặn");
+        }
+
+        if (blockedByMe) {
+            throw new ChatBlockedException("Bạn đã chặn người dùng này");
+        }
     }
 
     /**

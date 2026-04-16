@@ -78,10 +78,28 @@ public interface FriendRepository extends JpaRepository<Friend, Long> {
      * Check if user is blocked
      */
     @Query("SELECT COUNT(f) > 0 FROM Friend f " +
-            "WHERE (f.requester.id = :userId1 AND f.receiver.id = :userId2) " +
-            "OR (f.requester.id = :userId2 AND f.receiver.id = :userId1) " +
+            "WHERE ((f.requester.id = :userId1 AND f.receiver.id = :userId2) " +
+            "OR (f.requester.id = :userId2 AND f.receiver.id = :userId1)) " +
             "AND f.status = 'BLOCKED'")
     boolean isBlocked(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
+
+    /**
+     * Check if blocker has blocked target (directional)
+     */
+    @Query("SELECT COUNT(f) > 0 FROM Friend f " +
+            "WHERE f.requester.id = :blockerId " +
+            "AND f.receiver.id = :targetId " +
+            "AND f.status = 'BLOCKED'")
+    boolean isBlockedBy(@Param("blockerId") Long blockerId, @Param("targetId") Long targetId);
+
+    /**
+     * Get directional blocked relation
+     */
+    @Query("SELECT f FROM Friend f " +
+            "WHERE f.requester.id = :blockerId " +
+            "AND f.receiver.id = :targetId " +
+            "AND f.status = 'BLOCKED'")
+    Optional<Friend> findDirectionalBlocked(@Param("blockerId") Long blockerId, @Param("targetId") Long targetId);
 
     /**
      * Delete friend relationship
