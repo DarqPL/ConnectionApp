@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { Mail, Phone, Calendar, User, MessageSquare, Users, Clock, Camera, Loader2, Edit2 } from "lucide-react";
+import { Mail, Phone, Calendar, User, MessageSquare, Users, Clock, Camera, Loader2, Edit2, Lock, ShieldCheck, KeyRound } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useState, useRef } from "react";
 import { userService } from "@/services/userService";
@@ -17,6 +17,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,9 +29,18 @@ const ProfilePage = () => {
   const [editLoading, setEditLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form states
+  // Profile Form states
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [phone, setPhone] = useState(user?.phone || "");
+
+  // Password Form states
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   if (!user) return null;
 
@@ -76,7 +86,36 @@ const ProfilePage = () => {
     }
   };
 
-  const joinedDate = "January 2024"; // Fallback or compute from user data if available
+  const handlePasswordChange = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error("Mật khẩu xác nhận không khớp");
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      toast.error("Mật khẩu mới phải có ít nhất 6 ký tự");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      await userService.changePassword(
+        passwordForm.oldPassword,
+        passwordForm.newPassword
+      );
+      toast.success("Đổi mật khẩu thành công!");
+      setIsPasswordDialogOpen(false);
+      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err: any) {
+      console.error(err);
+      const msg = err.response?.data || "Mật khẩu cũ không chính xác";
+      toast.error(msg);
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const joinedDate = "January 2024";
 
   return (
     <SidebarProvider>
@@ -94,8 +133,6 @@ const ProfilePage = () => {
                     <AvatarFallback className="text-4xl font-bold bg-muted">
                       {user.displayName.charAt(0)}
                     </AvatarFallback>
-                    
-                    {/* Hover Overlay */}
                     <div 
                       onClick={handleAvatarClick}
                       className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -155,33 +192,29 @@ const ProfilePage = () => {
                   </Button>
                 </CardHeader>
                 <CardContent className="grid gap-4">
-                  <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/30 transition-colors">
-                    <div className="p-2 bg-blue-500/10 rounded-lg">
-                      <Mail className="h-5 w-5 text-blue-500" />
+                   <div className="flex items-center gap-4 p-3 rounded-lg">
+                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+                      <Mail className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">Email</p>
                       <p className="font-medium">{user.email}</p>
                     </div>
                   </div>
-
                   <Separator />
-
-                  <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/30 transition-colors">
-                    <div className="p-2 bg-green-500/10 rounded-lg">
-                      <Phone className="h-5 w-5 text-green-500" />
+                  <div className="flex items-center gap-4 p-3 rounded-lg">
+                    <div className="p-2 bg-green-500/10 rounded-lg text-green-500">
+                      <Phone className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">Số điện thoại</p>
                       <p className="font-medium">{user.phone || "Chưa cập nhật"}</p>
                     </div>
                   </div>
-
                   <Separator />
-
-                  <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/30 transition-colors">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                      <Calendar className="h-5 w-5 text-purple-500" />
+                  <div className="flex items-center gap-4 p-3 rounded-lg">
+                    <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+                      <Calendar className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">Ngày tham gia</p>
@@ -193,7 +226,7 @@ const ProfilePage = () => {
             </div>
 
             <div className="space-y-6">
-                {/* Stats Section Placeholder */}
+                 {/* Stats Section */}
                  <Card className="shadow-lg border-none glass-light">
                     <CardHeader>
                         <CardTitle>Hoạt động</CardTitle>
@@ -215,48 +248,120 @@ const ProfilePage = () => {
                         </div>
                     </CardContent>
                  </Card>
+
+                 {/* Security Section */}
+                 <Card className="shadow-lg border-none glass-light border-l-4 border-l-yellow-500/50">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Lock className="h-5 w-5 text-yellow-500" />
+                            Bảo mật
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Button 
+                            variant="outline" 
+                            className="w-full justify-start gap-2 border-yellow-500/20 hover:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                            onClick={() => setIsPasswordDialogOpen(true)}
+                        >
+                            <KeyRound className="h-4 w-4" />
+                            Đổi mật khẩu
+                        </Button>
+                    </CardContent>
+                 </Card>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Edit Profile Dialog */}
+      {/* Edit Profile Modal */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] rounded-3xl">
           <DialogHeader>
             <DialogTitle>Chỉnh sửa hồ sơ</DialogTitle>
-            <DialogDescription>
-              Thay đổi thông tin hiển thị của bạn tại đây.
-            </DialogDescription>
+            <DialogDescription>Cập nhật thông tin cá nhân của bạn.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Tên hiển thị
-              </Label>
+            <div className="grid gap-2">
+              <Label htmlFor="ename">Tên hiển thị</Label>
               <Input
-                id="name"
+                id="ename"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="col-span-3"
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="phone" className="text-right">
-                Điện thoại
-              </Label>
+            <div className="grid gap-2">
+              <Label htmlFor="ephone">Điện thoại</Label>
               <Input
-                id="phone"
+                id="ephone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="col-span-3"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" onClick={handleUpdateProfile} disabled={editLoading}>
-              {editLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Lưu thay đổi
+            <Button onClick={handleUpdateProfile} disabled={editLoading} className="w-full">
+               {editLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               Lưu thay đổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password Change Modal */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl backdrop-blur-xl bg-background/95 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <ShieldCheck className="h-6 w-6 text-primary" />
+              Thay đổi mật khẩu
+            </DialogTitle>
+            <DialogDescription>
+              Nhập mật khẩu hiện tại và mật khẩu mới.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="pass-old" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Mật khẩu hiện tại</Label>
+              <Input
+                id="pass-old"
+                type="password"
+                placeholder="Nhập mật khẩu cũ"
+                value={passwordForm.oldPassword}
+                onChange={(e) => setPasswordForm(prev => ({ ...prev, oldPassword: e.target.value }))}
+                className="rounded-xl h-11 bg-muted/20"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pass-new" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Mật khẩu mới</Label>
+              <Input
+                id="pass-new"
+                type="password"
+                placeholder="Tối thiểu 6 ký tự"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                className="rounded-xl h-11 bg-muted/20"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pass-confirm" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Xác nhận mật khẩu</Label>
+              <Input
+                id="pass-confirm"
+                type="password"
+                placeholder="Nhập lại mật khẩu mới"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                className="rounded-xl h-11 bg-muted/20"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+                className="w-full h-11 rounded-xl shadow-lg shadow-primary/20" 
+                onClick={handlePasswordChange}
+                disabled={passwordLoading || !passwordForm.oldPassword || !passwordForm.newPassword}
+            >
+              {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận thay đổi
             </Button>
           </DialogFooter>
         </DialogContent>
