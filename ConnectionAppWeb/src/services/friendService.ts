@@ -1,6 +1,12 @@
 import api from "@/lib/axios";
 import type { Friend } from "@/types/user";
 
+export interface BlockStatus {
+  blocked: boolean;
+  blockedByMe: boolean;
+  blockedByOther: boolean;
+}
+
 export const friendService = {
   /**
    * POST /api/friends/request/{receiverId}
@@ -100,5 +106,13 @@ export const friendService = {
    */
   async unblockUser(blockedUserId: number): Promise<void> {
     await api.delete(`/friends/block/${blockedUserId}`);
+  },
+
+  /**
+   * GET /api/friends/block/status/{otherUserId}
+   */
+  async getBlockStatus(otherUserId: number): Promise<BlockStatus> {
+    const res = await api.get(`/friends/block/status/${otherUserId}`);
+    return res.data;
   },
 };
