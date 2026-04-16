@@ -41,7 +41,12 @@ const ChatListScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchConversations();
+    // Only fetch from server when the list is empty (first load).
+    // Realtime updates via WebSocket keep the list up-to-date after that.
+    if (conversations.length === 0) {
+      fetchConversations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = useCallback(async () => {
