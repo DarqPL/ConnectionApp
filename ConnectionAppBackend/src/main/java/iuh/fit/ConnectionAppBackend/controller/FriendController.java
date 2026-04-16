@@ -1,6 +1,7 @@
 package iuh.fit.ConnectionAppBackend.controller;
 
 import iuh.fit.ConnectionAppBackend.domain.dto.FriendResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.BlockStatusResponse;
 import iuh.fit.ConnectionAppBackend.service.FriendService;
 import iuh.fit.ConnectionAppBackend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -126,6 +127,21 @@ public class FriendController {
         friendService.unblockUser(userId, blockedUserId);
         return ResponseEntity.noContent().build();
     }
+
+        /**
+         * Get block status between current user and target user
+         */
+        @GetMapping("/block/status/{otherUserId}")
+        public ResponseEntity<BlockStatusResponse> getBlockStatus(
+                        Authentication authentication,
+                        @PathVariable Long otherUserId) {
+
+                Long userId = userService.getUserByUsername(authentication.getName())
+                                .orElseThrow(() -> new RuntimeException("User not found"))
+                                .getId();
+
+                return ResponseEntity.ok(friendService.getBlockStatus(userId, otherUserId));
+        }
 
     /**
      * Check if users are friends

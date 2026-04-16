@@ -7,11 +7,37 @@ import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { useSocketStore } from "@/stores/useSocketStore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { Button } from "../ui/button";
+import { Ban, MoreVertical, ShieldCheck } from "lucide-react";
+import { friendService } from "@/services/friendService";
+import { toast } from "sonner";
+import { useState } from "react";
 
-const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
+interface ChatWindowHeaderProps {
+  chat?: Conversation;
+  peerUserId?: number | null;
+  blockedByMe?: boolean;
+  blockedByOther?: boolean;
+  onBlockStatusChanged?: () => Promise<void> | void;
+}
+
+const ChatWindowHeader = ({
+  chat,
+  peerUserId,
+  blockedByMe = false,
+  blockedByOther = false,
+  onBlockStatusChanged,
+}: ChatWindowHeaderProps) => {
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
+  const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
 
   let otherUser;
 
@@ -31,6 +57,41 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
     if (!user || !otherUser) return;
   }
+
+  const showBlockActions =
+    chat.type === "PRIVATE" && !!peerUserId && !!onBlockStatusChanged;
+
+  const handleBlock = async () => {
+    if (!peerUserId || isUpdatingBlock) return;
+
+    setIsUpdatingBlock(true);
+    try {
+      await friendService.blockUser(peerUserId);
+      toast.success("Đã chặn người dùng");
+      await onBlockStatusChanged?.();
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể chặn người dùng");
+    } finally {
+      setIsUpdatingBlock(false);
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (!peerUserId || isUpdatingBlock) return;
+
+    setIsUpdatingBlock(true);
+    try {
+      await friendService.unblockUser(peerUserId);
+      toast.success("Đã bỏ chặn người dùng");
+      await onBlockStatusChanged?.();
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể bỏ chặn người dùng");
+    } finally {
+      setIsUpdatingBlock(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-10 px-4 py-2 flex items-center bg-background">
@@ -53,7 +114,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 />
                 <StatusBadge
                   status={
-                    onlineUsers.includes(String(otherUser?.userId ?? "")) ? "online" : "offline"
+                    onlineUsers.includes(String(otherUser?.userId ?? ""))
+                      ? "online"
+                      : "offline"
                   }
                 />
               </>
@@ -69,6 +132,41 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           <h2 className="font-semibold text-foreground">
             {chat.type === "PRIVATE" ? otherUser?.displayName : chat.name}
           </h2>
+
+          {showBlockActions && (
+            <div className="ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    disabled={isUpdatingBlock}
+                  >
+                    <MoreVertical className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {blockedByMe ? (
+                    <DropdownMenuItem onClick={handleUnblock}>
+                      <ShieldCheck className="size-4" />
+                      Bỏ chặn người dùng
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={handleBlock}
+                      variant={blockedByOther ? "default" : "destructive"}
+                    >
+                      <Ban className="size-4" />
+                      {blockedByOther
+                        ? "Chặn lại người dùng"
+                        : "Chặn người dùng"}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -16,7 +17,15 @@ interface ChatHeaderProps {
   name?: string;
   avatar?: string | null;
   type?: string;
-  participants?: Array<{ userId: number; avatarUrl?: string | null; displayName: string }>;
+  participants?: Array<{
+    userId: number;
+    avatarUrl?: string | null;
+    displayName: string;
+  }>;
+  isBlockedByMe?: boolean;
+  isBlockedByOther?: boolean;
+  onBlockUser?: () => void;
+  onUnblockUser?: () => void;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -24,20 +33,64 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   avatar,
   type = "PRIVATE",
   participants = [],
+  isBlockedByMe = false,
+  isBlockedByOther = false,
+  onBlockUser,
+  onUnblockUser,
 }) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const isGroup = type === "GROUP";
   const FALLBACK = "https://i.pravatar.cc/150?img=2";
 
+  const handleMorePress = () => {
+    if (isGroup) {
+      return;
+    }
+
+    if (isBlockedByMe) {
+      Alert.alert("Tùy chọn", `Bạn đã chặn ${name}`, [
+        {
+          text: "Bỏ chặn người dùng",
+          onPress: onUnblockUser,
+        },
+        { text: "Hủy", style: "cancel" },
+      ]);
+      return;
+    }
+
+    Alert.alert(
+      "Chặn người dùng",
+      isBlockedByOther
+        ? `Bạn đã bị ${name} chặn. Bạn vẫn có thể chặn lại người dùng này.`
+        : `Bạn có chắc muốn chặn ${name}?`,
+      [
+        {
+          text: "Chặn",
+          style: "destructive",
+          onPress: onBlockUser,
+        },
+        { text: "Hủy", style: "cancel" },
+      ],
+    );
+  };
+
   const renderAvatar = () => {
     if (!isGroup || participants.length < 2) {
-      return <Image source={{ uri: avatar || FALLBACK }} style={styles.avatar} />;
+      return (
+        <Image source={{ uri: avatar || FALLBACK }} style={styles.avatar} />
+      );
     }
     return (
       <View style={styles.groupWrap}>
-        <Image source={{ uri: participants[0]?.avatarUrl || FALLBACK }} style={[styles.smallAvatar, { top: 0, right: 0, zIndex: 1 }]} />
-        <Image source={{ uri: participants[1]?.avatarUrl || FALLBACK }} style={[styles.smallAvatar, { bottom: 0, left: 0 }]} />
+        <Image
+          source={{ uri: participants[0]?.avatarUrl || FALLBACK }}
+          style={[styles.smallAvatar, { top: 0, right: 0, zIndex: 1 }]}
+        />
+        <Image
+          source={{ uri: participants[1]?.avatarUrl || FALLBACK }}
+          style={[styles.smallAvatar, { bottom: 0, left: 0 }]}
+        />
       </View>
     );
   };
@@ -49,14 +102,19 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       end={{ x: 1, y: 0 }}
       style={[styles.container, { paddingTop: insets.top + 6 }]}
     >
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => navigation.goBack()}
+      >
         <Ionicons name="arrow-back" size={24} color="#fff" />
       </TouchableOpacity>
 
       {renderAvatar()}
 
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{name}</Text>
+        <Text style={styles.name} numberOfLines={1}>
+          {name}
+        </Text>
         <Text style={styles.status}>Đang hoạt động</Text>
       </View>
 
@@ -67,6 +125,11 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         <TouchableOpacity style={styles.actionBtn}>
           <Ionicons name="videocam-outline" size={22} color="#fff" />
         </TouchableOpacity>
+        {!isGroup && (
+          <TouchableOpacity style={styles.actionBtn} onPress={handleMorePress}>
+            <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
     </LinearGradient>
   );

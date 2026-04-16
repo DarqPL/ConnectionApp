@@ -14,6 +14,18 @@ interface UploadResponse {
   size?: number;
 }
 
+export class ChatApiError extends Error {
+  code?: string;
+  status?: number;
+
+  constructor(message: string, code?: string, status?: number) {
+    super(message);
+    this.name = "ChatApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 const resolveAttachmentType = (
   mimeType?: string | null,
   fileName?: string,
@@ -55,9 +67,9 @@ export class ChatService {
     try {
       const data = await response.json();
       const message = data?.message || data?.error || fallback;
-      return new Error(message);
+      return new ChatApiError(message, data?.code, response.status);
     } catch {
-      return new Error(fallback);
+      return new ChatApiError(fallback, undefined, response.status);
     }
   }
 
