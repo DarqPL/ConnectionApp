@@ -1,4 +1,4 @@
-import { Bell, Shield, ShieldBan, Unlock } from "lucide-react";
+import { Bell, Shield, ShieldBan, Unlock, ShieldCheck, KeyRound, Loader2 } from "lucide-react";
 
 import {
   Card,
@@ -11,6 +11,18 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { userService } from "@/services/userService";
 import type { User } from "@/types/user";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 type Props = {
   user: User | null;
@@ -21,6 +33,42 @@ const PrivacySettings = ({ user }: Props) => {
   const [status, setStatus] = useState(user?.status);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [otp, setOtp] = useState("");
+
+  // Password change states
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
+  const [passLoading, setPassLoading] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  const handlePasswordChange = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error("Mật khẩu xác nhận không khớp");
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      toast.error("Mật khẩu phải từ 6 ký tự");
+      return;
+    }
+
+    setPassLoading(true);
+    try {
+      await userService.changePassword(
+        passwordForm.oldPassword,
+        passwordForm.newPassword
+      );
+      toast.success("Thay đổi mật khẩu thành công");
+      setIsPasswordOpen(false);
+      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err: any) {
+      const msg = err.response?.data || "Mật khẩu cũ không chính xác";
+      toast.error(msg);
+    } finally {
+      setPassLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.status) {
@@ -100,6 +148,8 @@ const PrivacySettings = ({ user }: Props) => {
 
       <CardContent className="space-y-6">
         <div className="space-y-4">
+      <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
+        <DialogTrigger asChild>
           <Button
             variant="outline"
             className="w-full justify-start glass-light border-border/30 hover:text-warning"
@@ -107,6 +157,64 @@ const PrivacySettings = ({ user }: Props) => {
             <Shield className="h-4 w-4 mr-2" />
             Đổi mật khẩu
           </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl backdrop-blur-xl bg-background/95 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <ShieldCheck className="h-6 w-6 text-primary" />
+              Thay đổi mật khẩu
+            </DialogTitle>
+            <DialogDescription>
+              Nhập mật khẩu hiện tại và mật khẩu mới để bảo mật tài khoản.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="priv-old" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Mật khẩu hiện tại</Label>
+              <Input
+                id="priv-old"
+                type="password"
+                placeholder="Nhập mật khẩu cũ"
+                value={passwordForm.oldPassword}
+                onChange={(e) => setPasswordForm(prev => ({ ...prev, oldPassword: e.target.value }))}
+                className="rounded-xl h-11 bg-muted/20"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="priv-new" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Mật khẩu mới</Label>
+              <Input
+                id="priv-new"
+                type="password"
+                placeholder="Tối thiểu 6 ký tự"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                className="rounded-xl h-11 bg-muted/20"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="priv-confirm" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Xác nhận mật khẩu</Label>
+              <Input
+                id="priv-confirm"
+                type="password"
+                placeholder="Nhập lại mật khẩu mới"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                className="rounded-xl h-11 bg-muted/20"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+                className="w-full h-11 rounded-xl shadow-lg shadow-primary/20" 
+                onClick={handlePasswordChange}
+                disabled={passLoading || !passwordForm.oldPassword || !passwordForm.newPassword}
+            >
+              {passLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận thay đổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
           <Button
             variant="outline"
