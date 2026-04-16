@@ -40,12 +40,14 @@ interface MessageInputProps {
   selectedConvo: Conversation;
   replyTo: Message | null;
   onCancelReply: () => void;
+  onBlockedDetected?: () => Promise<void> | void;
 }
 
 const MessageInput = ({
   selectedConvo,
   replyTo,
   onCancelReply,
+  onBlockedDetected,
 }: MessageInputProps) => {
   const { user } = useAuthStore();
   const { sendMessage } = useChatStore();
@@ -169,7 +171,16 @@ const MessageInput = ({
       onCancelReply(); // Clear reply after sending
     } catch (error) {
       console.error(error);
-      toast.error("Lỗi xảy ra khi gửi tin nhắn. Bạn hãy thử lại!");
+      const status = (error as any)?.response?.status;
+      const code = (error as any)?.response?.data?.code;
+      const message = (error as any)?.response?.data?.message;
+
+      if (status === 403 && code === "CHAT_BLOCKED") {
+        toast.error(message || "Bạn đã bị chặn");
+        await onBlockedDetected?.();
+      } else {
+        toast.error("Lỗi xảy ra khi gửi tin nhắn. Bạn hãy thử lại!");
+      }
     } finally {
       setIsUploading(false);
     }
