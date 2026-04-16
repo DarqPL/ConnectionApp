@@ -1,6 +1,7 @@
 import { Bell, ChevronsUpDown, UserIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,14 +19,28 @@ import {
 } from "@/components/ui/sidebar";
 import type { User } from "@/types/user";
 import Logout from "../auth/Logout";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FriendRequestDialog from "../friendRequest/FriendRequestDialog";
 import ProfileDialog from "../profile/ProfileDialog";
+import { useFriendStore } from "@/stores/useFriendStore";
 
 export function NavUser({ user }: { user: User }) {
   const { isMobile } = useSidebar();
   const [friendRequestOpen, setfriendRequestOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { pendingRequests, getPendingRequests } = useFriendStore();
+
+  useEffect(() => {
+    const loadPendingRequests = async () => {
+      try {
+        await getPendingRequests();
+      } catch (error) {
+        console.error("Lỗi khi tải lời mời kết bạn:", error);
+      }
+    };
+
+    loadPendingRequests();
+  }, [getPendingRequests]);
 
   return (
     <>
@@ -82,9 +97,16 @@ export function NavUser({ user }: { user: User }) {
                   <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
                   Tài Khoản
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setfriendRequestOpen(true)}>
-                  <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
-                  Thông Báo
+                <DropdownMenuItem onClick={() => setfriendRequestOpen(true)} className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                    <span>Thông Báo</span>
+                  </div>
+                  {pendingRequests.length > 0 && (
+                    <Badge variant="destructive" className="ml-auto text-xs">
+                      +{pendingRequests.length}
+                    </Badge>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
