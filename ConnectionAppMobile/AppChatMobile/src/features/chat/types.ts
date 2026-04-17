@@ -43,6 +43,8 @@ export interface ReplyInfo {
   parentId: string;
   parentContent: string | null;
   parentSenderName: string;
+  parentAttachments?: Attachment[] | null;
+  parentRecalled?: boolean;
 }
 
 export interface Message {

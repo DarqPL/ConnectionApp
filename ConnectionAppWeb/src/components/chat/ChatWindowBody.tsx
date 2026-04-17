@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import type { Message } from "@/types/chat";
+import { toast } from "sonner";
 
 interface ChatWindowBodyProps {
   onReply: (message: Message) => void;
@@ -32,6 +33,9 @@ const ChatWindowBody = ({
   >("delivered");
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<
+    string | null
+  >(null);
 
   const selectedConvo = conversations.find(
     (c) => c.id === activeConversationId,
@@ -40,13 +44,20 @@ const ChatWindowBody = ({
   const key = `chat-scroll-${activeConversationId}`;
 
   // Tách biệt việc lấy tin nhắn và xử lý sau khi đã có selectedConvo
-  const messages = selectedConvo ? (allMessages[selectedConvo.id]?.items ?? []) : [];
+  const messages = selectedConvo
+    ? (allMessages[selectedConvo.id]?.items ?? [])
+    : [];
   const reversedMessages = [...messages].reverse();
-  const hasMore = selectedConvo ? (allMessages[selectedConvo.id]?.hasMore ?? false) : false;
+  const hasMore = selectedConvo
+    ? (allMessages[selectedConvo.id]?.hasMore ?? false)
+    : false;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const manualScrollToBottomRef = useRef(false);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const scrollToBottom = (
     behavior: ScrollBehavior = "smooth",
@@ -72,9 +83,18 @@ const ChatWindowBody = ({
     manualScrollToBottomRef.current = false;
     setShowScrollToBottom(false);
     setIsAtBottom(true);
+    setHighlightedMessageId(null);
     sessionStorage.removeItem(key);
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [activeConversationId]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const fetchMoreMessages = async () => {
     if (!activeConversationId) return;
@@ -143,6 +163,34 @@ const ChatWindowBody = ({
     }
   }, [messages.length, isAtBottom]);
 
+  const handleReplyPreviewClick = (parentId: string) => {
+    const targetExists = messages.some((msg) => msg.id === parentId);
+    if (!targetExists) {
+      toast.info("Không tìm thấy tin nhắn gốc trong danh sách hiện tại");
+      return;
+    }
+
+    const targetElement = containerRef.current?.querySelector<HTMLElement>(
+      `[data-message-id="${CSS.escape(parentId)}"]`,
+    );
+
+    if (!targetElement) {
+      toast.info("Không thể điều hướng đến tin nhắn này");
+      return;
+    }
+
+    targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+
+    setHighlightedMessageId(parentId);
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedMessageId(null);
+    }, 1500);
+  };
+
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
   }
@@ -190,6 +238,8 @@ const ChatWindowBody = ({
               lastMessageStatus={lastMessageStatus}
               onReply={onReply}
               onForward={onForward}
+              onReplyPreviewClick={handleReplyPreviewClick}
+              isHighlighted={highlightedMessageId === message.id}
             />
           ))}
 

@@ -17,8 +17,14 @@ import { ResizeMode, Video } from "expo-av";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import type { Attachment, ReplyInfo } from "../types";
-import { detectEmailInMessage, isValidEmailFormat } from "../services/emailDetector";
-import { getOrFetchEmailUser, type FriendStatus } from "../services/userEmailCache";
+import {
+  detectEmailInMessage,
+  isValidEmailFormat,
+} from "../services/emailDetector";
+import {
+  getOrFetchEmailUser,
+  type FriendStatus,
+} from "../services/userEmailCache";
 import BusinessCard from "./BusinessCard";
 import { useAuth } from "../../auth/context/AuthContext";
 import type { User } from "../../auth/services/auth.service";
@@ -33,7 +39,9 @@ interface Props {
   recalledAt?: string | null;
   isGroup?: boolean;
   onLongPress?: () => void;
+  onReplyPreviewPress?: () => void;
   replyInfo?: ReplyInfo | null;
+  isHighlighted?: boolean;
 }
 
 const formatTime = (dateStr: string) => {
@@ -72,6 +80,33 @@ const resolveFileName = (
   }
 };
 
+/**
+ * Trả về text preview cho reply info.
+ * Ưu tiên: nội dung text → label attachment → tin nhắn đã thu hồi
+ */
+const getReplyPreviewText = (
+  replyInfo: import("../types").ReplyInfo,
+): string => {
+  if (replyInfo.parentRecalled) {
+    return "Tin nhắn đã được thu hồi";
+  }
+  if (replyInfo.parentContent) {
+    return replyInfo.parentContent;
+  }
+  const atts = replyInfo.parentAttachments;
+  if (atts && atts.length > 0) {
+    const first = atts[0];
+    if (first.type === "IMAGE")
+      return atts.length > 1 ? `📷 ${atts.length} hình ảnh` : "📷 Hình ảnh";
+    if (first.type === "VIDEO")
+      return atts.length > 1 ? `🎥 ${atts.length} video` : "🎥 Video";
+    if (first.type === "AUDIO") return "🎵 Âm thanh";
+    const name = first.originalFileName ?? "Tệp đính kèm";
+    return `📄 ${name}`;
+  }
+  return "Tin nhắn đã được thu hồi";
+};
+
 const MessageBubble: React.FC<Props> = ({
   message,
   attachments = [],
@@ -82,7 +117,9 @@ const MessageBubble: React.FC<Props> = ({
   recalledAt,
   isGroup = false,
   onLongPress,
+  onReplyPreviewPress,
   replyInfo,
+  isHighlighted = false,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
@@ -486,6 +523,7 @@ const MessageBubble: React.FC<Props> = ({
             isMe ? styles.bubbleSent : styles.bubbleReceived,
             isRecalled && styles.bubbleRecalled,
             replyInfo && !isRecalled && styles.bubbleWithReply,
+            isHighlighted && styles.bubbleHighlighted,
           ]}
         >
           {isRecalled ? (
@@ -501,7 +539,9 @@ const MessageBubble: React.FC<Props> = ({
           ) : (
             <View style={styles.contentWrap}>
               {replyInfo && (
-                <View
+                <TouchableOpacity
+                  activeOpacity={onReplyPreviewPress ? 0.65 : 1}
+                  onPress={onReplyPreviewPress}
                   style={[
                     styles.replyPreviewWrap,
                     isMe
@@ -529,9 +569,9 @@ const MessageBubble: React.FC<Props> = ({
                     ]}
                     numberOfLines={1}
                   >
-                    {replyInfo.parentContent ?? "Tin nhắn đã được thu hồi"}
+                    {getReplyPreviewText(replyInfo)}
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
 
               {attachments.length > 0 && (
@@ -541,6 +581,8 @@ const MessageBubble: React.FC<Props> = ({
                       <TouchableOpacity
                         key={`${attachment.fileUrl}-${index}`}
                         onPress={() => openImagePreview(attachment)}
+                        onLongPress={!isRecalled ? onLongPress : undefined}
+                        delayLongPress={350}
                         activeOpacity={0.85}
                       >
                         <Image
@@ -552,6 +594,8 @@ const MessageBubble: React.FC<Props> = ({
                       <TouchableOpacity
                         key={`${attachment.fileUrl}-${index}`}
                         onPress={() => openVideoPreview(attachment)}
+                        onLongPress={!isRecalled ? onLongPress : undefined}
+                        delayLongPress={350}
                         style={styles.videoCard}
                         activeOpacity={0.85}
                       >
@@ -591,6 +635,8 @@ const MessageBubble: React.FC<Props> = ({
                       <TouchableOpacity
                         key={`${attachment.fileUrl}-${index}`}
                         onPress={() => handleOpenAttachment(attachment)}
+                        onLongPress={!isRecalled ? onLongPress : undefined}
+                        delayLongPress={350}
                         style={styles.fileCard}
                         activeOpacity={0.85}
                       >
@@ -1002,6 +1048,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderStyle: "dashed",
+  },
+  bubbleHighlighted: {
+    borderWidth: 2,
+    borderColor: "#f5c542",
   },
   messageText: {
     fontSize: 15,
