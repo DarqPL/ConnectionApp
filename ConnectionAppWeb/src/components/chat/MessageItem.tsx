@@ -18,6 +18,8 @@ import {
   X,
   ZoomIn,
   ZoomOut,
+  MoreVertical,
+  Trash2,
 } from "lucide-react";
 import {
   Dialog,
@@ -92,10 +94,11 @@ const MessageItem = ({
   onForward,
 }: MessageItemProps) => {
   const { user: currentUser } = useAuthStore();
-  const { recallMessage } = useChatStore();
+  const { recallMessage, deleteMessage } = useChatStore();
   const [showMenu, setShowMenu] = useState(false);
-  const [showRecallConfirm, setShowRecallConfirm] = useState(false);
-  const [recalling, setRecalling] = useState(false);
+  const [showActionDialog, setShowActionDialog] = useState(false);
+  const [actionType, setActionType] = useState<'recall' | 'delete' | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
   const [previewVideo, setPreviewVideo] = useState<Attachment | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -182,20 +185,33 @@ const MessageItem = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showMenu]);
 
-  const handleRecallClick = () => {
+  const handleMoreClick = () => {
     setShowMenu(false);
-    setShowRecallConfirm(true);
+    setShowActionDialog(true);
   };
 
-  const handleRecallConfirm = async () => {
-    setRecalling(true);
+  const handleActionSelect = (type: 'recall' | 'delete') => {
+    setActionType(type);
+    setShowActionDialog(true);
+  };
+
+  const handleActionConfirm = async () => {
+    setIsProcessing(true);
     try {
-      await recallMessage(message.conversationId, message.id);
-      setShowRecallConfirm(false);
-    } catch {
-      toast.error("Không thể thu hồi tin nhắn. Vui lòng thử lại!");
+      if (actionType === 'recall') {
+        await recallMessage(message.conversationId, message.id);
+        toast.success("Đã thu hồi tin nhắn từ tất cả mọi người");
+      } else if (actionType === 'delete') {
+        await deleteMessage(message.conversationId, message.id);
+        toast.success("Đã xóa tin nhắn ở phía bạn");
+      }
+      setShowActionDialog(false);
+      setActionType(null);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Thao tác thất bại. Vui lòng thử lại!";
+      toast.error(errorMsg);
     } finally {
-      setRecalling(false);
+      setIsProcessing(false);
     }
   };
 
@@ -638,11 +654,11 @@ const MessageItem = ({
                 </button>
                 {message.isOwn && (
                   <button
-                    onClick={handleRecallClick}
+                    onClick={handleMoreClick}
                     className="p-1.5 rounded-full hover:bg-destructive/10 transition-colors"
-                    title="Thu hồi"
+                    title="Thêm tùy chọn"
                   >
-                    <Undo2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+                    <MoreVertical className="size-3.5 text-muted-foreground hover:text-destructive" />
                   </button>
                 )}
               </div>
@@ -651,40 +667,105 @@ const MessageItem = ({
         </div>
       </div>
 
-      {/* Recall confirm dialog */}
+      {/* Message action dialog (recall vs delete) */}
       <Dialog
-        open={showRecallConfirm}
+        open={showActionDialog}
         onOpenChange={(open) => {
-          if (!open && !recalling) setShowRecallConfirm(false);
+          if (!open && !isProcessing) {
+            setShowActionDialog(false);
+            setActionType(null);
+          }
         }}
       >
         <DialogContent showCloseButton={false} className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Undo2 className="size-4 text-destructive" />
-              Thu hồi tin nhắn
-            </DialogTitle>
-            <DialogDescription>
-              Tin nhắn sẽ bị thu hồi với tất cả mọi người trong cuộc trò chuyện.
-              Hành động này không thể hoàn tác.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowRecallConfirm(false)}
-              disabled={recalling}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleRecallConfirm}
-              disabled={recalling}
-            >
-              {recalling ? "Đang thu hồi..." : "Thu hồi"}
-            </Button>
-          </DialogFooter>
+          {actionType === null ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Lựa chọn hành động</DialogTitle>
+                <DialogDescription>
+                  Bạn muốn xóa tin nhắn này như thế nào?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => handleActionSelect('recall')}
+                  disabled={isProcessing}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold">⏮️ Thu hồi</span>
+                    <span className="text-xs text-muted-foreground">Xóa từ tất cả mọi người</span>
+                  </div>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => handleActionSelect('delete')}
+                  disabled={isProcessing}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold">🗑️ Xóa ở phía tôi</span>
+                    <span className="text-xs text-muted-foreground">Chỉ bạn sẽ không thấy</span>
+                  </div>
+                </Button>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowActionDialog(false)}
+                  disabled={isProcessing}
+                >
+                  Hủy
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {actionType === 'recall' ? (
+                    <>
+                      <Undo2 className="size-4 text-destructive" />
+                      Thu hồi tin nhắn
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-4 text-destructive" />
+                      Xóa tin nhắn
+                    </>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  {actionType === 'recall'
+                    ? 'Tin nhắn sẽ bị thu hồi từ tất cả mọi người trong cuộc trò chuyện. Hành động này không thể hoàn tác.'
+                    : 'Tin nhắn sẽ bị xóa khỏi thiết bị của bạn. Những người khác vẫn sẽ thấy.' }
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setActionType(null)}
+                  disabled={isProcessing}
+                >
+                  Quay lại
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleActionConfirm}
+                  disabled={isProcessing}
+                >
+                  {isProcessing
+                    ? actionType === 'recall'
+                      ? "Đang thu hồi..."
+                      : "Đang xóa..."
+                    : actionType === 'recall'
+                      ? "Thu hồi"
+                      : "Xóa" }
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -346,6 +346,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  deleteMessage: async (conversationId, messageId) => {
+    try {
+      await chatService.deleteMessage(messageId);
+      
+      set((state) => {
+        const prevItems = state.messages[conversationId]?.items ?? [];
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: {
+              ...state.messages[conversationId],
+              items: prevItems.filter((m) => m.id !== messageId),
+            },
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      throw error;
+    }
+  },
+
   addConvo: (convo) => {
     set((state) => {
       const otherConvos = state.conversations.filter((c) => c.id !== convo.id);
