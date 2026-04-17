@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MessageBubble from "../components/MessageBubble";
+import ForwardMessageModal from "../components/ForwardMessageModal";
 import ChatInput from "../components/ChatInput";
 import ChatHeader from "../components/ChatHeader";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
@@ -42,6 +43,7 @@ const ChatRoomScreen = ({ route }: any) => {
   const [showScrollToBottom, setShowScrollToBottom] = React.useState(false);
   const [isListReady, setIsListReady] = React.useState(false);
   const [replyTo, setReplyTo] = React.useState<Message | null>(null);
+  const [messageToForward, setMessageToForward] = React.useState<Message | null>(null);
   const [blockStatus, setBlockStatus] = React.useState<BlockStatus>({
     blocked: false,
     blockedByMe: false,
@@ -276,13 +278,17 @@ const ChatRoomScreen = ({ route }: any) => {
         onPress: () => setReplyTo(item),
       },
       {
+        text: "Chuyển tiếp",
+        onPress: () => setMessageToForward(item),
+      },
+      {
         text: "Hủy",
         style: "cancel",
       },
     ];
 
     if (isOwnMessage) {
-      actions.splice(1, 0, {
+      actions.splice(2, 0, {
         text: "Thu hồi",
         style: "destructive",
         onPress: () => handleRecallMessage(item.id),
@@ -415,6 +421,11 @@ const ChatRoomScreen = ({ route }: any) => {
           </Text>
         </View>
       )}
+
+      <ForwardMessageModal
+        message={messageToForward}
+        onClose={() => setMessageToForward(null)}
+      />
     </View>
   );
 };
