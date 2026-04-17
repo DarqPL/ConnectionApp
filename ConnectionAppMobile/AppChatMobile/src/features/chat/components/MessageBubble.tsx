@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,11 @@ import { ResizeMode, Video } from "expo-av";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import type { Attachment, ReplyInfo } from "../types";
+import { detectEmailInMessage, isValidEmailFormat } from "../services/emailDetector";
+import { getOrFetchEmailUser, type FriendStatus } from "../services/userEmailCache";
+import BusinessCard from "./BusinessCard";
+import { useAuth } from "../../auth/context/AuthContext";
+import type { User } from "../../auth/services/auth.service";
 
 interface Props {
   message: string;
@@ -81,6 +86,29 @@ const MessageBubble: React.FC<Props> = ({
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
+  const { user: currentUser } = useAuth();
+
+  // ── Email / Business card state ──────────────────────────────────────────
+  const [emailUser, setEmailUser] = useState<User | null>(null);
+  const [emailStatus, setEmailStatus] = useState<FriendStatus>("NONE");
+  const [detectedEmail, setDetectedEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isRecalled) return;
+    const email = detectEmailInMessage(message || "");
+    if (!email || !isValidEmailFormat(email)) {
+      setEmailUser(null);
+      setDetectedEmail(null);
+      return;
+    }
+    setDetectedEmail(email);
+    getOrFetchEmailUser(email)
+      .then((result) => {
+        setEmailUser(result.user);
+        setEmailStatus(result.status);
+      })
+      .catch(() => setEmailUser(null));
+  }, [message, isRecalled]);
   const [previewImage, setPreviewImage] = React.useState<Attachment | null>(
     null,
   );
@@ -598,6 +626,16 @@ const MessageBubble: React.FC<Props> = ({
                 >
                   {message}
                 </Text>
+              )}
+
+              {/* Business card — shown when message contains a known email */}
+              {!isRecalled && emailUser && detectedEmail && (
+                <BusinessCard
+                  email={detectedEmail}
+                  user={emailUser}
+                  initialStatus={emailStatus}
+                  currentUserId={currentUser?.id}
+                />
               )}
             </View>
           )}
