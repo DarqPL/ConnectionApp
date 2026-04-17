@@ -34,6 +34,7 @@ const ChatRoomScreen = ({ route }: any) => {
     fetchMessages,
     sendMessage,
     recallMessage,
+    deleteMessage,
     setCurrentConversation,
   } = useChat();
   const { user } = useAuth();
@@ -310,21 +311,41 @@ const ChatRoomScreen = ({ route }: any) => {
   };
 
   const handleRecallMessage = (msgId: string) => {
-    Alert.alert("Thu hồi tin nhắn", "Bạn có chắc muốn thu hồi tin nhắn này?", [
-      { text: "Bỏ qua", style: "cancel" },
-      {
-        text: "Thu hồi",
-        style: "destructive",
-        onPress: () => {
-          recallMessage(msgId).catch((err) => {
-            Alert.alert(
-              "Lỗi",
-              err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại",
-            );
-          });
+    Alert.alert(
+      "Thu hồi hoặc xóa",
+      "Bạn muốn làm gì với tin nhắn này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa ở phía tôi",
+          style: "destructive",
+          onPress: () => {
+            deleteMessage(msgId).catch((err) => {
+              Alert.alert(
+                "Lỗi",
+                err instanceof Error
+                  ? err.message
+                  : "Xóa tin nhắn thất bại",
+              );
+            });
+          },
         },
-      },
-    ]);
+        {
+          text: "Thu hồi từ tất cả",
+          style: "destructive",
+          onPress: () => {
+            recallMessage(msgId).catch((err) => {
+              Alert.alert(
+                "Lỗi",
+                err instanceof Error
+                  ? err.message
+                  : "Thu hồi tin nhắn thất bại",
+              );
+            });
+          },
+        },
+      ]
+    );
   };
 
   const handleMessageAction = (item: Message) => {

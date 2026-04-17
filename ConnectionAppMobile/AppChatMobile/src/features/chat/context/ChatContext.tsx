@@ -29,6 +29,7 @@ interface ChatContextType {
     parentId?: string | null,
   ) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
+  deleteMessage: (messageId: string) => Promise<void>;
   setCurrentConversation: (
     conversationId: number | null,
     sourceConversationId?: number,
@@ -451,13 +452,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setError(null);
     try {
       const updatedMsg = await chatService.recallMessage(messageId);
-      // Update UI immediately with server response (accurate recalledAt timestamp)
       setCurrentMessages((prev) =>
         prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)),
       );
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại";
+      setError(msg);
+      throw err;
+    }
+  }, []);
+
+  const deleteMessage = useCallback(async (messageId: string) => {
+    setError(null);
+    try {
+      await chatService.deleteMessage(messageId);
+      setCurrentMessages((prev) =>
+        prev.filter((m) => m.id !== messageId),
+      );
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Xóa tin nhắn thất bại";
       setError(msg);
       throw err;
     }
@@ -516,6 +531,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchMessages,
     sendMessage,
     recallMessage,
+    deleteMessage,
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,

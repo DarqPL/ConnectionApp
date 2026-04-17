@@ -197,6 +197,19 @@ export class ChatService {
     return (await response.json()) as Message;
   }
 
+  async deleteMessage(messageId: string): Promise<void> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Xóa tin nhắn thất bại");
+    }
+  }
+
   async markAsRead(conversationId: number): Promise<void> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}/read`,
