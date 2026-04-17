@@ -322,11 +322,26 @@ public class MessageService {
         MessageResponse.ReplyInfoResponse replyInfo = null;
         if (message.getParentId() != null) {
             replyInfo = messageRepository.findById(message.getParentId())
-                    .map(parent -> MessageResponse.ReplyInfoResponse.builder()
-                            .parentId(parent.getId())
-                            .parentContent(parent.getRecalledAt() != null ? null : parent.getContent())
-                            .parentSenderName(parent.getSenderInfo().getDisplayName())
-                            .build())
+                    .map(parent -> {
+                        boolean parentRecalled = parent.getRecalledAt() != null;
+                        List<MessageResponse.AttachmentResponse> parentAttachments = parentRecalled
+                                ? Collections.emptyList()
+                                : (parent.getAttachments() == null ? Collections.emptyList()
+                                    : parent.getAttachments().stream()
+                                        .map(a -> MessageResponse.AttachmentResponse.builder()
+                                                .fileUrl(a.getFileUrl())
+                                                .type(a.getType() == null ? AttachmentType.FILE.name() : a.getType().name())
+                                                .originalFileName(resolveOriginalFileName(a.getOriginalFileName(), a.getFileUrl()))
+                                                .build())
+                                        .collect(Collectors.toList()));
+                        return MessageResponse.ReplyInfoResponse.builder()
+                                .parentId(parent.getId())
+                                .parentContent(parentRecalled ? null : parent.getContent())
+                                .parentSenderName(parent.getSenderInfo().getDisplayName())
+                                .parentAttachments(parentAttachments)
+                                .parentRecalled(parentRecalled)
+                                .build();
+                    })
                     .orElse(null);
         }
 

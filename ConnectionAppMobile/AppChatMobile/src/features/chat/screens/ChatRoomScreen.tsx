@@ -45,7 +45,14 @@ const ChatRoomScreen = ({ route }: any) => {
   const [showScrollToBottom, setShowScrollToBottom] = React.useState(false);
   const [isListReady, setIsListReady] = React.useState(false);
   const [replyTo, setReplyTo] = React.useState<Message | null>(null);
-  const [messageToForward, setMessageToForward] = React.useState<Message | null>(null);
+  const [messageToForward, setMessageToForward] =
+    React.useState<Message | null>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = React.useState<string | null>(
+    null,
+  );
+  const highlightTimeoutRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const [blockStatus, setBlockStatus] = React.useState<BlockStatus>({
     blocked: false,
     blockedByMe: false,
@@ -58,6 +65,10 @@ const ChatRoomScreen = ({ route }: any) => {
   const displayMessages = currentMessages;
   const isGroup = type === "GROUP";
   const isPrivateChat = !isGroup;
+  const messageIndexMap = React.useMemo(
+    () => new Map(displayMessages.map((message, index) => [message.id, index])),
+    [displayMessages],
+  );
 
   const peerUserId = React.useMemo(() => {
     if (!isPrivateChat || !user) {
@@ -97,6 +108,54 @@ const ChatRoomScreen = ({ route }: any) => {
     flatListRef.current?.scrollToEnd({ animated });
   }, []);
 
+  const handleScrollToParent = React.useCallback(
+    (parentId: string) => {
+      const index = messageIndexMap.get(parentId);
+      if (index === undefined) {
+        return;
+      }
+
+      flatListRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.3,
+      });
+
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+
+      setHighlightedMsgId(parentId);
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightedMsgId(null);
+      }, 1500);
+    },
+    [messageIndexMap],
+  );
+
+  const handleScrollToIndexFailed = React.useCallback(
+    (info: {
+      index: number;
+      highestMeasuredFrameIndex: number;
+      averageItemLength: number;
+    }) => {
+      const fallbackOffset = Math.max(0, info.averageItemLength * info.index);
+      flatListRef.current?.scrollToOffset({
+        offset: fallbackOffset,
+        animated: false,
+      });
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: info.index,
+          animated: true,
+          viewPosition: 0.3,
+        });
+      }, 120);
+    },
+    [],
+  );
+
   useEffect(() => {
     userInteractedRef.current = false;
     initialAnchorDoneRef.current = false;
@@ -104,6 +163,7 @@ const ChatRoomScreen = ({ route }: any) => {
     setShowScrollToBottom(false);
     setIsListReady(false);
     setReplyTo(null);
+    setHighlightedMsgId(null);
     setBlockStatus({
       blocked: false,
       blockedByMe: false,
@@ -117,6 +177,9 @@ const ChatRoomScreen = ({ route }: any) => {
     return () => {
       setCurrentConversation(null, conversationId);
       setShowScrollToBottom(false);
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
     };
   }, [conversationId, fetchMessages, setCurrentConversation]);
 
@@ -330,109 +393,117 @@ const ChatRoomScreen = ({ route }: any) => {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
-      <StatusBar barStyle="light-content" />
-      <ChatHeader
-        name={name}
-        avatar={avatarUrl}
-        type={type}
-        participants={participants}
-        isBlockedByMe={isBlockedByMe}
-        isBlockedByOther={isBlockedByOther}
-        onBlockUser={handleBlockUser}
-        onUnblockUser={handleUnblockUser}
-      />
-
-      {isBlockedChat && (
-        <View style={styles.blockedBanner}>
-          <Text style={styles.blockedText}>
-            {isBlockedByOther ? "Bạn đã bị chặn" : "Bạn đã chặn người này"}
-          </Text>
-          {isBlockedByMe && (
-            <TouchableOpacity
-              style={styles.unblockBtn}
-              onPress={handleUnblockUser}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.unblockBtnText}>Bỏ chặn</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {displayMessages.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
-            Chưa có tin nhắn nào.{"\n"}Hãy gửi lời chào! 👋
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={displayMessages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <MessageBubble
-              message={item.content || ""}
-              attachments={item.attachments || []}
-              isMe={item.senderInfo?.senderId === user?.id}
-              senderName={item.senderInfo?.displayName}
-              avatarUrl={item.senderInfo?.avatarUrl}
-              createdAt={item.createdAt}
-              recalledAt={item.recalledAt}
-              replyInfo={item.replyInfo}
-              isGroup={isGroup}
-              onLongPress={() => handleMessageAction(item)}
-            />
-          )}
-          contentContainerStyle={[
-            styles.msgList,
-            !isListReady && styles.msgListHidden,
-          ]}
-          onContentSizeChange={handleContentSizeChange}
-          onScrollBeginDrag={() => {
-            userInteractedRef.current = true;
-          }}
-          onScroll={handleListScroll}
-          scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}
+        <StatusBar barStyle="light-content" />
+        <ChatHeader
+          name={name}
+          avatar={avatarUrl}
+          type={type}
+          participants={participants}
+          isBlockedByMe={isBlockedByMe}
+          isBlockedByOther={isBlockedByOther}
+          onBlockUser={handleBlockUser}
+          onUnblockUser={handleUnblockUser}
         />
-      )}
 
-      {displayMessages.length > 0 && showScrollToBottom && (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.scrollToBottomFab,
-            {
-              bottom: insets.bottom + 78,
-            },
-          ]}
-          onPress={handleScrollToBottomPress}
-        >
-          <Ionicons name="chevron-down" size={24} color="#fff" />
-        </TouchableOpacity>
-      )}
+        {isBlockedChat && (
+          <View style={styles.blockedBanner}>
+            <Text style={styles.blockedText}>
+              {isBlockedByOther ? "Bạn đã bị chặn" : "Bạn đã chặn người này"}
+            </Text>
+            {isBlockedByMe && (
+              <TouchableOpacity
+                style={styles.unblockBtn}
+                onPress={handleUnblockUser}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.unblockBtnText}>Bỏ chặn</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
-      {!isBlockedChat ? (
-        <ChatInput
-          conversationId={conversationId}
-          onSend={handleSend}
-          disabled={sending || (isPrivateChat && isBlockStatusLoading)}
-          replyTo={replyTo}
-          onCancelReply={() => setReplyTo(null)}
+        {displayMessages.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              Chưa có tin nhắn nào.{"\n"}Hãy gửi lời chào! 👋
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={displayMessages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <MessageBubble
+                message={item.content || ""}
+                attachments={item.attachments || []}
+                isMe={item.senderInfo?.senderId === user?.id}
+                senderName={item.senderInfo?.displayName}
+                avatarUrl={item.senderInfo?.avatarUrl}
+                createdAt={item.createdAt}
+                recalledAt={item.recalledAt}
+                replyInfo={item.replyInfo}
+                isGroup={isGroup}
+                onLongPress={() => handleMessageAction(item)}
+                onReplyPreviewPress={
+                  item.replyInfo?.parentId
+                    ? () => handleScrollToParent(item.replyInfo.parentId)
+                    : undefined
+                }
+                isHighlighted={item.id === highlightedMsgId}
+              />
+            )}
+            extraData={highlightedMsgId}
+            contentContainerStyle={[
+              styles.msgList,
+              !isListReady && styles.msgListHidden,
+            ]}
+            onContentSizeChange={handleContentSizeChange}
+            onScrollBeginDrag={() => {
+              userInteractedRef.current = true;
+            }}
+            onScroll={handleListScroll}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        {displayMessages.length > 0 && showScrollToBottom && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[
+              styles.scrollToBottomFab,
+              {
+                bottom: insets.bottom + 78,
+              },
+            ]}
+            onPress={handleScrollToBottomPress}
+          >
+            <Ionicons name="chevron-down" size={24} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {!isBlockedChat ? (
+          <ChatInput
+            conversationId={conversationId}
+            onSend={handleSend}
+            disabled={sending || (isPrivateChat && isBlockStatusLoading)}
+            replyTo={replyTo}
+            onCancelReply={() => setReplyTo(null)}
+          />
+        ) : (
+          <View style={styles.blockedComposerPlaceholder}>
+            <Text style={styles.blockedComposerText}>
+              {isBlockedByOther ? "Bạn đã bị chặn" : "Bạn đã chặn người này"}
+            </Text>
+          </View>
+        )}
+
+        <ForwardMessageModal
+          message={messageToForward}
+          onClose={() => setMessageToForward(null)}
         />
-      ) : (
-        <View style={styles.blockedComposerPlaceholder}>
-          <Text style={styles.blockedComposerText}>
-            {isBlockedByOther ? "Bạn đã bị chặn" : "Bạn đã chặn người này"}
-          </Text>
-        </View>
-      )}
-
-      <ForwardMessageModal
-        message={messageToForward}
-        onClose={() => setMessageToForward(null)}
-      />
       </View>
     </KeyboardAvoidingView>
   );

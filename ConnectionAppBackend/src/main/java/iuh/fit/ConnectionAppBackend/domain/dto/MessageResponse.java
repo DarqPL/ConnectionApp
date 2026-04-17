@@ -53,5 +53,7 @@ public class MessageResponse {
         private String parentId;
         private String parentContent;
         private String parentSenderName;
+        private List<AttachmentResponse> parentAttachments;
+        private boolean parentRecalled;
     }
 }

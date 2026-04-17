@@ -31,10 +31,7 @@ import { Button } from "../ui/button";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
-import {
-  detectEmailInMessage,
-  isValidEmailFormat,
-} from "@/lib/emailDetector";
+import { detectEmailInMessage, isValidEmailFormat } from "@/lib/emailDetector";
 import { userService } from "@/services/userService";
 import { friendService } from "@/services/friendService";
 import BusinessCard from "../profile/BusinessCard";
@@ -80,6 +77,8 @@ interface MessageItemProps {
   lastMessageStatus: "delivered" | "seen";
   onReply: (message: Message) => void;
   onForward?: (message: Message) => void;
+  onReplyPreviewClick?: (parentId: string) => void;
+  isHighlighted?: boolean;
 }
 
 const MessageItem = ({
@@ -90,6 +89,8 @@ const MessageItem = ({
   lastMessageStatus,
   onReply,
   onForward,
+  onReplyPreviewClick,
+  isHighlighted = false,
 }: MessageItemProps) => {
   const { user: currentUser } = useAuthStore();
   const { recallMessage } = useChatStore();
@@ -127,8 +128,8 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-    new Date(prev?.createdAt || 0).getTime() >
-    300000; // 5 phút
+      new Date(prev?.createdAt || 0).getTime() >
+      300000; // 5 phút
 
   const isGroupBreak =
     isShowTime || message.senderInfo.senderId !== prev?.senderInfo.senderId;
@@ -436,8 +437,10 @@ const MessageItem = ({
       )}
 
       <div
+        data-message-id={message.id}
         className={cn(
-          "flex gap-2 message-bounce mt-1 group",
+          "flex gap-2 message-bounce mt-1 group rounded-md transition-colors",
+          isHighlighted && "bg-yellow-200/40",
           message.isOwn ? "justify-end" : "justify-start",
         )}
       >
@@ -478,15 +481,39 @@ const MessageItem = ({
           >
             {/* Reply preview */}
             {message.replyInfo && !isRecalled && (
-              <div className="text-xs px-3 py-1.5 rounded-t-lg border-l-2 border-primary/40 bg-muted/60 max-w-full mb-0">
+              <button
+                type="button"
+                onClick={() =>
+                  onReplyPreviewClick?.(message.replyInfo.parentId)
+                }
+                className="text-left text-xs px-3 py-1.5 rounded-t-lg border-l-2 border-primary/40 bg-muted/60 max-w-full mb-0 hover:bg-muted/80 transition-colors"
+              >
                 <span className="font-semibold text-primary/70 text-[11px]">
                   {message.replyInfo.parentSenderName}
                 </span>
                 <p className="truncate text-muted-foreground text-[11px]">
-                  {message.replyInfo.parentContent ??
-                    "Tin nhắn đã được thu hồi"}
+                  {(() => {
+                    const ri = message.replyInfo;
+                    if (ri.parentRecalled) return "Tin nhắn đã được thu hồi";
+                    if (ri.parentContent) return ri.parentContent;
+                    const atts = ri.parentAttachments;
+                    if (atts && atts.length > 0) {
+                      const first = atts[0];
+                      if (first.type === "IMAGE")
+                        return atts.length > 1
+                          ? `📷 ${atts.length} hình ảnh`
+                          : "📷 Hình ảnh";
+                      if (first.type === "VIDEO")
+                        return atts.length > 1
+                          ? `🎥 ${atts.length} video`
+                          : "🎥 Video";
+                      if (first.type === "AUDIO") return "🎵 Âm thanh";
+                      return `📄 ${first.originalFileName ?? "Tệp đính kèm"}`;
+                    }
+                    return "Tin nhắn đã được thu hồi";
+                  })()}
                 </p>
-              </div>
+              </button>
             )}
 
             <Card
