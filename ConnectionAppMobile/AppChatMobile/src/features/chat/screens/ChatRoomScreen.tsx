@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -322,7 +324,12 @@ const ChatRoomScreen = ({ route }: any) => {
   }
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+    >
+      <View style={{ flex: 1, paddingBottom: insets.bottom }}>
       <StatusBar barStyle="light-content" />
       <ChatHeader
         name={name}
@@ -426,7 +433,8 @@ const ChatRoomScreen = ({ route }: any) => {
         message={messageToForward}
         onClose={() => setMessageToForward(null)}
       />
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
