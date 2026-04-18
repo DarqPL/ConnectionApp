@@ -2,6 +2,7 @@ package iuh.fit.ConnectionAppBackend.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -15,6 +16,9 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @Value("${app.upload.max-file-size:2MB}")
+    private String maxFileSizeLabel;
 
     @ExceptionHandler(ImageNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleImageNotFoundException(
@@ -55,7 +59,7 @@ public class GlobalExceptionHandler {
     ErrorResponse errorResponse = ErrorResponse.builder()
         .status(HttpStatus.BAD_REQUEST.value())
         .code("IMG_SIZE_EXCEEDED")
-        .message("File size must not exceed 2MB")
+        .message("File size must not exceed " + maxFileSizeLabel)
         .error("Bad Request")
         .path(request.getDescription(false).replace("uri=", ""))
         .timestamp(LocalDateTime.now())

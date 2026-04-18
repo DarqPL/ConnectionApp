@@ -20,6 +20,10 @@ import * as DocumentPicker from "expo-document-picker";
 import type { PendingAttachment } from "../context/ChatContext";
 import { useChat } from "../context/ChatContext";
 import type { Message } from "../types";
+import {
+  MAX_UPLOAD_FILE_SIZE_BYTES,
+  MAX_UPLOAD_FILE_SIZE_LABEL,
+} from "../../../config/upload";
 
 interface ChatInputProps {
   onSend: (
@@ -34,7 +38,6 @@ interface ChatInputProps {
 }
 
 const MAX_FILES = 5;
-const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 
 type LocalAttachment = PendingAttachment & {
   id: string;
@@ -81,7 +84,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<LocalAttachment[]>([]);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
 
   const appendFiles = (incoming: LocalAttachment[]) => {
@@ -98,7 +101,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       let rejectedBySize = 0;
 
       incoming.slice(0, available).forEach((item) => {
-        if (item.size && item.size > MAX_FILE_SIZE_BYTES) {
+        if (item.size && item.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
           rejectedBySize += 1;
           return;
         }
@@ -115,7 +118,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (rejectedBySize > 0) {
         Alert.alert(
           "Dung lượng vượt quá",
-          `${rejectedBySize} tệp lớn hơn 2MB và đã bị bỏ qua.`,
+          `${rejectedBySize} tệp lớn hơn ${MAX_UPLOAD_FILE_SIZE_LABEL} và đã bị bỏ qua.`,
         );
       }
 
