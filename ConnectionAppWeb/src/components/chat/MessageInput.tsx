@@ -8,9 +8,12 @@ import EmojiPicker from "./EmojiPicker";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
+import {
+  MAX_UPLOAD_FILE_SIZE_BYTES,
+  MAX_UPLOAD_FILE_SIZE_LABEL,
+} from "@/config/upload";
 
 const MAX_FILES = 5;
-const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 
 interface PendingAttachment {
   id: string;
@@ -117,7 +120,7 @@ const MessageInput = ({
     let rejectedBySize = 0;
 
     candidates.forEach((file) => {
-      if (file.size > MAX_FILE_SIZE_BYTES) {
+      if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
         rejectedBySize += 1;
         return;
       }
@@ -132,7 +135,9 @@ const MessageInput = ({
     });
 
     if (rejectedBySize > 0) {
-      toast.error(`${rejectedBySize} tep vuot qua 2MB nen khong duoc them.`);
+      toast.error(
+        `${rejectedBySize} tep vuot qua ${MAX_UPLOAD_FILE_SIZE_LABEL} nen khong duoc them.`,
+      );
     }
 
     if (nextItems.length === 0) {

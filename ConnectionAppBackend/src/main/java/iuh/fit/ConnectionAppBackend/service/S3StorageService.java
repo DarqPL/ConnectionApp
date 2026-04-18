@@ -5,9 +5,12 @@ import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
 import iuh.fit.ConnectionAppBackend.exception.ImageNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.ImageValidationException;
 import iuh.fit.ConnectionAppBackend.exception.StorageException;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -25,15 +28,24 @@ import java.util.UUID;
 @Service
 public class S3StorageService {
 
-    private static final long MAX_FILE_SIZE_BYTES = 2L * 1024L * 1024L;
     private static final int RANDOM_SUFFIX_LENGTH = 6;
     private static final int RANDOM_SUFFIX_BOUND = 1_000_000;
+
+    @Value("${app.upload.max-file-size:2MB}")
+    private String maxFileSizeLabel;
+
+    private long maxFileSizeBytes;
 
     @Autowired
     private S3Client s3Client;
 
     @Autowired
     private S3Properties s3Properties;
+
+    @PostConstruct
+    void initUploadLimit() {
+        maxFileSizeBytes = DataSize.parse(maxFileSizeLabel).toBytes();
+    }
 
     public ImageObjectResponse uploadImage(MultipartFile file) {
         return uploadImage(file, null);
@@ -196,8 +208,11 @@ public class S3StorageService {
             throw new ImageValidationException("IMG_FILE_REQUIRED", "File is required");
         }
 
-        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            throw new ImageValidationException("IMG_SIZE_EXCEEDED", "File size must not exceed 2MB");
+        if (file.getSize() > maxFileSizeBytes) {
+            throw new ImageValidationException(
+                    "IMG_SIZE_EXCEEDED",
+                    "File size must not exceed " + maxFileSizeLabel
+            );
         }
     }
 
