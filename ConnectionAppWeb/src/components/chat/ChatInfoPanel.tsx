@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import {
   X, Download, File, UserPlus, Settings, BellOff, Pin,
   ChevronDown, ChevronRight, Users, Pencil,
-  Calendar, StickyNote, Image as ImageIcon, Plus, History, LogOut, Trash2
+  Calendar, StickyNote, Image as ImageIcon, LogOut, Trash2,
+  MessageCircle, Link as LinkIcon, BarChart3
 } from "lucide-react";
 import type { Message, Conversation } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,9 @@ interface ChatInfoPanelProps {
   messages: Message[];
   isOpen: boolean;
   onClose: () => void;
+  onLeaveGroup?: () => void;
+  onDeleteHistory?: () => void;
+  onLogout?: () => void;
 }
 
 const SectionHeader = ({
@@ -43,18 +47,53 @@ const SectionHeader = ({
   </button>
 );
 
-const ChatInfoPanel = ({ chat, messages, isOpen, onClose }: ChatInfoPanelProps) => {
+const ChatInfoPanel = ({ 
+  chat, 
+  messages, 
+  isOpen, 
+  onClose,
+  onLeaveGroup,
+  onDeleteHistory,
+  onLogout
+}: ChatInfoPanelProps) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     members: true,
     board: true,
     media: true,
     files: true,
+    description: false,
+    pinnedMessages: false,
+    schedule: false,
+    polls: false,
+    groupLink: false,
   });
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [showAllImages, setShowAllImages] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleDeleteHistory = () => {
+    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện này không?\n\nLưu ý: Hành động này không thể hoàn tác.");
+    if (confirmed) {
+      onDeleteHistory?.();
+    }
+  };
+
+  const handleLeaveGroup = () => {
+    const confirmed = window.confirm("Bạn có chắc chắn muốn rời khỏi nhóm này không?");
+    if (confirmed) {
+      onLeaveGroup?.();
+    }
+  };
+
+  const handleLogout = () => {
+    const confirmed = window.confirm("Bạn có chắc chắn muốn đăng xuất?");
+    if (confirmed) {
+      onLogout?.();
+    }
   };
 
   const allMedia = useMemo(() => {
@@ -190,6 +229,83 @@ const ChatInfoPanel = ({ chat, messages, isOpen, onClose }: ChatInfoPanelProps) 
           </div>
         )}
 
+        {/* Group Description Section */}
+        <SectionHeader
+          title="Thêm mô tả nhóm"
+          isOpen={openSections.description}
+          onToggle={() => toggleSection("description")}
+        />
+        {openSections.description && (
+          <div className="px-4 pb-4">
+            <div className="p-3 rounded-lg bg-secondary/30 text-sm text-muted-foreground italic">
+              Chưa có mô tả nhóm. Nhấn để thêm mô tả cho nhóm của bạn.
+            </div>
+          </div>
+        )}
+
+        {/* Pinned Messages Section */}
+        <SectionHeader
+          title="Tin nhắn đã ghim"
+          isOpen={openSections.pinnedMessages}
+          onToggle={() => toggleSection("pinnedMessages")}
+        />
+        {openSections.pinnedMessages && (
+          <div className="px-4 pb-4">
+            <div className="text-center py-4 text-muted-foreground">
+              <MessageCircle className="size-6 mx-auto mb-2 opacity-50" />
+              <p className="text-xs italic">Chưa có tin nhắn đã ghim</p>
+            </div>
+          </div>
+        )}
+
+        {/* Group Schedule Section */}
+        <SectionHeader
+          title="Lịch nhóm"
+          isOpen={openSections.schedule}
+          onToggle={() => toggleSection("schedule")}
+        />
+        {openSections.schedule && (
+          <div className="px-4 pb-4">
+            <div className="text-center py-4 text-muted-foreground">
+              <Calendar className="size-6 mx-auto mb-2 opacity-50" />
+              <p className="text-xs italic">Chưa có sự kiện nào</p>
+            </div>
+          </div>
+        )}
+
+        {/* Polls Section */}
+        <SectionHeader
+          title="Bình chọn"
+          isOpen={openSections.polls}
+          onToggle={() => toggleSection("polls")}
+        />
+        {openSections.polls && (
+          <div className="px-4 pb-4">
+            <div className="text-center py-4 text-muted-foreground">
+              <BarChart3 className="size-6 mx-auto mb-2 opacity-50" />
+              <p className="text-xs italic">Chưa có bình chọn nào</p>
+            </div>
+          </div>
+        )}
+
+        {/* Group Link Section */}
+        <SectionHeader
+          title="Link nhóm"
+          isOpen={openSections.groupLink}
+          onToggle={() => toggleSection("groupLink")}
+        />
+        {openSections.groupLink && (
+          <div className="px-4 pb-4 space-y-2">
+            <div className="p-3 rounded-lg bg-secondary/30 border border-border/40 text-xs space-y-2">
+              <p className="font-semibold">https://zalo.me/g/mvdfnx533</p>
+              <Button size="sm" variant="outline" className="w-full h-7 text-xs">
+                <LinkIcon className="size-3 mr-1" />
+                Sao chép link
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Board Section */}
         <SectionHeader
           title="Bảng tin nhóm"
@@ -313,27 +429,32 @@ const ChatInfoPanel = ({ chat, messages, isOpen, onClose }: ChatInfoPanelProps) 
             )}
           </div>
         )}
+
+        {/* Action Buttons - Delete History & Leave Group */}
+        <div className="px-4 pb-4 space-y-2 border-t border-border/40 mt-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full h-9 text-xs text-destructive hover:text-destructive"
+            onClick={handleDeleteHistory}
+          >
+            <Trash2 className="size-4 mr-2" />
+            Xóa lịch sử cuộc trò chuyện
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full h-9 text-xs text-destructive hover:text-destructive"
+            onClick={handleLeaveGroup}
+          >
+            <LogOut className="size-4 mr-2" />
+            Rời khỏi nhóm
+          </Button>
+        </div>
       </div>
 
-      {/* Action Buttons - Vertical at Bottom */}
-      <div className="px-4 py-4 border-t border-border/40 space-y-2 bg-background">
-        <Button
-          variant="secondary"
-          size="sm"
-          className="w-full h-9 text-xs text-destructive hover:text-destructive"
-        >
-          <Trash2 className="size-4 mr-2" />
-          Xóa lịch sử cuộc trò chuyện
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="w-full h-9 text-xs"
-        >
-          <LogOut className="size-4 mr-2" />
-          Đăng xuất
-        </Button>
-      </div>
+      {/* Bottom Section with Pin Toggle and Logout Button */}
+     
     </div>
   );
 };
