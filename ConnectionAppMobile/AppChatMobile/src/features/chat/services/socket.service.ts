@@ -5,8 +5,8 @@ export interface ChatSocketHandlers {
   onIncomingMessage: (message: Message) => void;
   onIncomingConversation: (conversation: Conversation) => void;
   onRecallMessage: (message: Message) => void;
-  onUserTyping?: (data: { userId: number }) => void;
-  onUserStoppedTyping?: (data: { userId: number }) => void;
+  onUserTyping?: (data: TypingPayload) => void;
+  onUserStoppedTyping?: (data: TypingPayload) => void;
   onSecurityNotification?: (payload: {
     type?: string;
     title?: string;
@@ -17,6 +17,13 @@ export interface ChatSocketHandlers {
     ipAddress?: string;
   }) => void;
   onConnectionError?: (error: string) => void;
+}
+
+export interface TypingPayload {
+  conversationId: number;
+  userId: number;
+  displayName?: string;
+  typedAt?: string;
 }
 
 /**
@@ -126,14 +133,20 @@ class ChatSocketService {
         });
 
         // NEW: Subscribe to stopped typing notifications
-        client.subscribe(`/topic/user.${userId}/stopped-typing`, (stompFrame) => {
-          try {
-            const payload = JSON.parse(stompFrame.body);
-            this.handlersRef?.onUserStoppedTyping?.(payload);
-          } catch (e) {
-            console.error("[Socket] Failed to parse stopped-typing notification:", e);
-          }
-        });
+        client.subscribe(
+          `/topic/user.${userId}/stopped-typing`,
+          (stompFrame) => {
+            try {
+              const payload = JSON.parse(stompFrame.body);
+              this.handlersRef?.onUserStoppedTyping?.(payload);
+            } catch (e) {
+              console.error(
+                "[Socket] Failed to parse stopped-typing notification:",
+                e,
+              );
+            }
+          },
+        );
 
         client.subscribe(`/topic/user.${userId}/security`, (stompFrame) => {
           try {
@@ -188,7 +201,10 @@ class ChatSocketService {
         destination: `/app/chat/${conversationId}/typing`,
         body: JSON.stringify({ conversationId }),
       });
-      console.log("[Socket] Sent typing notification for conversation:", conversationId);
+      console.log(
+        "[Socket] Sent typing notification for conversation:",
+        conversationId,
+      );
     }
   }
 
@@ -199,7 +215,10 @@ class ChatSocketService {
         destination: `/app/chat/${conversationId}/stopped-typing`,
         body: JSON.stringify({ conversationId }),
       });
-      console.log("[Socket] Sent stopped typing notification for conversation:", conversationId);
+      console.log(
+        "[Socket] Sent stopped typing notification for conversation:",
+        conversationId,
+      );
     }
   }
 

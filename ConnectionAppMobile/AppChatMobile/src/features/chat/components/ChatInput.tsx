@@ -87,6 +87,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
 
+  const stopTyping = (targetConversationId: number) => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    if (typingStateRef.current) {
+      notifyStoppedTyping(targetConversationId);
+      typingStateRef.current = false;
+    }
+  };
+
   const appendFiles = (incoming: LocalAttachment[]) => {
     if (incoming.length === 0) return;
 
@@ -179,6 +191,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
     const trimmed = text.trim();
     if ((!trimmed && selectedFiles.length === 0) || isSending || disabled)
       return;
+
+    stopTyping(conversationId);
+
     setIsSending(true);
     try {
       await onSend(
@@ -213,7 +228,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSelectEmoji = ({ emoji }: { emoji: string }) => {
     if (!emoji) return;
-    setText((prev) => `${prev}${emoji}`);
+    handleTextChange(`${text}${emoji}`);
   };
 
   // NEW: Handle text input with typing notification
@@ -238,6 +253,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       typingTimeoutRef.current = setTimeout(() => {
         notifyStoppedTyping(conversationId);
         typingStateRef.current = false;
+        typingTimeoutRef.current = null;
         console.log("[ChatInput] User stopped typing");
       }, 1000);
     } else {
@@ -250,6 +266,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
       }
     }
   };

@@ -10,8 +10,15 @@ import { Alert } from "react-native";
 import type { Attachment, Message, Conversation } from "../types";
 import { chatService } from "../services/chat.service";
 import { chatSocketService } from "../services/socket.service";
+import type { TypingPayload } from "../services/socket.service";
 import { useAuth } from "../../auth/context/AuthContext";
 import { authService } from "../../auth/services/auth.service";
+
+interface TypingPresence {
+  userId: number;
+  displayName: string;
+  conversationId: number;
+}
 
 interface ChatContextType {
   conversations: Conversation[];
@@ -19,7 +26,7 @@ interface ChatContextType {
   currentConversationId: number | null;
   isLoading: boolean;
   error: string | null;
-  typingUsers: number[]; // NEW: Track who is typing
+  typingUsers: TypingPresence[];
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
   sendMessage: (
@@ -59,13 +66,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   >(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [typingUsers, setTypingUsers] = useState<number[]>([]); // NEW
+  const [typingUsers, setTypingUsers] = useState<TypingPresence[]>([]);
 
   // Ref so socket handlers always access latest state without reconnecting
   const currentConversationRef = useRef<number | null>(null);
   const userIdRef = useRef<number | null>(null);
   const messageFetchVersionRef = useRef(0);
-  const typingTimeoutRef = useRef<Record<number, NodeJS.Timeout>>({}); // NEW
+  const typingTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
     currentConversationRef.current = currentConversationId;
@@ -136,12 +143,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               ...serverConvo,
               lastMessageContent: existing.lastMessageContent,
               lastMessageAt: existing.lastMessageAt,
-              unreadCount: Math.max(existing.unreadCount, serverConvo.unreadCount),
+              unreadCount: Math.max(
+                existing.unreadCount,
+                serverConvo.unreadCount,
+              ),
             };
           }
           return {
             ...serverConvo,
-            unreadCount: Math.max(existing.unreadCount, serverConvo.unreadCount),
+            unreadCount: Math.max(
+              existing.unreadCount,
+              serverConvo.unreadCount,
+            ),
           };
         });
 
@@ -231,31 +244,79 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   // NEW: Handle user typing notification
-  const onUserTyping = useCallback((data: { userId: number }) => {
+  const onUserTyping = useCallback((data: TypingPayload) => {
+    const activeConversationId = currentConversationRef.current;
+    if (!activeConversationId || data.conversationId !== activeConversationId) {
+      return;
+    }
+
+    if (!data.userId || data.userId === userIdRef.current) {
+      return;
+    }
+
     console.log("[ChatContext] User typing:", data.userId);
+
+    const displayName =
+      (data.displayName ?? "Nguoi dung").trim() || "Nguoi dung";
+
     setTypingUsers((prev) => {
-      if (prev.includes(data.userId)) return prev;
-      return [...prev, data.userId];
+      const index = prev.findIndex((item) => item.userId === data.userId);
+      const nextPresence: TypingPresence = {
+        userId: data.userId,
+        displayName,
+        conversationId: data.conversationId,
+      };
+
+      if (index === -1) {
+        return [...prev, nextPresence];
+      }
+
+      const next = [...prev];
+      next[index] = nextPresence;
+      return next;
     });
 
-    // Auto-clear typing indicator after 3 seconds
-    if (typingTimeoutRef.current[data.userId]) {
-      clearTimeout(typingTimeoutRef.current[data.userId]);
+    const timeoutKey = `${data.conversationId}:${data.userId}`;
+    if (typingTimeoutRef.current[timeoutKey]) {
+      clearTimeout(typingTimeoutRef.current[timeoutKey]);
     }
-    typingTimeoutRef.current[data.userId] = setTimeout(() => {
-      setTypingUsers((prev) => prev.filter((id) => id !== data.userId));
-      delete typingTimeoutRef.current[data.userId];
+
+    typingTimeoutRef.current[timeoutKey] = setTimeout(() => {
+      setTypingUsers((prev) =>
+        prev.filter(
+          (item) =>
+            !(
+              item.conversationId === data.conversationId &&
+              item.userId === data.userId
+            ),
+        ),
+      );
+      delete typingTimeoutRef.current[timeoutKey];
     }, 3000);
   }, []);
 
   // NEW: Handle user stopped typing notification
-  const onUserStoppedTyping = useCallback((data: { userId: number }) => {
-    console.log("[ChatContext] User stopped typing:", data.userId);
-    if (typingTimeoutRef.current[data.userId]) {
-      clearTimeout(typingTimeoutRef.current[data.userId]);
-      delete typingTimeoutRef.current[data.userId];
+  const onUserStoppedTyping = useCallback((data: TypingPayload) => {
+    if (!data.conversationId || !data.userId) {
+      return;
     }
-    setTypingUsers((prev) => prev.filter((id) => id !== data.userId));
+
+    console.log("[ChatContext] User stopped typing:", data.userId);
+    const timeoutKey = `${data.conversationId}:${data.userId}`;
+    if (typingTimeoutRef.current[timeoutKey]) {
+      clearTimeout(typingTimeoutRef.current[timeoutKey]);
+      delete typingTimeoutRef.current[timeoutKey];
+    }
+
+    setTypingUsers((prev) =>
+      prev.filter(
+        (item) =>
+          !(
+            item.conversationId === data.conversationId &&
+            item.userId === data.userId
+          ),
+      ),
+    );
   }, []);
 
   const onSecurityNotification = useCallback(
@@ -467,12 +528,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setError(null);
     try {
       await chatService.deleteMessage(messageId);
-      setCurrentMessages((prev) =>
-        prev.filter((m) => m.id !== messageId),
-      );
+      setCurrentMessages((prev) => prev.filter((m) => m.id !== messageId));
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Xóa tin nhắn thất bại";
+      const msg = err instanceof Error ? err.message : "Xóa tin nhắn thất bại";
       setError(msg);
       throw err;
     }
@@ -489,9 +547,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       messageFetchVersionRef.current += 1;
+      Object.values(typingTimeoutRef.current).forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+      typingTimeoutRef.current = {};
       currentConversationRef.current = conversationId;
       setCurrentConversationId(conversationId);
       setCurrentMessages([]);
+      setTypingUsers([]);
       setError(null);
 
       if (conversationId === null) {

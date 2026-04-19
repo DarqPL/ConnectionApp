@@ -24,6 +24,15 @@ interface SocketState {
   onlineUsers: string[];
   connectSocket: (userId: number) => void;
   disconnectSocket: () => void;
+  notifyTyping: (conversationId: number) => void;
+  notifyStoppedTyping: (conversationId: number) => void;
+}
+
+interface TypingPayload {
+  conversationId: number;
+  userId: number;
+  displayName?: string;
+  typedAt?: string;
 }
 
 const resolveSocketUrl = (): string => {
@@ -77,6 +86,35 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           useChatStore.getState().updateMessage(recalledMessage);
         });
 
+        client.subscribe(`/topic/user.${userId}/typing`, (message) => {
+          const payload: TypingPayload = JSON.parse(message.body);
+          if (!payload?.conversationId || !payload?.userId) {
+            return;
+          }
+
+          if (payload.userId === userId) {
+            return;
+          }
+
+          useChatStore.getState().upsertTypingUser({
+            conversationId: payload.conversationId,
+            userId: payload.userId,
+            displayName: payload.displayName || "Nguoi dung",
+            typedAt: payload.typedAt,
+          });
+        });
+
+        client.subscribe(`/topic/user.${userId}/stopped-typing`, (message) => {
+          const payload: TypingPayload = JSON.parse(message.body);
+          if (!payload?.conversationId || !payload?.userId) {
+            return;
+          }
+
+          useChatStore
+            .getState()
+            .removeTypingUser(payload.conversationId, payload.userId);
+        });
+
         // Subscribe to security warnings (unknown-device login).
         client.subscribe(`/topic/user.${userId}/security`, (message) => {
           const payload: SecurityNotification = JSON.parse(message.body);
@@ -115,7 +153,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         client.subscribe(`/topic/user.${userId}/friend-requests`, (message) => {
           const newRequest = JSON.parse(message.body);
           useFriendStore.getState().addPendingRequest(newRequest);
-          
+
           // Show toast notification
           toast.info("Bạn có lời mời kết bạn mới", {
             description: `${newRequest.displayName} đã gửi lời mời kết bạn`,
@@ -126,8 +164,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         // Subscribe to friend accepted notifications
         client.subscribe(`/topic/user.${userId}/friend-accepted`, (message) => {
           const acceptedFriend = JSON.parse(message.body);
-          useFriendStore.getState().removePendingRequest(acceptedFriend.friendId);
-          
+          useFriendStore
+            .getState()
+            .removePendingRequest(acceptedFriend.friendId);
+
           // Show toast notification
           toast.success("Lời mời được chấp nhận", {
             description: `${acceptedFriend.displayName} đã chấp nhận lời mời kết bạn`,
@@ -160,6 +200,31 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   disconnectSocket: () => {
     const client = get().client;
     client?.deactivate();
+    useChatStore.getState().clearAllTypingUsers();
     set({ client: null });
+  },
+
+  notifyTyping: (conversationId) => {
+    const client = get().client;
+    if (!client?.connected) {
+      return;
+    }
+
+    client.publish({
+      destination: `/app/chat/${conversationId}/typing`,
+      body: JSON.stringify({ conversationId }),
+    });
+  },
+
+  notifyStoppedTyping: (conversationId) => {
+    const client = get().client;
+    if (!client?.connected) {
+      return;
+    }
+
+    client.publish({
+      destination: `/app/chat/${conversationId}/stopped-typing`,
+      body: JSON.stringify({ conversationId }),
+    });
   },
 }));

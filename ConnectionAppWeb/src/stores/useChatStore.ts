@@ -4,6 +4,41 @@ import type { Message } from "@/types/chat";
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 
+const TYPING_CLEAR_DELAY_MS = 3500;
+const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+const getTypingKey = (conversationId: number, userId: number): string =>
+  `${conversationId}:${userId}`;
+
+const clearTypingTimeout = (conversationId: number, userId: number): void => {
+  const key = getTypingKey(conversationId, userId);
+  const timeoutId = typingTimeouts.get(key);
+  if (!timeoutId) {
+    return;
+  }
+
+  clearTimeout(timeoutId);
+  typingTimeouts.delete(key);
+};
+
+const clearTypingTimeoutsByConversation = (conversationId: number): void => {
+  for (const [key, timeoutId] of typingTimeouts.entries()) {
+    if (!key.startsWith(`${conversationId}:`)) {
+      continue;
+    }
+
+    clearTimeout(timeoutId);
+    typingTimeouts.delete(key);
+  }
+};
+
+const clearAllTypingTimeouts = (): void => {
+  for (const timeoutId of typingTimeouts.values()) {
+    clearTimeout(timeoutId);
+  }
+  typingTimeouts.clear();
+};
+
 const buildMessagePreview = (message: Message): string => {
   const content = (message.content ?? "").trim();
   if (content) {
@@ -23,6 +58,7 @@ const buildMessagePreview = (message: Message): string => {
 
 export const useChatStore = create<ChatState>()((set, get) => ({
   conversations: [],
+  typingByConversation: {},
   messages: {},
   activeConversationId: null,
   convoLoading: false,
@@ -32,6 +68,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
 
   setActiveConversation: (id) => {
+    const prevConversationId = get().activeConversationId;
+    if (prevConversationId && prevConversationId !== id) {
+      get().clearTypingUsers(prevConversationId);
+    }
+
     set({ activeConversationId: id });
     // Call backend to mark as read
     if (id) {
@@ -47,8 +88,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   reset: () => {
+    clearAllTypingTimeouts();
     set({
       conversations: [],
+      typingByConversation: {},
       messages: {},
       activeConversationId: null,
       convoLoading: false,
@@ -293,6 +336,106 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
+  upsertTypingUser: (typingUser) => {
+    const user = useAuthStore.getState().user;
+    if (!typingUser.conversationId || !typingUser.userId) {
+      return;
+    }
+
+    if (user && typingUser.userId === user.id) {
+      return;
+    }
+
+    const fallbackName = typingUser.displayName?.trim() || "Nguoi dung";
+
+    set((state) => {
+      const current =
+        state.typingByConversation[typingUser.conversationId] ?? [];
+      const index = current.findIndex(
+        (item) => item.userId === typingUser.userId,
+      );
+
+      const nextTypingUser = {
+        conversationId: typingUser.conversationId,
+        userId: typingUser.userId,
+        displayName: fallbackName,
+        typedAt: typingUser.typedAt,
+      };
+
+      const next =
+        index === -1
+          ? [...current, nextTypingUser]
+          : current.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, ...nextTypingUser } : item,
+            );
+
+      return {
+        typingByConversation: {
+          ...state.typingByConversation,
+          [typingUser.conversationId]: next,
+        },
+      };
+    });
+
+    clearTypingTimeout(typingUser.conversationId, typingUser.userId);
+    const timeoutId = setTimeout(() => {
+      get().removeTypingUser(typingUser.conversationId, typingUser.userId);
+    }, TYPING_CLEAR_DELAY_MS);
+
+    typingTimeouts.set(
+      getTypingKey(typingUser.conversationId, typingUser.userId),
+      timeoutId,
+    );
+  },
+
+  removeTypingUser: (conversationId, userId) => {
+    clearTypingTimeout(conversationId, userId);
+
+    set((state) => {
+      const current = state.typingByConversation[conversationId] ?? [];
+      if (current.length === 0) {
+        return state;
+      }
+
+      const filtered = current.filter((item) => item.userId !== userId);
+      if (filtered.length === current.length) {
+        return state;
+      }
+
+      if (filtered.length === 0) {
+        const rest = { ...state.typingByConversation };
+        delete rest[conversationId];
+        return { typingByConversation: rest };
+      }
+
+      return {
+        typingByConversation: {
+          ...state.typingByConversation,
+          [conversationId]: filtered,
+        },
+      };
+    });
+  },
+
+  clearTypingUsers: (conversationId) => {
+    clearTypingTimeoutsByConversation(conversationId);
+
+    set((state) => {
+      if (!state.typingByConversation[conversationId]) {
+        return state;
+      }
+
+      const rest = { ...state.typingByConversation };
+      delete rest[conversationId];
+      return { typingByConversation: rest };
+    });
+  },
+
+  clearAllTypingUsers: () => {
+    clearAllTypingTimeouts();
+    set({ typingByConversation: {} });
+  },
+
   updateMessage: (message) => {
     const convoId = message.conversationId;
     const user = useAuthStore.getState().user;
@@ -349,7 +492,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   deleteMessage: async (conversationId, messageId) => {
     try {
       await chatService.deleteMessage(messageId);
-      
+
       set((state) => {
         const prevItems = state.messages[conversationId]?.items ?? [];
         return {
