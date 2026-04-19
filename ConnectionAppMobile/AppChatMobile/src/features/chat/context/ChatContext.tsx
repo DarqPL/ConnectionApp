@@ -328,7 +328,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       reason?: string;
       deviceName?: string;
       ipAddress?: string;
+      remainingMinutes?: number;
+      lockUntil?: string;
     }) => {
+      if (payload.type === "ACCOUNT_TEMP_LOCKED") {
+        const message =
+          payload.message ||
+          (payload.remainingMinutes
+            ? `Bạn bị khóa tài khoản ${payload.remainingMinutes} phút do vi phạm chính sách.`
+            : "Bạn đã vi phạm chính sách của chúng tôi.");
+
+        Alert.alert(payload.title || "Tài khoản bị khóa tạm thời", message);
+        signOut().catch(() => {
+          Alert.alert("Phiên đăng nhập đã hết hạn", "Vui lòng đăng nhập lại.");
+        });
+        return;
+      }
+
       if (
         payload.type === "SESSION_REVOKED_NEW_LOGIN" &&
         payload.targetPlatform === "MOBILE"

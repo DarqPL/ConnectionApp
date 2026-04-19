@@ -27,7 +27,9 @@ public class SecurityNotificationService {
                 deviceName,
                 ipAddress,
                 userAgent,
-                LocalDateTime.now()
+            LocalDateTime.now(),
+            null,
+            null
         );
 
         messagingTemplate.convertAndSend("/topic/user." + userId + "/security", payload);
@@ -40,16 +42,39 @@ public class SecurityNotificationService {
                                String userAgent) {
         SecurityNotificationDTO payload = new SecurityNotificationDTO(
             "SESSION_REVOKED_NEW_LOGIN",
-            "Phiên đăng nhập đã kết thúc",
+            "Thông báo đăng nhập",
             "Tài khoản của bạn vừa đăng nhập trên thiết bị " + targetPlatform.name() + " khác.",
             targetPlatform.name(),
             "NEW_LOGIN_SAME_PLATFORM",
             deviceName,
             ipAddress,
             userAgent,
-            LocalDateTime.now()
+            LocalDateTime.now(),
+            null,
+            null
         );
 
         messagingTemplate.convertAndSend("/topic/user." + userId + "/security", payload);
         }
+
+    public void notifyAccountTemporarilyLocked(Long userId,
+                                               LocalDateTime lockUntil,
+                                               long remainingMinutes,
+                                               String reason) {
+        SecurityNotificationDTO payload = new SecurityNotificationDTO(
+                "ACCOUNT_TEMP_LOCKED",
+                "Tài khoản bị khóa tạm thời",
+                "Bạn bị khóa tài khoản " + remainingMinutes + " phút do vi phạm chính sách.",
+                null,
+                reason,
+                null,
+                null,
+                null,
+                LocalDateTime.now(),
+                remainingMinutes,
+                lockUntil
+        );
+
+        messagingTemplate.convertAndSend("/topic/user." + userId + "/security", payload);
+    }
 }

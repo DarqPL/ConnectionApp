@@ -20,6 +20,7 @@ import iuh.fit.ConnectionAppBackend.service.EmailService;
 import iuh.fit.ConnectionAppBackend.service.OtpService;
 import iuh.fit.ConnectionAppBackend.service.RefreshTokenService;
 import iuh.fit.ConnectionAppBackend.service.SecurityNotificationService;
+import iuh.fit.ConnectionAppBackend.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,6 +62,9 @@ public class AuthController {
 
     @Autowired
     private SecurityNotificationService securityNotificationService;
+
+    @Autowired
+    private UserService userService;
 
     @Autowired
     private OtpService otpService;
@@ -141,12 +145,16 @@ public class AuthController {
     @PostMapping("/signin")
     public ResponseEntity<?> loginUser(@RequestBody LoginRequest req,
                                        HttpServletRequest httpRequest) {
+        Optional<User> candidate = userService.getUserByIdentifier(req.getUsername());
+        candidate.ifPresent(userService::assertAccountIsActive);
+
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword())
         );
 
         CustomerUserDetails  userDetails = (CustomerUserDetails) authentication.getPrincipal();
         User user = userDetails.getUser();
+        userService.assertAccountIsActive(user);
 
         String userAgent = httpRequest.getHeader("User-Agent");
         AuthPlatform platform = resolvePlatform(req.getPlatform(), userAgent);
@@ -191,6 +199,7 @@ public class AuthController {
         }
 
         RefreshToken token = refreshTokenService.getValidRefreshToken(refreshToken);
+        userService.assertAccountIsActive(token.getUser());
 
         refreshTokenService.touch(token);
 

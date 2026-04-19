@@ -8,15 +8,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Label } from "../ui/label";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
+import { useEffect } from "react";
+
+const LOCK_NOTICE_KEY = "auth_lock_notice";
 
 const signInSchema = z.object({
-  username: z.string().min(3, "Tên đăng nhập hoặc email phải có ít nhất 3 ký tự"),
+  username: z
+    .string()
+    .min(3, "Tên đăng nhập hoặc email phải có ít nhất 3 ký tự"),
   password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
 });
 
 type SignInFormValues = z.infer<typeof signInSchema>;
 
-export function SigninForm({ className, ...props }: React.ComponentProps<"div">) {
+export function SigninForm({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   const { signIn } = useAuthStore();
   const navigate = useNavigate();
   const {
@@ -28,6 +36,16 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
     resolver: zodResolver(signInSchema),
   });
 
+  useEffect(() => {
+    const lockNotice = sessionStorage.getItem(LOCK_NOTICE_KEY);
+    if (!lockNotice) {
+      return;
+    }
+
+    setError("root", { message: lockNotice });
+    sessionStorage.removeItem(LOCK_NOTICE_KEY);
+  }, [setError]);
+
   const onSubmit = async (data: SignInFormValues) => {
     const { username, password } = data;
     try {
@@ -35,31 +53,30 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
       navigate("/");
     } catch (error: any) {
       console.error("Login failed:", error);
-      const message = error.response?.data?.message || "Tên đăng nhập hoặc mật khẩu không chính xác";
+      const code = error.response?.data?.code;
+      const remainingMinutes = error.response?.data?.remainingMinutes;
+      let message =
+        error.response?.data?.message ||
+        "Tên đăng nhập hoặc mật khẩu không chính xác";
+
+      if (code === "ACCOUNT_TEMP_LOCKED" && Number(remainingMinutes) > 0) {
+        message = `${message}. Còn ${remainingMinutes} phút để gỡ khóa.`;
+      }
+
       setError("root", { message });
     }
   };
 
   return (
-    <div
-      className={cn("flex flex-col gap-6", className)}
-      {...props}
-    >
+    <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0 border-border/40 shadow-2xl bg-background/60 backdrop-blur-xl rounded-3xl">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form
-            className="p-8 md:p-12"
-            onSubmit={handleSubmit(onSubmit)}
-          >
+          <form className="p-8 md:p-12" onSubmit={handleSubmit(onSubmit)}>
             <div className="flex flex-col gap-8">
               {/* Header */}
               <div className="flex flex-col gap-2">
                 <div className="mb-4">
-                  <img
-                    src="/logo.svg"
-                    alt="logo"
-                    className="size-10"
-                  />
+                  <img src="/logo.svg" alt="logo" className="size-10" />
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
                   Chào mừng trở lại
@@ -72,7 +89,10 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
               <div className="grid gap-5">
                 {/* Username/Email */}
                 <div className="grid gap-2">
-                  <Label htmlFor="username" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                  <Label
+                    htmlFor="username"
+                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1"
+                  >
                     Tên đăng nhập hoặc Email
                   </Label>
                   <Input
@@ -92,7 +112,10 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
                 {/* Password */}
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                    <Label
+                      htmlFor="password"
+                      className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1"
+                    >
                       Mật khẩu
                     </Label>
                     <a
@@ -157,19 +180,23 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
             <div className="relative z-10 text-center space-y-4 max-w-[280px]">
               <div className="p-5 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl">
                 <p className="text-white text-lg font-medium italic leading-relaxed">
-                  "Connection là nơi khoảng cách không còn là rào cản giữa chúng ta."
+                  "Connection là nơi khoảng cách không còn là rào cản giữa chúng
+                  ta."
                 </p>
                 <div className="mt-6 flex items-center justify-center gap-3">
                   <div className="flex -space-x-2">
-                    {[
-                      "bg-blue-400",
-                      "bg-violet-400",
-                      "bg-indigo-400"
-                    ].map((color, i) => (
-                      <div key={i} className={`size-7 rounded-full border-2 border-white/30 ${color} shadow-sm`} />
-                    ))}
+                    {["bg-blue-400", "bg-violet-400", "bg-indigo-400"].map(
+                      (color, i) => (
+                        <div
+                          key={i}
+                          className={`size-7 rounded-full border-2 border-white/30 ${color} shadow-sm`}
+                        />
+                      ),
+                    )}
                   </div>
-                  <span className="text-white/90 text-xs font-semibold tracking-wide">+10k active users</span>
+                  <span className="text-white/90 text-xs font-semibold tracking-wide">
+                    +10k active users
+                  </span>
                 </div>
               </div>
             </div>
@@ -178,7 +205,15 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
       </Card>
 
       <div className="text-xs text-center text-muted-foreground/50 max-w-sm mx-auto">
-        Bằng cách tiếp tục, bạn đồng ý với <a href="#" className="underline hover:text-primary transition-colors">Điều khoản</a> và <a href="#" className="underline hover:text-primary transition-colors">Bảo mật</a> của chúng tôi.
+        Bằng cách tiếp tục, bạn đồng ý với{" "}
+        <a href="#" className="underline hover:text-primary transition-colors">
+          Điều khoản
+        </a>{" "}
+        và{" "}
+        <a href="#" className="underline hover:text-primary transition-colors">
+          Bảo mật
+        </a>{" "}
+        của chúng tôi.
       </div>
     </div>
   );

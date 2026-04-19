@@ -98,7 +98,7 @@ const ChatRoomScreen = ({ route }: any) => {
     deleteMessage,
     setCurrentConversation,
   } = useChat();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
   const userInteractedRef = useRef(false);
   const initialAnchorDoneRef = useRef(false);
@@ -356,6 +356,14 @@ const ChatRoomScreen = ({ route }: any) => {
       const code = (error as any)?.code;
       const message =
         error instanceof Error ? error.message : "Gửi tin nhắn thất bại";
+
+      if (code === "ACCOUNT_TEMP_LOCKED") {
+        Alert.alert("Tài khoản bị khóa tạm thời", message);
+        await signOut().catch(() => {
+          Alert.alert("Phiên đăng nhập đã hết hạn", "Vui lòng đăng nhập lại.");
+        });
+        return;
+      }
 
       if (code === "CHAT_BLOCKED" || /chặn/i.test(message)) {
         await refreshBlockStatus();

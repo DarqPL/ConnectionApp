@@ -1,6 +1,12 @@
 package iuh.fit.ConnectionAppBackend.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
+import iuh.fit.ConnectionAppBackend.exception.AccountTemporarilyLockedException;
+import iuh.fit.ConnectionAppBackend.exception.ErrorResponse;
 import iuh.fit.ConnectionAppBackend.service.CustomUserDetailsService;
+import iuh.fit.ConnectionAppBackend.service.CustomerUserDetails;
+import iuh.fit.ConnectionAppBackend.service.UserAccountLockService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,6 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -24,6 +31,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
     private CustomUserDetailsService customUserDetailsService;
+
+        @Autowired
+        private UserAccountLockService userAccountLockService;
+
+        @Autowired
+        private ObjectMapper objectMapper;
 
 
     @Override
@@ -53,6 +66,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     customUserDetailsService.loadUserByUsername(username);
 
             if (jwtUtils.validateToken(jwt, userDetails)) {
+                                if (userDetails instanceof CustomerUserDetails customerUserDetails) {
+                                        User user = customerUserDetails.getUser();
+                                        try {
+                                                userAccountLockService.assertAccountIsActive(user);
+                                        } catch (AccountTemporarilyLockedException ex) {
+                                                writeTemporaryLockResponse(response, request, ex);
+                                                return;
+                                        } catch (RuntimeException ex) {
+                                                writeUnauthorized(response, ex.getMessage());
+                                                return;
+                                        }
+                                }
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
@@ -82,6 +107,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 response.setContentType("application/json");
                 response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                 response.getWriter().write("{\"message\":\"" + message + "\"}");
+        }
+
+        private void writeTemporaryLockResponse(HttpServletResponse response,
+                                                HttpServletRequest request,
+                                                AccountTemporarilyLockedException ex) throws IOException {
+                ErrorResponse payload = ErrorResponse.builder()
+                        .status(HttpServletResponse.SC_FORBIDDEN)
+                        .code("ACCOUNT_TEMP_LOCKED")
+                        .message(ex.getMessage())
+                        .error("Forbidden")
+                        .path(request.getRequestURI())
+                        .timestamp(LocalDateTime.now())
+                        .remainingMinutes(ex.getRemainingMinutes())
+                        .lockUntil(ex.getLockUntil())
+                        .build();
+
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                response.getWriter().write(objectMapper.writeValueAsString(payload));
         }
 
 }

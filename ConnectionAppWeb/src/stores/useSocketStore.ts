@@ -7,6 +7,8 @@ import { useFriendStore } from "./useFriendStore";
 import { toast } from "sonner";
 import api from "@/lib/axios";
 
+const LOCK_NOTICE_KEY = "auth_lock_notice";
+
 interface SecurityNotification {
   type: string;
   title: string;
@@ -17,6 +19,8 @@ interface SecurityNotification {
   ipAddress?: string;
   userAgent?: string;
   loginAt?: string;
+  remainingMinutes?: number;
+  lockUntil?: string;
 }
 
 interface SocketState {
@@ -118,6 +122,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         // Subscribe to security warnings (unknown-device login).
         client.subscribe(`/topic/user.${userId}/security`, (message) => {
           const payload: SecurityNotification = JSON.parse(message.body);
+
+          if (payload.type === "ACCOUNT_TEMP_LOCKED") {
+            get().disconnectSocket();
+            useAuthStore.getState().clearState();
+
+            const lockMessage =
+              payload.message ||
+              (payload.remainingMinutes
+                ? `Bạn bị khóa ${payload.remainingMinutes} phút do vi phạm chính sách.`
+                : "Bạn đã vi phạm chính sách của chúng tôi.");
+
+            sessionStorage.setItem(LOCK_NOTICE_KEY, lockMessage);
+
+            toast.error(payload.title || "Tài khoản bị khóa tạm thời", {
+              description: lockMessage,
+              duration: 7000,
+            });
+
+            if (window.location.pathname !== "/signin") {
+              window.location.href = "/signin";
+            }
+            return;
+          }
 
           if (
             payload.type === "SESSION_REVOKED_NEW_LOGIN" &&

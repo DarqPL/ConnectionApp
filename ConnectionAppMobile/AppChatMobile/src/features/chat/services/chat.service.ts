@@ -17,12 +17,22 @@ interface UploadResponse {
 export class ChatApiError extends Error {
   code?: string;
   status?: number;
+  remainingMinutes?: number;
+  lockUntil?: string;
 
-  constructor(message: string, code?: string, status?: number) {
+  constructor(
+    message: string,
+    code?: string,
+    status?: number,
+    remainingMinutes?: number,
+    lockUntil?: string,
+  ) {
     super(message);
     this.name = "ChatApiError";
     this.code = code;
     this.status = status;
+    this.remainingMinutes = remainingMinutes;
+    this.lockUntil = lockUntil;
   }
 }
 
@@ -67,7 +77,13 @@ export class ChatService {
     try {
       const data = await response.json();
       const message = data?.message || data?.error || fallback;
-      return new ChatApiError(message, data?.code, response.status);
+      return new ChatApiError(
+        message,
+        data?.code,
+        response.status,
+        Number(data?.remainingMinutes),
+        data?.lockUntil,
+      );
     } catch {
       return new ChatApiError(fallback, undefined, response.status);
     }
@@ -198,12 +214,9 @@ export class ChatService {
   }
 
   async deleteMessage(messageId: string): Promise<void> {
-    const response = await authService.authFetch(
-      `/messages/${messageId}`,
-      {
-        method: "DELETE",
-      },
-    );
+    const response = await authService.authFetch(`/messages/${messageId}`, {
+      method: "DELETE",
+    });
 
     if (!response.ok) {
       throw await this.parseError(response, "Xóa tin nhắn thất bại");
