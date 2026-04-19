@@ -3,6 +3,7 @@ package iuh.fit.ConnectionAppBackend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.ConnectionAppBackend.domain.common.AttachmentType;
+import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
 import org.slf4j.Logger;
@@ -32,6 +33,12 @@ public class GroupMediaSafetyService {
     public record SafetyVerdict(boolean blocked, double confidence, String reason) {
     }
 
+    public enum ConversationScope {
+        GROUP,
+        PRIVATE,
+        BOTH
+    }
+
     private static final Logger logger = LoggerFactory.getLogger(GroupMediaSafetyService.class);
 
     @Value("${app.ai.safety.enabled:true}")
@@ -51,6 +58,9 @@ public class GroupMediaSafetyService {
 
     @Value("${app.ai.safety.high-confidence-threshold:0.85}")
     private double highConfidenceThreshold;
+
+    @Value("${app.ai.safety.conversation-scope:GROUP}")
+    private String conversationScope;
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -86,6 +96,19 @@ public class GroupMediaSafetyService {
         }
 
         return new SafetyVerdict(false, 0D, "Media passed policy checks");
+    }
+
+    public boolean shouldScanConversation(ConversationType conversationType) {
+        if (!enabled || conversationType == null) {
+            return false;
+        }
+
+        ConversationScope scope = resolveConversationScope();
+        return switch (scope) {
+            case GROUP -> conversationType == ConversationType.GROUP;
+            case PRIVATE -> conversationType == ConversationType.PRIVATE;
+            case BOTH -> conversationType == ConversationType.GROUP || conversationType == ConversationType.PRIVATE;
+        };
     }
 
     private SafetyVerdict scanSingleAttachment(Attachment attachment) {
@@ -269,5 +292,18 @@ public class GroupMediaSafetyService {
             return "";
         }
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private ConversationScope resolveConversationScope() {
+        if (!StringUtils.hasText(conversationScope)) {
+            return ConversationScope.GROUP;
+        }
+
+        try {
+            return ConversationScope.valueOf(conversationScope.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            logger.warn("[SafetyFilter] Invalid conversation scope '{}', fallback to GROUP", conversationScope);
+            return ConversationScope.GROUP;
+        }
     }
 }
