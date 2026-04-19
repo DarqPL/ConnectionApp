@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { Ban, MoreVertical, ShieldCheck, FileText } from "lucide-react";
+import { Ban, MoreVertical, ShieldCheck, PanelRight } from "lucide-react";
 import { friendService } from "@/services/friendService";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -142,9 +142,9 @@ const ChatWindowHeader = ({
                 size="icon"
                 className="size-8"
                 onClick={onFilesOpen}
-                title="Xem tập tin"
+                title="Thông tin hội thoại"
               >
-                <FileText className="size-4" />
+                <PanelRight className="size-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -185,9 +185,9 @@ const ChatWindowHeader = ({
                 size="icon"
                 className="size-8"
                 onClick={onFilesOpen}
-                title="Xem tập tin"
+                title="Thông tin hội thoại"
               >
-                <FileText className="size-4" />
+                <PanelRight className="size-4" />
               </Button>
             </div>
           )}
