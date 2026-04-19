@@ -2,15 +2,13 @@ package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
 
 
 public class CustomerUserDetails implements UserDetails {
@@ -47,6 +45,20 @@ public class CustomerUserDetails implements UserDetails {
     @Override
     public boolean isCredentialsNonExpired() {
         return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        if (user.getStatus() == UserStatus.LOCKED) {
+            return false;
+        }
+
+        return user.getLockUntil() == null || !user.getLockUntil().isAfter(LocalDateTime.now());
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return user.getStatus() != UserStatus.DELETED;
     }
 
 }

@@ -127,6 +127,28 @@ export interface User {
   status: string;
 }
 
+export class AuthApiError extends Error {
+  code?: string;
+  status?: number;
+  remainingMinutes?: number;
+  lockUntil?: string;
+
+  constructor(
+    message: string,
+    code?: string,
+    status?: number,
+    remainingMinutes?: number,
+    lockUntil?: string,
+  ) {
+    super(message);
+    this.name = "AuthApiError";
+    this.code = code;
+    this.status = status;
+    this.remainingMinutes = remainingMinutes;
+    this.lockUntil = lockUntil;
+  }
+}
+
 interface SignInResponse {
   accessToken: string;
 }
@@ -161,10 +183,24 @@ export class AuthService {
   ): Promise<Error> {
     try {
       const data = await response.json();
-      const message = data?.message || data?.error || fallback;
-      return new Error(message);
+      const code = data?.code;
+      const remainingMinutes = Number(data?.remainingMinutes);
+      const lockUntil = data?.lockUntil;
+      let message = data?.message || data?.error || fallback;
+
+      if (code === "ACCOUNT_TEMP_LOCKED" && remainingMinutes > 0) {
+        message = `${message}. Còn ${remainingMinutes} phút để gỡ khóa.`;
+      }
+
+      return new AuthApiError(
+        message,
+        code,
+        response.status,
+        Number.isFinite(remainingMinutes) ? remainingMinutes : undefined,
+        lockUntil,
+      );
     } catch {
-      return new Error(fallback);
+      return new AuthApiError(fallback, undefined, response.status);
     }
   }
 
@@ -352,12 +388,18 @@ export class AuthService {
 
   async confirmDeleteAccount(otp: string): Promise<void> {
     const params = new URLSearchParams({ otp });
-    const response = await this.authFetch(`/users/delete/confirm?${params.toString()}`, {
-      method: "POST",
-    });
+    const response = await this.authFetch(
+      `/users/delete/confirm?${params.toString()}`,
+      {
+        method: "POST",
+      },
+    );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Mã OTP không chính xác hoặc đã hết hạn");
+      throw await this.parseError(
+        response,
+        "Mã OTP không chính xác hoặc đã hết hạn",
+      );
     }
   }
 
@@ -426,14 +468,20 @@ export class AuthService {
     const isFormData =
       init.body instanceof FormData ||
       (init.body !== null &&
-        typeof init.body === 'object' &&
-        typeof (init.body as any).append === 'function');
+        typeof init.body === "object" &&
+        typeof (init.body as any).append === "function");
 
     console.log(`[AuthService] authFetch(${path}) - isFormData:`, isFormData);
     console.log(`[AuthService] body type:`, typeof init.body);
-    if (init.body && typeof init.body === 'object') {
-      console.log(`[AuthService] body instanceof FormData:`, init.body instanceof FormData);
-      console.log(`[AuthService] body.append fn:`, typeof (init.body as any).append);
+    if (init.body && typeof init.body === "object") {
+      console.log(
+        `[AuthService] body instanceof FormData:`,
+        init.body instanceof FormData,
+      );
+      console.log(
+        `[AuthService] body.append fn:`,
+        typeof (init.body as any).append,
+      );
     }
 
     let requestInit: RequestInit;
@@ -443,7 +491,9 @@ export class AuthService {
       requestInit = {
         ...init,
         headers: {
-          ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}),
+          ...(this.accessToken
+            ? { Authorization: `Bearer ${this.accessToken}` }
+            : {}),
         },
       };
       console.log(`[AuthService] Using FormData headers with auth token`);

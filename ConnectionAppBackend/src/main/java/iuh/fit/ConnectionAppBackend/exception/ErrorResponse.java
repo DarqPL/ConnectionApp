@@ -18,5 +18,7 @@ public class ErrorResponse {
     private String error;
     private String path;
     private LocalDateTime timestamp;
+    private Long remainingMinutes;
+    private LocalDateTime lockUntil;
     private String trace;
 }

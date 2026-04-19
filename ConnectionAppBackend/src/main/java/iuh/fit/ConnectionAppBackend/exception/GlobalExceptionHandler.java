@@ -132,6 +132,24 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(AccountTemporarilyLockedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountTemporarilyLockedException(
+            AccountTemporarilyLockedException ex, WebRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.FORBIDDEN.value())
+                .code("ACCOUNT_TEMP_LOCKED")
+                .message(ex.getMessage())
+                .error("Forbidden")
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .remainingMinutes(ex.getRemainingMinutes())
+                .lockUntil(ex.getLockUntil())
+                .build();
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ErrorResponse> handleStorageException(
             StorageException ex, WebRequest request) {

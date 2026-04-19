@@ -15,6 +15,8 @@ export interface ChatSocketHandlers {
     reason?: string;
     deviceName?: string;
     ipAddress?: string;
+    remainingMinutes?: number;
+    lockUntil?: string;
   }) => void;
   onConnectionError?: (error: string) => void;
 }

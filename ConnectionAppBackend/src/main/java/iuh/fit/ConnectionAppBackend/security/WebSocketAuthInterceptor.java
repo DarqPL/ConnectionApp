@@ -1,6 +1,8 @@
 package iuh.fit.ConnectionAppBackend.security;
 
 import iuh.fit.ConnectionAppBackend.service.CustomUserDetailsService;
+import iuh.fit.ConnectionAppBackend.service.CustomerUserDetails;
+import iuh.fit.ConnectionAppBackend.service.UserAccountLockService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -20,6 +22,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor  {
     @Autowired
     private CustomUserDetailsService userDetailsService;
 
+    @Autowired
+    private UserAccountLockService userAccountLockService;
+
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor =
@@ -30,23 +35,32 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor  {
             String token = accessor.getFirstNativeHeader("Authorization");
 
             if (token != null && token.startsWith("Bearer ")) {
+                try {
+                    token = token.substring(7);
 
-                token = token.substring(7);
+                    String username = jwtUtils.extractUsername(token);
 
-                String username = jwtUtils.extractUsername(token);
+                    UserDetails userDetails =
+                            userDetailsService.loadUserByUsername(username);
 
-                UserDetails userDetails =
-                        userDetailsService.loadUserByUsername(username);
+                    if (jwtUtils.validateToken(token, userDetails)) {
+                        if (userDetails instanceof CustomerUserDetails customerUserDetails) {
+                            userAccountLockService.assertAccountIsActive(customerUserDetails.getUser());
+                        }
 
-                if (jwtUtils.validateToken(token, userDetails)) {
+                        UsernamePasswordAuthenticationToken auth =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails, null, userDetails.getAuthorities());
 
-                    UsernamePasswordAuthenticationToken auth =
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails, null, userDetails.getAuthorities());
-
-                    accessor.setUser(auth);
+                        accessor.setUser(auth);
+                        return message;
+                    }
+                } catch (RuntimeException ex) {
+                    return null;
                 }
             }
+
+            return null;
         }
 
         return message;

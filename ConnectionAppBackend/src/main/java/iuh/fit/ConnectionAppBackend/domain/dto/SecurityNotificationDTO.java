@@ -19,4 +19,6 @@ public class SecurityNotificationDTO {
     private String ipAddress;
     private String userAgent;
     private LocalDateTime loginAt;
+    private Long remainingMinutes;
+    private LocalDateTime lockUntil;
 }

@@ -14,6 +14,8 @@ import {
   MAX_UPLOAD_FILE_SIZE_LABEL,
 } from "@/config/upload";
 
+const LOCK_NOTICE_KEY = "auth_lock_notice";
+
 const MAX_FILES = 5;
 
 interface PendingAttachment {
@@ -55,7 +57,9 @@ const MessageInput = ({
 }: MessageInputProps) => {
   const { user } = useAuthStore();
   const { sendMessage } = useChatStore();
-  const { notifyTyping, notifyStoppedTyping } = useSocketStore();
+  const { notifyTyping, notifyStoppedTyping, disconnectSocket } =
+    useSocketStore();
+  const { clearState } = useAuthStore();
   const [value, setValue] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
@@ -219,6 +223,27 @@ const MessageInput = ({
       const status = (error as any)?.response?.status;
       const code = (error as any)?.response?.data?.code;
       const message = (error as any)?.response?.data?.message;
+      const remainingMinutes = (error as any)?.response?.data?.remainingMinutes;
+
+      if (status === 403 && code === "ACCOUNT_TEMP_LOCKED") {
+        const lockMessage =
+          message ||
+          (Number(remainingMinutes) > 0
+            ? `Bạn đã vi phạm chính sách của chúng tôi. Tài khoản bị khóa ${remainingMinutes} phút.`
+            : "Bạn đã vi phạm chính sách của chúng tôi.");
+
+        toast.error(lockMessage);
+
+        sessionStorage.setItem(LOCK_NOTICE_KEY, lockMessage);
+
+        disconnectSocket();
+        clearState();
+
+        if (window.location.pathname !== "/signin") {
+          window.location.href = "/signin";
+        }
+        return;
+      }
 
       if (status === 403 && code === "CHAT_BLOCKED") {
         toast.error(message || "Bạn đã bị chặn");

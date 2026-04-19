@@ -54,6 +54,10 @@ public class User {
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
+    private LocalDateTime lockUntil;
+
+    private String lockReason;
+
     @Column(nullable = false)
     private Integer tokenVersion = 0;
 

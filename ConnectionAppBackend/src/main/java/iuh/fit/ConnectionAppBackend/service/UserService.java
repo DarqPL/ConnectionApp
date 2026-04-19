@@ -7,19 +7,28 @@ import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Optional;
 import java.util.List;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @Service
 public class UserService {
+
+    public record TemporaryLockInfo(LocalDateTime lockUntil, long remainingMinutes, String reason) {
+    }
+
+    private static final String DEFAULT_TEMP_LOCK_REASON = "POLICY_VIOLATION";
 
     @Autowired
     private UserRepository userRepository;
@@ -40,6 +49,12 @@ public class UserService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private UserAccountLockService userAccountLockService;
+
+    @Value("${app.security.temp-lock-minutes:30}")
+    private long tempLockMinutes;
 
     /**
      * Get user profile by user ID
@@ -85,6 +100,11 @@ public class UserService {
     public void updateUserStatus(Long userId, UserStatus status) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (user.getLockUntil() != null && user.getLockUntil().isAfter(LocalDateTime.now())) {
+            return;
+        }
+
         user.setStatus(status);
         userRepository.save(user);
     }
@@ -110,6 +130,52 @@ public class UserService {
      */
     public Optional<User> getUserByUsername(String username) {
         return userRepository.findByUsername(username);
+    }
+
+    /**
+     * Get user by username or email identifier.
+     */
+    public Optional<User> getUserByIdentifier(String identifier) {
+        return userRepository.findByUsernameOrEmail(identifier, identifier);
+    }
+
+    /**
+     * Throw if account is currently locked; auto-unlocks temporary lock when time has passed.
+     */
+    @Transactional
+    public void assertAccountIsActive(User user) {
+        userAccountLockService.assertAccountIsActive(user);
+    }
+
+    /**
+     * Temporarily lock account for policy violation and invalidate all sessions.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public TemporaryLockInfo lockAccountTemporarily(Long userId, String reason) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime base = user.getLockUntil() != null && user.getLockUntil().isAfter(now)
+                ? user.getLockUntil()
+                : now;
+
+        LocalDateTime lockUntil = base.plusMinutes(Math.max(1, tempLockMinutes));
+        String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : DEFAULT_TEMP_LOCK_REASON;
+
+        user.setStatus(UserStatus.OFFLINE);
+        user.setLockUntil(lockUntil);
+        user.setLockReason(normalizedReason);
+        bumpAllPlatformTokenVersions(user);
+        userRepository.save(user);
+
+        refreshTokenService.revokeAllByUser(user);
+
+        return new TemporaryLockInfo(
+                lockUntil,
+                calculateRemainingMinutes(lockUntil),
+                normalizedReason
+        );
     }
 
     /**
@@ -215,11 +281,14 @@ public class UserService {
             throw new IllegalStateException("Cannot lock a deleted account");
         }
 
-        if (user.getStatus() == UserStatus.LOCKED) {
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getLockUntil() != null && user.getLockUntil().isAfter(now)) {
             return "Account is already locked";
         }
 
-        user.setStatus(UserStatus.LOCKED);
+        user.setStatus(UserStatus.OFFLINE);
+        user.setLockUntil(now.plusYears(100));
+        user.setLockReason("MANUAL_LOCK");
         userRepository.save(user);
 
         return "Account locked successfully";
@@ -237,12 +306,14 @@ public class UserService {
             throw new IllegalStateException("Cannot unlock a deleted account");
         }
 
-        if (user.getStatus() != UserStatus.LOCKED) {
+        if (user.getLockUntil() == null) {
             return "Account is not locked";
         }
 
         // tuỳ logic: OFFLINE hoặc ONLINE
         user.setStatus(UserStatus.OFFLINE);
+        user.setLockUntil(null);
+        user.setLockReason(null);
         userRepository.save(user);
 
         return "Account unlocked successfully";
@@ -314,5 +385,23 @@ public class UserService {
         userRepository.delete(user);
 
         return "Account deleted successfully";
+    }
+
+    private long calculateRemainingMinutes(LocalDateTime lockUntil) {
+        long remainingSeconds = Duration.between(LocalDateTime.now(), lockUntil).getSeconds();
+        if (remainingSeconds <= 0) {
+            return 0;
+        }
+        return (remainingSeconds + 59) / 60;
+    }
+
+    private void bumpAllPlatformTokenVersions(User user) {
+        Integer webVersion = user.getWebTokenVersion() == null ? 0 : user.getWebTokenVersion();
+        Integer mobileVersion = user.getMobileTokenVersion() == null ? 0 : user.getMobileTokenVersion();
+        Integer commonVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+
+        user.setWebTokenVersion(webVersion + 1);
+        user.setMobileTokenVersion(mobileVersion + 1);
+        user.setTokenVersion(commonVersion + 1);
     }
 }

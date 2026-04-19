@@ -12,6 +12,7 @@ import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
+import iuh.fit.ConnectionAppBackend.exception.AccountTemporarilyLockedException;
 import iuh.fit.ConnectionAppBackend.exception.ChatBlockedException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
@@ -60,6 +61,15 @@ public class MessageService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private GroupMediaSafetyService groupMediaSafetyService;
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private SecurityNotificationService securityNotificationService;
+
     /**
      * Send a message
      */
@@ -69,13 +79,16 @@ public class MessageService {
             throw new BadRequestException("Conversation ID is required");
         }
 
+        Conversation conversation = conversationRepository.findById(request.getConversationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + request.getConversationId()));
+
         // Verify sender is member of conversation
         boolean isMember = conversationUserRepository.isMember(request.getConversationId(), senderId);
         if (!isMember) {
             throw new UnauthorizedException("User is not a member of this conversation");
         }
 
-        validatePrivateConversationBlock(request.getConversationId(), senderId);
+        validatePrivateConversationBlock(conversation, senderId);
 
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + senderId));
@@ -85,6 +98,27 @@ public class MessageService {
 
         if (!StringUtils.hasText(normalizedContent) && normalizedAttachments.isEmpty()) {
             throw new BadRequestException("Message must contain text or attachments");
+        }
+
+        if (conversation.getType() == ConversationType.GROUP) {
+            GroupMediaSafetyService.SafetyVerdict verdict = groupMediaSafetyService.scanGroupMedia(normalizedAttachments);
+            if (verdict.blocked()) {
+            UserService.TemporaryLockInfo lockInfo = userService.lockAccountTemporarily(senderId, "POLICY_VIOLATION_GROUP_MEDIA");
+            securityNotificationService.notifyAccountTemporarilyLocked(
+                senderId,
+                lockInfo.lockUntil(),
+                lockInfo.remainingMinutes(),
+                lockInfo.reason()
+            );
+
+            throw new AccountTemporarilyLockedException(
+                "Bạn đã vi phạm chính sách của chúng tôi. Tài khoản bị khóa tạm thời trong "
+                    + lockInfo.remainingMinutes()
+                    + " phút.",
+                lockInfo.remainingMinutes(),
+                lockInfo.lockUntil()
+            );
+            }
         }
 
         SenderInfo senderInfo = SenderInfo.builder()
@@ -134,13 +168,12 @@ public class MessageService {
         return response;
     }
 
-    private void validatePrivateConversationBlock(Long conversationId, Long senderId) {
-        Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
-
+    private void validatePrivateConversationBlock(Conversation conversation, Long senderId) {
         if (conversation.getType() != ConversationType.PRIVATE) {
             return;
         }
+
+        Long conversationId = conversation.getId();
 
         List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);
         Long otherUserId = members.stream()
