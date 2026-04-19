@@ -4,7 +4,7 @@ import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
-import FilePanel from "./FilePanel";
+import ChatInfoPanel from "./ChatInfoPanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -211,8 +211,8 @@ const ChatWindowLayout = () => {
   };
 
   return (
-    <>
-      <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden bg-transparent border-none shadow-none">
+    <div className="flex h-full w-full overflow-hidden bg-background">
+      <SidebarInset className="flex flex-col h-full flex-1 min-w-0 overflow-hidden bg-transparent border-none shadow-none">
         {/* Header */}
         <ChatWindowHeader
           chat={selectedConvo}
@@ -273,8 +273,8 @@ const ChatWindowLayout = () => {
         )}
       </SidebarInset>
 
-      {/* File Panel */}
-      <FilePanel
+      <ChatInfoPanel
+        chat={selectedConvo}
         messages={allMessages[selectedConvo.id]?.items || []}
         isOpen={isFilesPanelOpen}
         onClose={() => setIsFilesPanelOpen(false)}
@@ -285,7 +285,7 @@ const ChatWindowLayout = () => {
         message={messageToForward}
         onClose={() => setMessageToForward(null)}
       />
-    </>
+    </div>
   );
 };
 
