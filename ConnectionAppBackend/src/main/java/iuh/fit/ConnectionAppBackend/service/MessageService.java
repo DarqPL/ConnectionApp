@@ -100,10 +100,10 @@ public class MessageService {
             throw new BadRequestException("Message must contain text or attachments");
         }
 
-        if (conversation.getType() == ConversationType.GROUP) {
+        if (groupMediaSafetyService.shouldScanConversation(conversation.getType())) {
             GroupMediaSafetyService.SafetyVerdict verdict = groupMediaSafetyService.scanGroupMedia(normalizedAttachments);
             if (verdict.blocked()) {
-            UserService.TemporaryLockInfo lockInfo = userService.lockAccountTemporarily(senderId, "POLICY_VIOLATION_GROUP_MEDIA");
+            UserService.TemporaryLockInfo lockInfo = userService.lockAccountTemporarily(senderId, "POLICY_VIOLATION_MEDIA_SAFETY");
             securityNotificationService.notifyAccountTemporarilyLocked(
                 senderId,
                 lockInfo.lockUntil(),
