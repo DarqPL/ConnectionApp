@@ -6,6 +6,7 @@ import { FileText, ImagePlus, Loader2, Send, X } from "lucide-react";
 import { Input } from "../ui/input";
 import EmojiPicker from "./EmojiPicker";
 import { useChatStore } from "@/stores/useChatStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 import { toast } from "sonner";
 import { chatService } from "@/services/chatService";
 import {
@@ -54,11 +55,15 @@ const MessageInput = ({
 }: MessageInputProps) => {
   const { user } = useAuthStore();
   const { sendMessage } = useChatStore();
+  const { notifyTyping, notifyStoppedTyping } = useSocketStore();
   const [value, setValue] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
   const pendingFilesRef = useRef<PendingAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingStateRef = useRef(false);
+  const conversationRef = useRef<number>(selectedConvo.id);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -66,13 +71,38 @@ const MessageInput = ({
 
   useEffect(() => {
     return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      if (typingStateRef.current) {
+        notifyStoppedTyping(conversationRef.current);
+      }
+
       pendingFilesRef.current.forEach((item) => {
         if (item.previewUrl) {
           URL.revokeObjectURL(item.previewUrl);
         }
       });
     };
-  }, []);
+  }, [notifyStoppedTyping]);
+
+  useEffect(() => {
+    if (
+      conversationRef.current !== selectedConvo.id &&
+      typingStateRef.current
+    ) {
+      notifyStoppedTyping(conversationRef.current);
+    }
+
+    conversationRef.current = selectedConvo.id;
+    typingStateRef.current = false;
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+  }, [notifyStoppedTyping, selectedConvo.id]);
 
   if (!user) return null;
 
@@ -152,6 +182,16 @@ const MessageInput = ({
     if (!currValue && pendingFiles.length === 0) return;
     if (isUploading) return;
 
+    if (typingStateRef.current) {
+      notifyStoppedTyping(selectedConvo.id);
+      typingStateRef.current = false;
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
     setIsUploading(true);
 
     try {
@@ -196,6 +236,48 @@ const MessageInput = ({
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const scheduleStoppedTyping = (conversationId: number) => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      notifyStoppedTyping(conversationId);
+      typingStateRef.current = false;
+      typingTimeoutRef.current = null;
+    }, 1200);
+  };
+
+  const applyTypingState = (nextValue: string) => {
+    const normalized = nextValue.trim();
+    const conversationId = selectedConvo.id;
+
+    if (!normalized) {
+      if (typingStateRef.current) {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (!typingStateRef.current) {
+      notifyTyping(conversationId);
+      typingStateRef.current = true;
+    }
+
+    scheduleStoppedTyping(conversationId);
+  };
+
+  const handleValueChange = (nextValue: string) => {
+    setValue(nextValue);
+    applyTypingState(nextValue);
   };
 
   return (
@@ -293,7 +375,7 @@ const MessageInput = ({
           <Input
             onKeyPress={handleKeyPress}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => handleValueChange(e.target.value)}
             placeholder="Soạn tin nhắn..."
             className="pr-20 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none"
           ></Input>
@@ -306,9 +388,13 @@ const MessageInput = ({
             >
               <div>
                 <EmojiPicker
-                  onChange={(emoji: string) =>
-                    setValue((prev) => `${prev}${emoji}`)
-                  }
+                  onChange={(emoji: string) => {
+                    setValue((prev) => {
+                      const next = `${prev}${emoji}`;
+                      applyTypingState(next);
+                      return next;
+                    });
+                  }}
                 />
               </div>
             </Button>

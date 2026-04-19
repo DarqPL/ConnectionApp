@@ -16,19 +16,39 @@ import { Button } from "../ui/button";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
+const TypingDots = () => {
+  return (
+    <span className="ml-1 inline-flex items-end gap-1" aria-hidden="true">
+      {[0, 1, 2].map((dot) => (
+        <span
+          key={dot}
+          className="inline-block size-1.5 rounded-full bg-current animate-bounce"
+          style={{
+            animationDelay: `${dot * 0.14}s`,
+            animationDuration: "0.9s",
+          }}
+        />
+      ))}
+    </span>
+  );
+};
+
 const ChatWindowLayout = () => {
   const {
     activeConversationId,
     conversations,
     fetchMessages,
     messages: allMessages,
+    typingByConversation,
   } = useChatStore();
 
   const { user } = useAuthStore();
   const { getUserById } = userService;
 
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [messageToForward, setMessageToForward] = useState<Message | null>(null);
+  const [messageToForward, setMessageToForward] = useState<Message | null>(
+    null,
+  );
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [blockStatus, setBlockStatus] = useState<BlockStatus>({
     blocked: false,
@@ -40,6 +60,38 @@ const ChatWindowLayout = () => {
 
   const selectedConvo =
     conversations.find((c) => c.id === activeConversationId) ?? null;
+
+  const typingUsers = selectedConvo
+    ? (typingByConversation[selectedConvo.id] ?? [])
+    : [];
+
+  const typingLabel = useMemo(() => {
+    if (!selectedConvo || typingUsers.length === 0) {
+      return null;
+    }
+
+    const names = typingUsers
+      .map((item) => item.displayName?.trim())
+      .filter((name): name is string => Boolean(name));
+
+    if (names.length === 0) {
+      return "Người dùng đang nhập";
+    }
+
+    if (selectedConvo.type === "PRIVATE") {
+      return `${names[0]} đang nhập`;
+    }
+
+    if (names.length === 1) {
+      return `${names[0]} đang nhập`;
+    }
+
+    if (names.length === 2) {
+      return `${names[0]} và ${names[1]} đang nhập`;
+    }
+
+    return `${names[0]}, ${names[1]} và ${names.length - 2} người khác đang nhập`;
+  }, [selectedConvo, typingUsers]);
 
   // 🔥 reset khi đổi conversation
   useEffect(() => {
@@ -183,12 +235,20 @@ const ChatWindowLayout = () => {
 
         {/* Footer */}
         {!isBlockedChat ? (
-          <MessageInput
-            selectedConvo={selectedConvo}
-            replyTo={replyTo}
-            onCancelReply={() => setReplyTo(null)}
-            onBlockedDetected={refreshBlockStatus}
-          />
+          <>
+            {typingLabel && (
+              <div className="border-t border-border/40 px-4 py-1.5 text-xs text-muted-foreground bg-background/80">
+                <span>{typingLabel}</span>
+                <TypingDots />
+              </div>
+            )}
+            <MessageInput
+              selectedConvo={selectedConvo}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+              onBlockedDetected={refreshBlockStatus}
+            />
+          </>
         ) : (
           <div className="p-3 text-center text-sm text-muted-foreground border-t space-y-2">
             {isLocked && <p>Tài khoản này đã bị khóa</p>}

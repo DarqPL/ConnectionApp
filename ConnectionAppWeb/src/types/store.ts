@@ -31,6 +31,7 @@ export interface ThemeState {
 
 export interface ChatState {
   conversations: Conversation[];
+  typingByConversation: Record<number, TypingUser[]>;
   messages: Record<
     number,
     {
@@ -59,9 +60,14 @@ export interface ChatState {
   addMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;
   recallMessage: (conversationId: number, messageId: string) => Promise<void>;
+  deleteMessage: (conversationId: number, messageId: string) => Promise<void>;
   updateConversation: (
     conversation: Partial<Conversation> & { id: number },
   ) => void;
+  upsertTypingUser: (typingUser: TypingUser) => void;
+  removeTypingUser: (conversationId: number, userId: number) => void;
+  clearTypingUsers: (conversationId: number) => void;
+  clearAllTypingUsers: () => void;
   addConvo: (convo: Conversation) => void;
   createConversation: (
     type: string,
@@ -70,11 +76,20 @@ export interface ChatState {
   ) => Promise<void>;
 }
 
+export interface TypingUser {
+  conversationId: number;
+  userId: number;
+  displayName: string;
+  typedAt?: string;
+}
+
 export interface SocketState {
   client: unknown | null;
   onlineUsers: string[];
   connectSocket: (userId: number) => void;
   disconnectSocket: () => void;
+  notifyTyping: (conversationId: number) => void;
+  notifyStoppedTyping: (conversationId: number) => void;
 }
 
 export interface FriendState {

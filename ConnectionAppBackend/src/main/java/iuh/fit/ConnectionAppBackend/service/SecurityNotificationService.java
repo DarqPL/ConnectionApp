@@ -20,8 +20,8 @@ public class SecurityNotificationService {
                                          String userAgent) {
         SecurityNotificationDTO payload = new SecurityNotificationDTO(
                 "UNKNOWN_DEVICE_LOGIN",
-                "Canh bao bao mat",
-                "Co thiet bi la dang nhap vao tai khoan cua ban",
+                "Cảnh báo bảo mật",
+                "Có thiết bị đang đăng nhập vào tài khoản của bạn",
             null,
             null,
                 deviceName,

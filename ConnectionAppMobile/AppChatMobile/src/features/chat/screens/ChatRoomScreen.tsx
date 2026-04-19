@@ -3,6 +3,7 @@ import {
   View,
   FlatList,
   StyleSheet,
+  Animated,
   ActivityIndicator,
   Alert,
   Text,
@@ -25,11 +26,71 @@ import { COLORS } from "../../../theme";
 import type { Message } from "../types";
 import { friendService, type BlockStatus } from "../services/friend.service";
 
+const TypingDots = () => {
+  const dotOpacities = React.useRef([
+    new Animated.Value(0.35),
+    new Animated.Value(0.35),
+    new Animated.Value(0.35),
+  ]).current;
+
+  useEffect(() => {
+    const loops = dotOpacities.map((opacity, index) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(index * 160),
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 220,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0.35,
+            duration: 220,
+            useNativeDriver: true,
+          }),
+          Animated.delay(220),
+        ]),
+      ),
+    );
+
+    loops.forEach((loop) => loop.start());
+
+    return () => {
+      loops.forEach((loop) => loop.stop());
+    };
+  }, [dotOpacities]);
+
+  return (
+    <View style={styles.typingDots}>
+      {dotOpacities.map((opacity, index) => (
+        <Animated.View
+          key={index}
+          style={[
+            styles.typingDot,
+            {
+              opacity,
+              transform: [
+                {
+                  scale: opacity.interpolate({
+                    inputRange: [0.35, 1],
+                    outputRange: [0.85, 1.15],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+};
+
 const ChatRoomScreen = ({ route }: any) => {
   const insets = useSafeAreaInsets();
   const { conversationId, name, avatarUrl, type, participants } = route.params;
   const {
     currentMessages,
+    typingUsers,
     isLoading,
     fetchMessages,
     sendMessage,
@@ -83,6 +144,34 @@ const ChatRoomScreen = ({ route }: any) => {
   const isBlockedByMe = blockStatus.blockedByMe;
   const isBlockedByOther = blockStatus.blockedByOther;
   const isBlockedChat = isPrivateChat && (isBlockedByMe || isBlockedByOther);
+
+  const typingLabel = React.useMemo(() => {
+    if (typingUsers.length === 0) {
+      return null;
+    }
+
+    const names = typingUsers
+      .map((item) => item.displayName?.trim())
+      .filter((name): name is string => Boolean(name));
+
+    if (names.length === 0) {
+      return "Người dùng đang nhập";
+    }
+
+    if (!isGroup) {
+      return `${names[0]} đang nhập`;
+    }
+
+    if (names.length === 1) {
+      return `${names[0]} đang nhập`;
+    }
+
+    if (names.length === 2) {
+      return `${names[0]} và ${names[1]} đang nhập`;
+    }
+
+    return `${names[0]}, ${names[1]} và ${names.length - 2} người khác đang nhập`;
+  }, [isGroup, typingUsers]);
 
   const refreshBlockStatus = React.useCallback(async () => {
     if (!isPrivateChat || !peerUserId) {
@@ -311,41 +400,33 @@ const ChatRoomScreen = ({ route }: any) => {
   };
 
   const handleRecallMessage = (msgId: string) => {
-    Alert.alert(
-      "Thu hồi hoặc xóa",
-      "Bạn muốn làm gì với tin nhắn này?",
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Xóa ở phía tôi",
-          style: "destructive",
-          onPress: () => {
-            deleteMessage(msgId).catch((err) => {
-              Alert.alert(
-                "Lỗi",
-                err instanceof Error
-                  ? err.message
-                  : "Xóa tin nhắn thất bại",
-              );
-            });
-          },
+    Alert.alert("Thu hồi hoặc xóa", "Bạn muốn làm gì với tin nhắn này?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa ở phía tôi",
+        style: "destructive",
+        onPress: () => {
+          deleteMessage(msgId).catch((err) => {
+            Alert.alert(
+              "Lỗi",
+              err instanceof Error ? err.message : "Xóa tin nhắn thất bại",
+            );
+          });
         },
-        {
-          text: "Thu hồi từ tất cả",
-          style: "destructive",
-          onPress: () => {
-            recallMessage(msgId).catch((err) => {
-              Alert.alert(
-                "Lỗi",
-                err instanceof Error
-                  ? err.message
-                  : "Thu hồi tin nhắn thất bại",
-              );
-            });
-          },
+      },
+      {
+        text: "Thu hồi từ tất cả",
+        style: "destructive",
+        onPress: () => {
+          recallMessage(msgId).catch((err) => {
+            Alert.alert(
+              "Lỗi",
+              err instanceof Error ? err.message : "Thu hồi tin nhắn thất bại",
+            );
+          });
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleMessageAction = (item: Message) => {
@@ -506,13 +587,23 @@ const ChatRoomScreen = ({ route }: any) => {
         )}
 
         {!isBlockedChat ? (
-          <ChatInput
-            conversationId={conversationId}
-            onSend={handleSend}
-            disabled={sending || (isPrivateChat && isBlockStatusLoading)}
-            replyTo={replyTo}
-            onCancelReply={() => setReplyTo(null)}
-          />
+          <>
+            {typingLabel && (
+              <View style={styles.typingContainer}>
+                <View style={styles.typingRow}>
+                  <Text style={styles.typingText}>{typingLabel}</Text>
+                  <TypingDots />
+                </View>
+              </View>
+            )}
+            <ChatInput
+              conversationId={conversationId}
+              onSend={handleSend}
+              disabled={sending || (isPrivateChat && isBlockStatusLoading)}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+            />
+          </>
         ) : (
           <View style={styles.blockedComposerPlaceholder}>
             <Text style={styles.blockedComposerText}>
@@ -594,6 +685,35 @@ const styles = StyleSheet.create({
     color: "#a61e1e",
     fontSize: 13,
     fontWeight: "600",
+  },
+  typingContainer: {
+    borderTopWidth: 1,
+    borderTopColor: "#e8e8ef",
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 2,
+    backgroundColor: "#fff",
+  },
+  typingText: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontStyle: "italic",
+  },
+  typingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  typingDots: {
+    marginLeft: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  typingDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.textMuted,
   },
   scrollToBottomFab: {
     position: "absolute",
