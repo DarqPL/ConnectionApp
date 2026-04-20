@@ -39,6 +39,7 @@ export interface TypingPayload {
 class ChatSocketService {
   private client: Client | null = null;
   private handlersRef: ChatSocketHandlers | null = null;
+  private isDisconnecting = false;
 
   /** Update handlers without reconnecting. Used from React context. */
   updateHandlers(handlers: ChatSocketHandlers) {
@@ -59,6 +60,7 @@ class ChatSocketService {
     }
 
     this.handlersRef = handlers;
+    this.isDisconnecting = false;
 
     console.log("[Socket] Connecting to:", wsUrl);
 
@@ -88,6 +90,7 @@ class ChatSocketService {
       },
 
       onConnect: (frame) => {
+        this.isDisconnecting = false;
         console.log(
           "[Socket] ✅ Connected! Session:",
           frame.headers?.["session"],
@@ -167,7 +170,14 @@ class ChatSocketService {
       },
 
       onWebSocketError: (evt) => {
-        console.error("[Socket] WebSocket error:", JSON.stringify(evt));
+        if (this.isDisconnecting || !client.active) {
+          console.log(
+            "[Socket] WebSocket error while disconnecting/inactive, ignored.",
+          );
+          return;
+        }
+
+        console.warn("[Socket] WebSocket error:", JSON.stringify(evt));
         this.handlersRef?.onConnectionError?.("Không thể kết nối realtime");
       },
 
@@ -190,6 +200,7 @@ class ChatSocketService {
   disconnect(): void {
     if (this.client) {
       console.log("[Socket] Disconnecting...");
+      this.isDisconnecting = true;
       this.handlersRef = null;
       this.client.deactivate();
       this.client = null;
@@ -198,7 +209,7 @@ class ChatSocketService {
 
   // NEW: Send typing notification
   notifyTyping(conversationId: number): void {
-    if (this.client?.active) {
+    if (this.client?.connected) {
       this.client.publish({
         destination: `/app/chat/${conversationId}/typing`,
         body: JSON.stringify({ conversationId }),
@@ -212,7 +223,7 @@ class ChatSocketService {
 
   // NEW: Send stopped typing notification
   notifyStoppedTyping(conversationId: number): void {
-    if (this.client?.active) {
+    if (this.client?.connected) {
       this.client.publish({
         destination: `/app/chat/${conversationId}/stopped-typing`,
         body: JSON.stringify({ conversationId }),
