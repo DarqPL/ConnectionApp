@@ -14,4 +14,5 @@ public class MessageRequest {
     private String content;
     private String parentId;
     private List<AttachmentRequest> attachments;
+    private PollRequest poll;
 }

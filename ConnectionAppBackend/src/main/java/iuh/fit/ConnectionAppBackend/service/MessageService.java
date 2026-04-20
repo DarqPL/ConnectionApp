@@ -7,8 +7,12 @@ import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.AttachmentRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.PollRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.PollResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Poll;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.PollOption;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
@@ -40,6 +44,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -103,8 +108,8 @@ public class MessageService {
         String normalizedContent = request.getContent() == null ? "" : request.getContent().trim();
         List<Attachment> normalizedAttachments = mapAndValidateAttachments(request.getAttachments());
 
-        if (!StringUtils.hasText(normalizedContent) && normalizedAttachments.isEmpty()) {
-            throw new BadRequestException("Message must contain text or attachments");
+        if (!StringUtils.hasText(normalizedContent) && normalizedAttachments.isEmpty() && request.getPoll() == null) {
+            throw new BadRequestException("Message must contain text, attachments, or a poll");
         }
 
         if (groupMediaSafetyService.shouldScanConversation(conversation.getType())) {
@@ -138,8 +143,9 @@ public class MessageService {
                 .conversationId(request.getConversationId())
                 .senderInfo(senderInfo)
             .content(StringUtils.hasText(normalizedContent) ? normalizedContent : null)
-            .attachments(normalizedAttachments)
+                .attachments(normalizedAttachments)
                 .parentId(request.getParentId())
+                .poll(mapPollRequestToEntity(request.getPoll()))
                 .isDeleted(false)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -313,6 +319,188 @@ public class MessageService {
 
         return response;
     }
+    @Transactional
+    public MessageResponse vote(String messageId, Long userId, List<String> optionIds) {
+        Message message = messageRepository.findByIdAndIsDeletedFalse(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + messageId));
+
+        if (message.getPoll() == null) {
+            throw new BadRequestException("This message is not a poll");
+        }
+
+        if (message.getPoll().isClosed()) {
+            throw new BadRequestException("Poll is closed");
+        }
+
+        if (message.getPoll().getExpiredAt() != null && message.getPoll().getExpiredAt().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Poll has expired");
+        }
+
+        // Verify user is member of conversation
+        boolean isMember = conversationUserRepository.isMember(message.getConversationId(), userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        Poll poll = message.getPoll();
+        boolean multiChoice = poll.isMultiChoice();
+
+        if (optionIds == null) {
+            optionIds = new ArrayList<>();
+        }
+
+        if (!multiChoice && optionIds.size() > 1) {
+            throw new BadRequestException("This poll only allows a single choice");
+        }
+
+        // Clear previous votes for this user in all options and ensure list is initialized
+        for (PollOption option : poll.getOptions()) {
+            if (option.getVoterIds() == null) {
+                option.setVoterIds(new ArrayList<>());
+            }
+            option.getVoterIds().remove(userId);
+        }
+
+        // Add new votes
+        for (PollOption option : poll.getOptions()) {
+            if (optionIds.contains(option.getId())) {
+                if (option.getVoterIds() == null) {
+                    option.setVoterIds(new ArrayList<>());
+                }
+                option.getVoterIds().add(userId);
+            }
+        }
+
+        // BUMP the message to the end of conversation
+        message.setUpdateAt(LocalDateTime.now());
+
+        Message updatedMessage = messageRepository.save(message);
+        
+        // Update conversation last message timestamp to bump conversation list
+        conversationRepository.findById(message.getConversationId()).ifPresent(convo -> {
+            convo.setLastMessageAt(LocalDateTime.now());
+            conversationRepository.save(convo);
+        });
+
+        MessageResponse response = mapToMessageResponse(updatedMessage);
+
+        // Broadcast update to all members via their personal topics
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(message.getConversationId());
+        for (ConversationUser member : members) {
+            if (member.getUser() != null) {
+                messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId(), response);
+            }
+        }
+
+        return response;
+    }
+
+    @Transactional
+    public MessageResponse closePoll(String messageId, Long userId) {
+        Message message = messageRepository.findByIdAndIsDeletedFalse(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + messageId));
+
+        if (message.getPoll() == null) {
+            throw new BadRequestException("This message is not a poll");
+        }
+
+        // Only creator can close the poll
+        if (!message.getSenderInfo().getSenderId().equals(userId)) {
+            throw new UnauthorizedException("Only the creator can close this poll");
+        }
+
+        message.getPoll().setClosed(true);
+        message.setUpdateAt(LocalDateTime.now());
+
+        Message updatedMessage = messageRepository.save(message);
+        MessageResponse response = mapToMessageResponse(updatedMessage);
+
+        // Broadcast update to all members via their personal topics
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(message.getConversationId());
+        for (ConversationUser member : members) {
+            if (member.getUser() != null) {
+                messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId(), response);
+            }
+        }
+
+        return response;
+    }
+
+    @Transactional
+    public MessageResponse pinMessage(Long conversationId, Long userId, String messageId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+
+        // Verify user is member
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+
+        String pinnedIds = conversation.getPinnedMessageIds();
+        List<String> idList = new ArrayList<>();
+        if (StringUtils.hasText(pinnedIds)) {
+            idList = new ArrayList<>(List.of(pinnedIds.split(",")));
+        }
+
+        if (!idList.contains(messageId)) {
+            idList.add(messageId);
+            conversation.setPinnedMessageIds(String.join(",", idList));
+            conversationRepository.save(conversation);
+        }
+
+        MessageResponse response = mapToMessageResponse(message);
+
+        // Notify members about conversation update (pinned messages changed)
+        broadcastConversationUpdate(conversationId);
+
+        return response;
+    }
+
+    @Transactional
+    public void unpinMessage(Long conversationId, Long userId, String messageId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+
+        // Verify user is member
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        String pinnedIds = conversation.getPinnedMessageIds();
+        if (StringUtils.hasText(pinnedIds)) {
+            List<String> idList = new ArrayList<>(List.of(pinnedIds.split(",")));
+            if (idList.remove(messageId)) {
+                conversation.setPinnedMessageIds(idList.isEmpty() ? null : String.join(",", idList));
+                conversationRepository.save(conversation);
+                
+                // Notify members
+                broadcastConversationUpdate(conversationId);
+            }
+        }
+    }
+
+    private void broadcastConversationUpdate(Long conversationId) {
+        // Fetch updated conversation response
+        // We'll use a simplified update notification for now
+        // or a full conversation update if needed.
+        // For simplicity, let's just trigger a reload signal or send the updated pinned messages list.
+        
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "PIN_UPDATE");
+        
+        for (ConversationUser member : members) {
+            if (member.getUser() != null) {
+                messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/conversation-updates", update);
+            }
+        }
+    }
 
     /**
      * Search messages
@@ -372,7 +560,7 @@ public class MessageService {
     /**
      * Map Message entity to MessageResponse DTO
      */
-    private MessageResponse mapToMessageResponse(Message message) {
+    public MessageResponse mapToMessageResponse(Message message) {
         MessageResponse.SenderInfoResponse senderInfo = MessageResponse.SenderInfoResponse.builder()
                 .senderId(message.getSenderInfo().getSenderId())
                 .displayName(message.getSenderInfo().getDisplayName())
@@ -429,6 +617,53 @@ public class MessageService {
                 .isDeleted(message.isDeleted())
                 .recalledAt(message.getRecalledAt())
                 .replyInfo(replyInfo)
+                .poll(mapPollEntityToResponse(message.getPoll()))
+                .build();
+    }
+
+    private Poll mapPollRequestToEntity(PollRequest request) {
+        if (request == null) return null;
+
+        List<PollOption> options = new ArrayList<>();
+        if (request.getOptions() != null) {
+            for (int i = 0; i < request.getOptions().size(); i++) {
+                options.add(PollOption.builder()
+                        .id(String.valueOf(i))
+                        .text(request.getOptions().get(i).getText())
+                        .voterIds(new ArrayList<>())
+                        .build());
+            }
+        }
+
+        return Poll.builder()
+                .question(request.getQuestion())
+                .options(options)
+                .multiChoice(request.isMultiChoice())
+                .allowAddOptions(request.isAllowAddOptions())
+                .isAnonymous(request.isAnonymous())
+                .expiredAt(request.getExpiredAt())
+                .build();
+    }
+
+    private PollResponse mapPollEntityToResponse(Poll poll) {
+        if (poll == null) return null;
+
+        List<PollResponse.PollOptionResponse> options = poll.getOptions().stream()
+                .map(o -> PollResponse.PollOptionResponse.builder()
+                        .id(o.getId())
+                        .text(o.getText())
+                        .voterIds(o.getVoterIds())
+                        .build())
+                .collect(Collectors.toList());
+
+        return PollResponse.builder()
+                .question(poll.getQuestion())
+                .options(options)
+                .multiChoice(poll.isMultiChoice())
+                .allowAddOptions(poll.isAllowAddOptions())
+                .isAnonymous(poll.isAnonymous())
+                .closed(poll.isClosed())
+                .expiredAt(poll.getExpiredAt())
                 .build();
     }
 

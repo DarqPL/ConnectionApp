@@ -2,6 +2,7 @@ package iuh.fit.ConnectionAppBackend.domain.entity.mongodb;
 
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Poll;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -30,6 +31,8 @@ public class Message {
     private SenderInfo senderInfo;
 
     private String content;
+
+    private Poll poll;
 
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
@@ -81,5 +84,9 @@ public class Message {
 
     public void setRecalledAt(LocalDateTime recalledAt) {
         this.recalledAt = recalledAt;
+    }
+
+    public void setPoll(Poll poll) {
+        this.poll = poll;
     }
 }

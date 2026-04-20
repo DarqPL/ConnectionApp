@@ -205,6 +205,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         // Subscribe to conversation updates (member joined/left)
         client.subscribe(`/topic/user.${userId}/conversation-updates`, (message) => {
           const update = JSON.parse(message.body);
+          
+          if (update?.type === "PIN_UPDATE" && update?.conversationId) {
+             useChatStore.getState().fetchConversationById(update.conversationId);
+             return;
+          }
+
           // update: { conversationId, participants }
           if (update?.conversationId && update?.participants) {
             useChatStore

@@ -7,6 +7,7 @@ import type {
   Message,
   MessageRequest,
   PageResponse,
+  PollRequest,
 } from "@/types/chat";
 
 interface UploadedObjectResponse {
@@ -114,12 +115,14 @@ export const chatService = {
     content: string,
     parentId?: string | null,
     attachments?: Attachment[],
+    poll?: PollRequest | null,
   ): Promise<Message> {
     const payload: MessageRequest = {
       conversationId,
       content,
       parentId: parentId ?? null,
       attachments: attachments ?? [],
+      poll: poll ?? null,
     };
 
     const res = await api.post("/messages", payload);
@@ -219,5 +222,26 @@ export const chatService = {
   async aiRewriteDraft(payload: AiRewriteRequest): Promise<AiRewriteResponse> {
     const res = await api.post("/messages/ai-rewrite", payload);
     return res.data;
+  },
+  async votePoll(messageId: string, optionIds: string[]): Promise<Message> {
+    const res = await api.post(`/messages/${messageId}/vote`, null, {
+      params: { optionIds: optionIds.join(",") },
+    });
+    return res.data;
+  },
+  async closePoll(messageId: string): Promise<Message> {
+    const res = await api.put(`/messages/${messageId}/poll/close`);
+    return res.data;
+  },
+  async pinMessage(conversationId: number, messageId: string): Promise<Message> {
+    const res = await api.post(`/messages/${messageId}/pin`, null, {
+      params: { conversationId },
+    });
+    return res.data;
+  },
+  async unpinMessage(conversationId: number, messageId: string): Promise<void> {
+    await api.delete(`/messages/${messageId}/unpin`, {
+      params: { conversationId },
+    });
   },
 };

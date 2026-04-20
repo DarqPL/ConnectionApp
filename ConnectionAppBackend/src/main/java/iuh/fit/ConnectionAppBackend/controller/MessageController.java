@@ -145,6 +145,73 @@ public class MessageController {
     }
 
     /**
+     * Vote in a poll
+     */
+    @PostMapping("/{messageId}/vote")
+    public ResponseEntity<MessageResponse> vote(
+            Authentication authentication,
+            @PathVariable String messageId,
+            @RequestParam List<String> optionIds) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        MessageResponse message = messageService.vote(messageId, userId, optionIds);
+        return ResponseEntity.ok(message);
+    }
+
+    /**
+     * Close a poll
+     */
+    @PutMapping("/{messageId}/poll/close")
+    public ResponseEntity<MessageResponse> closePoll(
+            Authentication authentication,
+            @PathVariable String messageId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        MessageResponse message = messageService.closePoll(messageId, userId);
+        return ResponseEntity.ok(message);
+    }
+
+    /**
+     * Pin a message
+     */
+    @PostMapping("/{messageId}/pin")
+    public ResponseEntity<MessageResponse> pinMessage(
+            Authentication authentication,
+            @PathVariable String messageId,
+            @RequestParam Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        MessageResponse message = messageService.pinMessage(conversationId, userId, messageId);
+        return ResponseEntity.ok(message);
+    }
+
+    /**
+     * Unpin a message
+     */
+    @DeleteMapping("/{messageId}/unpin")
+    public ResponseEntity<Void> unpinMessage(
+            Authentication authentication,
+            @PathVariable String messageId,
+            @RequestParam Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        messageService.unpinMessage(conversationId, userId, messageId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Search messages
      */
     @GetMapping("/search")

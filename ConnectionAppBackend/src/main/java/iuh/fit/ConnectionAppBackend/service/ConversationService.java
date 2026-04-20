@@ -5,6 +5,7 @@ import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
@@ -13,14 +14,17 @@ import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
 import iuh.fit.ConnectionAppBackend.repo.ConversationRepository;
 import iuh.fit.ConnectionAppBackend.repo.ConversationUserRepository;
+import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -43,7 +47,14 @@ public class ConversationService {
     private UserRepository userRepository;
 
     @Autowired
+    private MessageRepository messageRepository;
+
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
+    @Lazy
+    private MessageService messageService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -380,6 +391,16 @@ public class ConversationService {
                     .collect(Collectors.toList());
         }
 
+        List<MessageResponse> pinnedMessages = new ArrayList<>();
+        if (StringUtils.hasText(conversation.getPinnedMessageIds())) {
+            String[] ids = conversation.getPinnedMessageIds().split(",");
+            for (String id : ids) {
+                messageRepository.findById(id).ifPresent(msg -> {
+                    pinnedMessages.add(messageService.mapToMessageResponse(msg));
+                });
+            }
+        }
+
         return ConversationResponse.builder()
                 .id(conversation.getId())
                 .name(conversation.getName())
@@ -393,6 +414,7 @@ public class ConversationService {
                 .createdAt(conversation.getCreatedAt())
                 .updatedAt(conversation.getUpdateAt())
                 .participants(participants)
+                .pinnedMessages(pinnedMessages)
                 .build();
     }
 
