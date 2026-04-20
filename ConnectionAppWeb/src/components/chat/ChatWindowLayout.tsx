@@ -15,6 +15,7 @@ import { friendService, type BlockStatus } from "@/services/friendService";
 import { Button } from "../ui/button";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const TypingDots = () => {
   return (
@@ -40,10 +41,12 @@ const ChatWindowLayout = () => {
     fetchMessages,
     messages: allMessages,
     typingByConversation,
+    removeConversation,
   } = useChatStore();
 
   const { user } = useAuthStore();
   const { getUserById } = userService;
+  const navigate = useNavigate();
 
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [messageToForward, setMessageToForward] = useState<Message | null>(
@@ -57,6 +60,13 @@ const ChatWindowLayout = () => {
   });
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
   const [isFilesPanelOpen, setIsFilesPanelOpen] = useState(false);
+
+  const handleLeaveGroup = useCallback(() => {
+    if (activeConversationId) {
+      removeConversation(activeConversationId);
+      navigate("/");
+    }
+  }, [activeConversationId, removeConversation, navigate]);
 
   const selectedConvo =
     conversations.find((c) => c.id === activeConversationId) ?? null;
@@ -278,6 +288,7 @@ const ChatWindowLayout = () => {
         messages={allMessages[selectedConvo.id]?.items || []}
         isOpen={isFilesPanelOpen}
         onClose={() => setIsFilesPanelOpen(false)}
+        onLeaveGroup={handleLeaveGroup}
       />
 
       {/* Forward Modal */}

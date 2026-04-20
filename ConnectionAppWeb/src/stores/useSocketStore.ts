@@ -202,6 +202,17 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           });
         });
 
+        // Subscribe to conversation updates (member joined/left)
+        client.subscribe(`/topic/user.${userId}/conversation-updates`, (message) => {
+          const update = JSON.parse(message.body);
+          // update: { conversationId, participants }
+          if (update?.conversationId && update?.participants) {
+            useChatStore
+              .getState()
+              .updateConversationParticipants(update.conversationId, update.participants);
+          }
+        });
+
         // Subscribe to online users
         client.subscribe("/topic/online-users", (message) => {
           const users = JSON.parse(message.body);

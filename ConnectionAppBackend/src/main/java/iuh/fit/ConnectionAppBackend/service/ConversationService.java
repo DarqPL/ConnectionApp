@@ -27,6 +27,7 @@ import jakarta.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -234,6 +235,27 @@ public class ConversationService {
                 .build();
 
         conversationUserRepository.save(newConversationUser);
+
+        // 🔥 Send real-time notification to all members (including new one)
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        if (!allMembers.isEmpty()) {
+            List<ConversationUserResponse> updatedParticipants = allMembers.stream()
+                    .map(this::mapToConversationUserResponse)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> update = new java.util.HashMap<>();
+            update.put("conversationId", conversationId);
+            update.put("participants", updatedParticipants);
+            update.put("joinedUserId", newMemberId); // ID of user who joined
+
+            // Notify all members
+            for (ConversationUser member : allMembers) {
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                        update
+                );
+            }
+        }
     }
 
     /**
@@ -241,12 +263,45 @@ public class ConversationService {
      */
     @Transactional
     public void removeUserFromConversation(Long conversationId, Long userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
         boolean isMember = conversationUserRepository.isMember(conversationId, userId);
         if (!isMember) {
             throw new BadRequestException("User is not a member of this conversation");
         }
 
         conversationUserRepository.deleteByConversationIdAndUserId(conversationId, userId);
+
+        // Check remaining members
+        List<ConversationUser> remainingMembers = conversationUserRepository.findByConversationId(conversationId);
+
+        // If no members left and it's a GROUP, soft delete the conversation
+        if (remainingMembers.isEmpty() && conversation.getType() == ConversationType.GROUP) {
+            conversation.setActivate(false);
+            conversationRepository.save(conversation);
+            return;
+        }
+
+        // 🔥 Send real-time notification to all remaining members
+        if (!remainingMembers.isEmpty()) {
+            List<ConversationUserResponse> updatedParticipants = remainingMembers.stream()
+                    .map(this::mapToConversationUserResponse)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> update = new java.util.HashMap<>();
+            update.put("conversationId", conversationId);
+            update.put("participants", updatedParticipants);
+            update.put("leftUserId", userId); // ID of user who left
+
+            // Notify all remaining members
+            for (ConversationUser member : remainingMembers) {
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                        update
+                );
+            }
+        }
     }
 
     /**
@@ -257,6 +312,59 @@ public class ConversationService {
         boolean isMember = conversationUserRepository.isMember(conversationId, userId);
         if (isMember) {
             conversationUserRepository.resetUnreadCount(conversationId, userId);
+        }
+    }
+
+    /**
+     * Update member role in conversation
+     */
+    @Transactional
+    public void updateMemberRole(Long conversationId, Long userId, Long memberId, String newRole) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        // Check if requester is owner
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER)) {
+            throw new UnauthorizedException("Only owner can change member roles");
+        }
+
+        // Check if member exists
+        ConversationUser member = conversationUserRepository.findByConversationIdAndUserId(conversationId, memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("User is not a member of this conversation"));
+
+        // Cannot demote owner
+        if (member.getRole().equals(ConversationRole.OWNER)) {
+            throw new BadRequestException("Cannot change the role of the owner");
+        }
+
+        // Update role
+        ConversationRole role = ConversationRole.valueOf(newRole.toUpperCase());
+        member.setRole(role);
+        conversationUserRepository.save(member);
+
+        // 🔥 Send real-time notification to all members
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        if (!allMembers.isEmpty()) {
+            List<ConversationUserResponse> updatedParticipants = allMembers.stream()
+                    .map(this::mapToConversationUserResponse)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> update = new java.util.HashMap<>();
+            update.put("conversationId", conversationId);
+            update.put("participants", updatedParticipants);
+            update.put("roleUpdatedUserId", memberId); // ID of user whose role changed
+            update.put("newRole", newRole);
+
+            // Notify all members
+            for (ConversationUser m : allMembers) {
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + m.getUser().getId() + "/conversation-updates",
+                        update
+                );
+            }
         }
     }
 

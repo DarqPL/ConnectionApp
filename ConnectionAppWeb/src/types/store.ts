@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, Message } from "./chat";
+import type { Attachment, Conversation, Message, Participant } from "./chat";
 import type { Friend, User } from "./user";
 
 export interface AuthState {
@@ -64,6 +64,7 @@ export interface ChatState {
   updateConversation: (
     conversation: Partial<Conversation> & { id: number },
   ) => void;
+  updateConversationParticipants: (conversationId: number, participants: Participant[]) => void;
   upsertTypingUser: (typingUser: TypingUser) => void;
   removeTypingUser: (conversationId: number, userId: number) => void;
   clearTypingUsers: (conversationId: number) => void;
@@ -74,6 +75,7 @@ export interface ChatState {
     name: string,
     participantIds: number[],
   ) => Promise<void>;
+  removeConversation: (conversationId: number) => void;
 }
 
 export interface TypingUser {

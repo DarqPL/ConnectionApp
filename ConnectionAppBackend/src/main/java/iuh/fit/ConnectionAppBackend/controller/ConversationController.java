@@ -4,6 +4,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PaginationRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.RoleUpdateRequest;
 import iuh.fit.ConnectionAppBackend.service.ConversationService;
 import iuh.fit.ConnectionAppBackend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -160,6 +161,24 @@ public class ConversationController {
             conversationService.removeUserFromConversation(conversationId, memberId);
         }
 
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Update member role in conversation
+     */
+    @PutMapping("/{conversationId}/members/{memberId}/role")
+    public ResponseEntity<Void> updateMemberRole(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @PathVariable Long memberId,
+            @RequestBody RoleUpdateRequest request) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.updateMemberRole(conversationId, userId, memberId, request.getRole());
         return ResponseEntity.noContent().build();
     }
 
