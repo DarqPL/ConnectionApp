@@ -21,6 +21,8 @@ import { chatService } from "../services/chat.service";
 import type { Friend } from "../types";
 
 const FALLBACK = "https://i.pravatar.cc/150?img=5";
+const MIN_GROUP_MEMBERS = 3;
+const MIN_INVITED_FRIENDS = MIN_GROUP_MEMBERS - 1;
 
 const CreateGroupScreen = () => {
   const insets = useSafeAreaInsets();
@@ -30,9 +32,14 @@ const CreateGroupScreen = () => {
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const canCreate =
+    selected.length >= MIN_INVITED_FRIENDS &&
+    Boolean(groupName.trim()) &&
+    !creating;
 
   useEffect(() => {
-    friendService.getFriends()
+    friendService
+      .getFriends()
       .then(setFriends)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -42,7 +49,7 @@ const CreateGroupScreen = () => {
     setSelected((prev) =>
       prev.includes(friendId)
         ? prev.filter((id) => id !== friendId)
-        : [...prev, friendId]
+        : [...prev, friendId],
     );
   };
 
@@ -51,13 +58,20 @@ const CreateGroupScreen = () => {
       Alert.alert("Thiếu tên", "Vui lòng nhập tên nhóm");
       return;
     }
-    if (selected.length === 0) {
-      Alert.alert("Chưa chọn thành viên", "Chọn ít nhất 1 người");
+    if (selected.length < MIN_INVITED_FRIENDS) {
+      Alert.alert(
+        "Chưa đủ thành viên",
+        `Nhóm cần ít nhất ${MIN_GROUP_MEMBERS} thành viên (bao gồm bạn). Vui lòng chọn tối thiểu ${MIN_INVITED_FRIENDS} người.`,
+      );
       return;
     }
     setCreating(true);
     try {
-      const group = await chatService.createConversation("GROUP", groupName.trim(), selected);
+      const group = await chatService.createConversation(
+        "GROUP",
+        groupName.trim(),
+        selected,
+      );
       navigation.replace("ChatRoom", {
         conversationId: group.id,
         name: group.name,
@@ -75,8 +89,14 @@ const CreateGroupScreen = () => {
   const renderFriend = ({ item }: { item: Friend }) => {
     const isSelected = selected.includes(item.friendId);
     return (
-      <TouchableOpacity style={styles.friendRow} onPress={() => toggleSelect(item.friendId)}>
-        <Image source={{ uri: item.avatarUrl || FALLBACK }} style={styles.avatar} />
+      <TouchableOpacity
+        style={styles.friendRow}
+        onPress={() => toggleSelect(item.friendId)}
+      >
+        <Image
+          source={{ uri: item.avatarUrl || FALLBACK }}
+          style={styles.avatar}
+        />
         <View style={styles.friendInfo}>
           <Text style={styles.displayName}>{item.displayName}</Text>
           <Text style={styles.username}>@{item.username}</Text>
@@ -99,14 +119,17 @@ const CreateGroupScreen = () => {
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+          >
             <Ionicons name="close" size={26} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Tạo nhóm mới</Text>
           <TouchableOpacity
-            style={[styles.createBtn, (creating || selected.length === 0 || !groupName.trim()) && styles.createBtnDisabled]}
+            style={[styles.createBtn, !canCreate && styles.createBtnDisabled]}
             onPress={handleCreate}
-            disabled={creating || selected.length === 0 || !groupName.trim()}
+            disabled={!canCreate}
           >
             {creating ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -119,7 +142,12 @@ const CreateGroupScreen = () => {
 
       {/* Group name input */}
       <View style={styles.nameSection}>
-        <Ionicons name="camera-outline" size={24} color={COLORS.textMuted} style={styles.cameraIcon} />
+        <Ionicons
+          name="camera-outline"
+          size={24}
+          color={COLORS.textMuted}
+          style={styles.cameraIcon}
+        />
         <TextInput
           style={styles.nameInput}
           placeholder="Tên nhóm..."
@@ -134,6 +162,12 @@ const CreateGroupScreen = () => {
       {selected.length > 0 && (
         <View style={styles.selectedSection}>
           <Text style={styles.selectedLabel}>Đã chọn ({selected.length}):</Text>
+          {selected.length < MIN_INVITED_FRIENDS && (
+            <Text style={styles.validationText}>
+              Chọn thêm {MIN_INVITED_FRIENDS - selected.length} người để đủ 3
+              thành viên (tính cả bạn).
+            </Text>
+          )}
           <View style={styles.chips}>
             {selected.map((id) => {
               const f = friends.find((fr) => fr.friendId === id);
@@ -166,7 +200,9 @@ const CreateGroupScreen = () => {
           renderItem={renderFriend}
           ListEmptyComponent={() => (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>Bạn chưa có bạn bè nào để thêm vào nhóm</Text>
+              <Text style={styles.emptyText}>
+                Bạn chưa có bạn bè nào để thêm vào nhóm
+              </Text>
             </View>
           )}
           showsVerticalScrollIndicator={false}
@@ -242,6 +278,11 @@ const styles = StyleSheet.create({
   selectedLabel: {
     fontSize: 12,
     color: COLORS.textMuted,
+    marginBottom: 6,
+  },
+  validationText: {
+    fontSize: 12,
+    color: "#b45309",
     marginBottom: 6,
   },
   chips: {

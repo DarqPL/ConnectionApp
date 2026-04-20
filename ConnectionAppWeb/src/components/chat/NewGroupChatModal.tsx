@@ -42,15 +42,15 @@ const NewGroupChatModal = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     try {
       e.preventDefault();
-      if (invitedUsers.length === 0) {
-        toast.warning("Bạn phải mời ít nhất 1 thành viên vào nhóm");
+      if (invitedUsers.length < 2) {
+        toast.warning("Nhóm phải có ít nhất 3 thành viên (bao gồm bạn)");
         return;
       }
 
       await createConversation(
         "GROUP",
         groupName,
-        invitedUsers.map((u) => u.friendId)
+        invitedUsers.map((u) => u.friendId),
       );
 
       toast.success("Tạo nhóm thành công!");
@@ -59,7 +59,10 @@ const NewGroupChatModal = () => {
       setGroupName("");
       setOpen(false);
     } catch (error) {
-      console.error("Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:", error);
+      console.error(
+        "Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:",
+        error,
+      );
       toast.error("Tạo nhóm thất bại");
     }
   };
@@ -67,7 +70,7 @@ const NewGroupChatModal = () => {
   const filteredFriends = friends.filter(
     (friend) =>
       friend.displayName.toLowerCase().includes(search.toLowerCase()) &&
-      !invitedUsers.some((u) => u.friendId === friend.friendId)
+      !invitedUsers.some((u) => u.friendId === friend.friendId),
   );
 
   return (
@@ -88,16 +91,10 @@ const NewGroupChatModal = () => {
           <DialogTitle className="capitalize">tạo nhóm chat mới</DialogTitle>
         </DialogHeader>
 
-        <form
-          className="space-y-4"
-          onSubmit={handleSubmit}
-        >
+        <form className="space-y-4" onSubmit={handleSubmit}>
           {/* tên nhóm */}
           <div className="space-y-2">
-            <Label
-              htmlFor="groupName"
-              className="text-sm font-semibold"
-            >
+            <Label htmlFor="groupName" className="text-sm font-semibold">
               Tên nhóm
             </Label>
             <Input
@@ -112,10 +109,7 @@ const NewGroupChatModal = () => {
 
           {/* mời thành viên */}
           <div className="space-y-2">
-            <Label
-              htmlFor="invite"
-              className="text-sm font-semibold"
-            >
+            <Label htmlFor="invite" className="text-sm font-semibold">
               Mời thành viên
             </Label>
 
@@ -140,12 +134,15 @@ const NewGroupChatModal = () => {
               invitedUsers={invitedUsers}
               onRemove={handleRemoveFriend}
             />
+            <p className="text-xs text-muted-foreground">
+              Cần chọn tối thiểu 2 người để tạo nhóm 3 thành viên (tính cả bạn).
+            </p>
           </div>
 
           <DialogFooter>
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || !groupName.trim() || invitedUsers.length < 2}
               className="flex-1 bg-gradient-chat text-white hover:opacity-90 transition-smooth"
             >
               {loading ? (
