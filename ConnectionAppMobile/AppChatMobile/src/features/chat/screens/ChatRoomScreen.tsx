@@ -20,6 +20,7 @@ import MessageBubble from "../components/MessageBubble";
 import ForwardMessageModal from "../components/ForwardMessageModal";
 import ChatInput from "../components/ChatInput";
 import ChatHeader from "../components/ChatHeader";
+import GroupSidebar from "../components/GroupSidebar";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
@@ -121,6 +122,7 @@ const ChatRoomScreen = ({ route }: any) => {
     blockedByOther: false,
   });
   const [isBlockStatusLoading, setIsBlockStatusLoading] = React.useState(false);
+  const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
 
   const showScrollThreshold = 120;
   const nearBottomThreshold = 24;
@@ -254,6 +256,7 @@ const ChatRoomScreen = ({ route }: any) => {
     setIsListReady(false);
     setReplyTo(null);
     setHighlightedMsgId(null);
+    setIsGroupSidebarOpen(false);
     setBlockStatus({
       blocked: false,
       blockedByMe: false,
@@ -486,6 +489,9 @@ const ChatRoomScreen = ({ route }: any) => {
           isBlockedByOther={isBlockedByOther}
           onBlockUser={handleBlockUser}
           onUnblockUser={handleUnblockUser}
+          onGroupInfoPress={
+            isGroup ? () => setIsGroupSidebarOpen(true) : undefined
+          }
         />
         <ActivityIndicator
           size="large"
@@ -513,6 +519,9 @@ const ChatRoomScreen = ({ route }: any) => {
           isBlockedByOther={isBlockedByOther}
           onBlockUser={handleBlockUser}
           onUnblockUser={handleUnblockUser}
+          onGroupInfoPress={
+            isGroup ? () => setIsGroupSidebarOpen(true) : undefined
+          }
         />
 
         {isBlockedChat && (
@@ -624,6 +633,17 @@ const ChatRoomScreen = ({ route }: any) => {
           message={messageToForward}
           onClose={() => setMessageToForward(null)}
         />
+
+        {isGroup && (
+          <GroupSidebar
+            visible={isGroupSidebarOpen}
+            onClose={() => setIsGroupSidebarOpen(false)}
+            groupName={name}
+            groupAvatar={avatarUrl}
+            participants={participants || []}
+            messages={displayMessages}
+          />
+        )}
       </View>
     </KeyboardAvoidingView>
   );

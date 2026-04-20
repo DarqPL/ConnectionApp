@@ -26,6 +26,7 @@ interface ChatHeaderProps {
   isBlockedByOther?: boolean;
   onBlockUser?: () => void;
   onUnblockUser?: () => void;
+  onGroupInfoPress?: () => void;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -37,6 +38,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   isBlockedByOther = false,
   onBlockUser,
   onUnblockUser,
+  onGroupInfoPress,
 }) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -45,6 +47,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   const handleMorePress = () => {
     if (isGroup) {
+      onGroupInfoPress?.();
       return;
     }
 
@@ -125,7 +128,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         <TouchableOpacity style={styles.actionBtn}>
           <Ionicons name="videocam-outline" size={22} color="#fff" />
         </TouchableOpacity>
-        {!isGroup && (
+        {(isGroup ? Boolean(onGroupInfoPress) : true) && (
           <TouchableOpacity style={styles.actionBtn} onPress={handleMorePress}>
             <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
           </TouchableOpacity>

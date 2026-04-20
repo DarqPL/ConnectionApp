@@ -46,6 +46,8 @@ interface PendingAttachment {
   isImage: boolean;
 }
 
+type DeliveryState = "SENT" | "RECEIVED" | null;
+
 const formatFileSize = (size: number): string => {
   if (size < 1024) {
     return `${size} B`;
@@ -93,6 +95,8 @@ const MessageInput = ({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
   const conversationRef = useRef<number>(selectedConvo.id);
+  const [deliveryState, setDeliveryState] = useState<DeliveryState>(null);
+  const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -102,6 +106,10 @@ const MessageInput = ({
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+      }
+
+      if (deliveryTimeoutRef.current) {
+        clearTimeout(deliveryTimeoutRef.current);
       }
 
       if (typingStateRef.current) {
@@ -131,6 +139,13 @@ const MessageInput = ({
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
     }
+
+    if (deliveryTimeoutRef.current) {
+      clearTimeout(deliveryTimeoutRef.current);
+      deliveryTimeoutRef.current = null;
+    }
+
+    setDeliveryState(null);
   }, [notifyStoppedTyping, selectedConvo.id]);
 
   if (!user) return null;
@@ -243,6 +258,14 @@ const MessageInput = ({
       setValue("");
       clearPendingFiles();
       onCancelReply(); // Clear reply after sending
+
+      setDeliveryState("SENT");
+      if (deliveryTimeoutRef.current) {
+        clearTimeout(deliveryTimeoutRef.current);
+      }
+      deliveryTimeoutRef.current = setTimeout(() => {
+        setDeliveryState("RECEIVED");
+      }, 700);
     } catch (error) {
       console.error(error);
       const status = (error as any)?.response?.status;
@@ -267,6 +290,7 @@ const MessageInput = ({
         if (window.location.pathname !== "/signin") {
           window.location.href = "/signin";
         }
+        setDeliveryState(null);
         return;
       }
 
@@ -276,6 +300,8 @@ const MessageInput = ({
       } else {
         toast.error("Lỗi xảy ra khi gửi tin nhắn. Bạn hãy thử lại!");
       }
+
+      setDeliveryState(null);
     } finally {
       setIsUploading(false);
     }
@@ -329,6 +355,14 @@ const MessageInput = ({
     setValue(nextValue);
     applyTypingState(nextValue);
   };
+
+  const isComposing = value.trim().length > 0;
+  const deliveryLabel =
+    deliveryState === "SENT"
+      ? "Đã gửi"
+      : deliveryState === "RECEIVED"
+        ? "Đã nhận"
+        : null;
 
   const applyAiRewrittenDraft = (nextDraft: string) => {
     setValue(nextDraft);
@@ -466,6 +500,19 @@ const MessageInput = ({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {(isComposing || deliveryLabel) && (
+        <div className="px-4 pt-1.5 pb-0.5 text-xs text-muted-foreground flex items-center justify-between">
+          {isComposing ? (
+            <span className="italic">Bạn đang soạn tin...</span>
+          ) : (
+            <span></span>
+          )}
+          {deliveryLabel && (
+            <span className="font-medium">{deliveryLabel}</span>
+          )}
         </div>
       )}
 

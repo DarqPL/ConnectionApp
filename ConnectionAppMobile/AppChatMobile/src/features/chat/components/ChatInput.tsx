@@ -46,6 +46,8 @@ type LocalAttachment = PendingAttachment & {
   isImage: boolean;
 };
 
+type DeliveryState = "SENT" | "RECEIVED" | null;
+
 const formatFileSize = (size?: number): string => {
   if (!size || Number.isNaN(size)) return "Unknown";
   if (size < 1024) return `${size} B`;
@@ -90,8 +92,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<LocalAttachment[]>([]);
+  const [deliveryState, setDeliveryState] = useState<DeliveryState>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
+  const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopTyping = (targetConversationId: number) => {
     if (typingTimeoutRef.current) {
@@ -215,8 +219,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setText("");
       setSelectedFiles([]);
       onCancelReply?.();
+
+      setDeliveryState("SENT");
+      if (deliveryTimeoutRef.current) {
+        clearTimeout(deliveryTimeoutRef.current);
+      }
+      deliveryTimeoutRef.current = setTimeout(() => {
+        setDeliveryState("RECEIVED");
+      }, 700);
     } catch (error) {
       console.error("Error sending message:", error);
+      setDeliveryState(null);
     } finally {
       setIsSending(false);
     }
@@ -352,15 +365,37 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+      if (deliveryTimeoutRef.current) {
+        clearTimeout(deliveryTimeoutRef.current);
+      }
       if (typingStateRef.current) {
         notifyStoppedTyping(conversationId);
       }
     };
   }, [conversationId, notifyStoppedTyping]);
 
+  const isComposing = text.trim().length > 0;
+  const deliveryLabel =
+    deliveryState === "SENT"
+      ? "Đã gửi"
+      : deliveryState === "RECEIVED"
+        ? "Đã nhận"
+        : null;
+
   return (
     <>
       <View style={styles.wrapper}>
+        {(isComposing || deliveryLabel) && (
+          <View style={styles.chatStatusRow}>
+            {isComposing && (
+              <Text style={styles.composingText}>Bạn đang soạn tin...</Text>
+            )}
+            {deliveryLabel && (
+              <Text style={styles.deliveryText}>{deliveryLabel}</Text>
+            )}
+          </View>
+        )}
+
         {replyTo && (
           <View style={styles.replyBanner}>
             <View style={styles.replyContent}>
@@ -626,6 +661,25 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#ede9fe",
+  },
+  chatStatusRow: {
+    minHeight: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  composingText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontStyle: "italic",
+  },
+  deliveryText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: "600",
   },
   replyBanner: {
     flexDirection: "row",
