@@ -16,6 +16,23 @@ interface UploadedObjectResponse {
   size?: number;
 }
 
+export type AiRewriteAction = "TRANSLATE" | "SUGGEST_REPLY" | "REWRITE_STYLE";
+
+export interface AiRewriteRequest {
+  conversationId: number;
+  draftContent: string;
+  action: AiRewriteAction;
+  targetLanguage?: "EN" | "VI";
+}
+
+export interface AiRewriteResponse {
+  conversationId: number;
+  action: AiRewriteAction;
+  rewrittenText?: string | null;
+  suggestions?: string[];
+  targetLanguage?: "EN" | "VI" | null;
+}
+
 const resolveAttachmentType = (
   mimeType?: string,
   fileName?: string,
@@ -181,5 +198,10 @@ export const chatService = {
    */
   async markAsRead(conversationId: number): Promise<void> {
     await api.put(`/conversations/${conversationId}/read`);
+  },
+
+  async aiRewriteDraft(payload: AiRewriteRequest): Promise<AiRewriteResponse> {
+    const res = await api.post("/messages/ai-rewrite", payload);
+    return res.data;
   },
 };
