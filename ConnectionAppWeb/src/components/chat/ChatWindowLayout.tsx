@@ -5,6 +5,7 @@ import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
 import ChatInfoPanel from "./ChatInfoPanel";
+import PinnedMessagesBar from "./PinnedMessagesBar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -232,6 +233,10 @@ const ChatWindowLayout = () => {
           onBlockStatusChanged={refreshBlockStatus}
           onFilesOpen={() => setIsFilesPanelOpen(true)}
         />
+
+        {activeConversationId && (
+          <PinnedMessagesBar conversationId={activeConversationId} />
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto bg-transparent">

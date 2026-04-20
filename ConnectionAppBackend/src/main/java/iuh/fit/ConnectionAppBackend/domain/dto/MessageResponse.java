@@ -24,6 +24,7 @@ public class MessageResponse {
     private boolean isDeleted;
     private LocalDateTime recalledAt;
     private ReplyInfoResponse replyInfo;
+    private PollResponse poll;
 
     @Data
     @NoArgsConstructor

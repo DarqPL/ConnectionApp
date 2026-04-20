@@ -28,6 +28,7 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string | null;
   participants: Participant[];
+  pinnedMessages: Message[];
   unreadCount: number;
 }
 
@@ -59,7 +60,24 @@ export interface Message {
   isDeleted: boolean;
   recalledAt: string | null;
   replyInfo: ReplyInfo | null;
+  poll: Poll | null;
   isOwn?: boolean; // computed on frontend
+}
+
+export interface Poll {
+  question: string;
+  options: PollOption[];
+  multiChoice: boolean;
+  allowAddOptions: boolean;
+  isAnonymous: boolean;
+  closed: boolean;
+  expiredAt: string | null;
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  voterIds: number[];
 }
 
 export interface SenderInfo {
@@ -92,6 +110,20 @@ export interface MessageRequest {
   content: string;
   parentId?: string | null;
   attachments?: Attachment[];
+  poll?: PollRequest | null;
+}
+
+export interface PollRequest {
+  question: string;
+  options: PollOptionRequest[];
+  multiChoice: boolean;
+  allowAddOptions: boolean;
+  isAnonymous: boolean;
+  expiredAt?: string | null;
+}
+
+export interface PollOptionRequest {
+  text: string;
 }
 
 /**

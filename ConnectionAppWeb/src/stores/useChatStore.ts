@@ -168,13 +168,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  sendMessage: async (conversationId, content, parentId, attachments = []) => {
+  sendMessage: async (conversationId, content, parentId, attachments = [], poll = null) => {
     try {
       const response = await chatService.sendMessage(
         conversationId,
         content,
         parentId,
         attachments,
+        poll,
       );
 
       const user = useAuthStore.getState().user;
@@ -238,17 +239,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const convoId = message.conversationId;
     const prevItems = get().messages[convoId]?.items ?? [];
 
-    // Avoid duplicates
-    if (prevItems.some((m) => m.id === message.id)) {
-      return;
-    }
-
     const user = useAuthStore.getState().user;
     const messageWithOwn: Message = {
       ...message,
       isOwn: user ? message.senderInfo.senderId === user.id : false,
     };
     const preview = buildMessagePreview(messageWithOwn);
+
+    // If message already exists, we might be receiving a poll update (bumping)
+    // or a manual update. We remove the old one to re-add at the correct position.
+    const exists = prevItems.some((m) => m.id === message.id);
+    let updatedItems = prevItems;
+    
+    if (exists) {
+      updatedItems = prevItems.filter((m) => m.id !== message.id);
+    }
 
     // Check if conversation exists in state
     const convoExists = get().conversations.some((c) => c.id === convoId);
@@ -313,7 +318,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         messages: {
           ...state.messages,
           [convoId]: {
-            items: [...prevItems, messageWithOwn],
+            items: [...updatedItems, messageWithOwn],
             hasMore: state.messages[convoId]?.hasMore ?? false,
             page: state.messages[convoId]?.page ?? 0,
           },
@@ -574,5 +579,78 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         typingByConversation: typingClone,
       };
     });
+  },
+
+  votePoll: async (messageId, optionIds) => {
+    try {
+      const updatedMessage = await chatService.votePoll(messageId, optionIds);
+      get().updateMessage(updatedMessage);
+    } catch (error) {
+      console.error("Error voting in poll:", error);
+      throw error;
+    }
+  },
+
+  closePoll: async (messageId) => {
+    try {
+      const updatedMessage = await chatService.closePoll(messageId);
+      get().updateMessage(updatedMessage);
+    } catch (error) {
+      console.error("Error closing poll:", error);
+      throw error;
+    }
+  },
+
+  pinMessage: async (conversationId, messageId) => {
+    try {
+      await chatService.pinMessage(conversationId, messageId);
+      // We'll re-fetch the conversation to get updated pinned list
+      await get().fetchConversationById(conversationId);
+    } catch (error) {
+      console.error("Error pinning message:", error);
+      throw error;
+    }
+  },
+
+  unpinMessage: async (conversationId, messageId) => {
+    try {
+      await chatService.unpinMessage(conversationId, messageId);
+      await get().fetchConversationById(conversationId);
+    } catch (error) {
+      console.error("Error unpinning message:", error);
+      throw error;
+    }
+  },
+
+  fetchConversationById: async (conversationId) => {
+    try {
+      const conversation = await chatService.fetchConversationById(conversationId);
+      const user = useAuthStore.getState().user;
+      
+      const myParticipant = conversation.participants?.find(
+        (p) => p.userId === user?.id,
+      );
+      const updatedConvo = {
+        ...conversation,
+        unreadCount: conversation.unreadCount ?? (myParticipant?.unreadCounts || 0),
+      };
+
+      set((state) => {
+        const exists = state.conversations.some((c) => c.id === conversationId);
+        if (exists) {
+          return {
+            conversations: state.conversations.map((c) =>
+              c.id === conversationId ? updatedConvo : c,
+            ),
+          };
+        } else {
+          return {
+            conversations: [updatedConvo, ...state.conversations],
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching conversation by id:", error);
+    }
   },
 }));

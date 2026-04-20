@@ -25,5 +25,6 @@ public class ConversationResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<ConversationUserResponse> participants;
+    private List<MessageResponse> pinnedMessages;
     private long unreadCount = 0;
 }

@@ -1,4 +1,4 @@
-import type { Attachment, Conversation, Message, Participant } from "./chat";
+import type { Attachment, Conversation, Message, Participant, PollRequest } from "./chat";
 import type { Friend, User } from "./user";
 
 export interface AuthState {
@@ -56,7 +56,13 @@ export interface ChatState {
     content: string,
     parentId?: string | null,
     attachments?: Attachment[],
+    poll?: PollRequest | null,
   ) => Promise<void>;
+  votePoll: (messageId: string, optionIds: string[]) => Promise<void>;
+  closePoll: (messageId: string) => Promise<void>;
+  pinMessage: (conversationId: number, messageId: string) => Promise<void>;
+  unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
+  fetchConversationById: (conversationId: number) => Promise<void>;
   addMessage: (message: Message) => void;
   updateMessage: (message: Message) => void;
   recallMessage: (conversationId: number, messageId: string) => Promise<void>;

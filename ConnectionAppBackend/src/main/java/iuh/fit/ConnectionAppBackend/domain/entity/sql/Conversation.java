@@ -61,6 +61,9 @@ public class Conversation {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
+    @Column(columnDefinition = "TEXT")
+    private String pinnedMessageIds;
+
     @OneToMany(mappedBy = "conversation",cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ConversationUser> conversationUsers = new ArrayList<>();
 }

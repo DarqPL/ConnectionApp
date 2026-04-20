@@ -6,6 +6,7 @@ import {
   FileText,
   ImagePlus,
   Languages,
+  ListTodo,
   Loader2,
   Send,
   Sparkles,
@@ -34,6 +35,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import PollCreator from "./PollCreator";
+import type { PollRequest } from "@/types/chat";
 
 const LOCK_NOTICE_KEY = "auth_lock_notice";
 
@@ -97,6 +100,7 @@ const MessageInput = ({
   const conversationRef = useRef<number>(selectedConvo.id);
   const [deliveryState, setDeliveryState] = useState<DeliveryState>(null);
   const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isPollCreatorOpen, setIsPollCreatorOpen] = useState(false);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -253,6 +257,7 @@ const MessageInput = ({
         currValue,
         replyTo?.id ?? null,
         uploadedAttachments,
+        null, // poll
       );
 
       setValue("");
@@ -302,6 +307,25 @@ const MessageInput = ({
       }
 
       setDeliveryState(null);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleCreatePoll = async (poll: PollRequest) => {
+    setIsUploading(true);
+    try {
+      await sendMessage(
+        selectedConvo.id,
+        "", // content empty for poll-only message
+        null, // parentId
+        [], // attachments
+        poll
+      );
+      toast.success("Đã tạo cuộc bầu chọn!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi tạo cuộc bầu chọn.");
     } finally {
       setIsUploading(false);
     }
@@ -536,6 +560,17 @@ const MessageInput = ({
           <ImagePlus className="size-4" />
         </Button>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hover:bg-primary/10 transition-smooth"
+          type="button"
+          onClick={() => setIsPollCreatorOpen(true)}
+          disabled={isUploading}
+        >
+          <ListTodo className="size-4" />
+        </Button>
+
         <div className="flex-1 relative">
           <Input
             onKeyPress={handleKeyPress}
@@ -668,6 +703,12 @@ const MessageInput = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      <PollCreator
+        isOpen={isPollCreatorOpen}
+        onClose={() => setIsPollCreatorOpen(false)}
+        onSave={handleCreatePoll}
+      />
     </div>
   );
 };
