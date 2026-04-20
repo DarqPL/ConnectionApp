@@ -200,6 +200,22 @@ export const chatService = {
     await api.put(`/conversations/${conversationId}/read`);
   },
 
+  /**
+   * DELETE /api/conversations/{conversationId}/members/{userId}
+   * Leave a group or remove a member
+   */
+  async leaveGroup(conversationId: number, userId: number): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/members/${userId}`);
+  },
+
+  /**
+   * PUT /api/conversations/{conversationId}/members/{memberId}/role
+   * Transfer ownership to another member
+   */
+  async updateMemberRole(conversationId: number, memberId: number, role: string): Promise<void> {
+    await api.put(`/conversations/${conversationId}/members/${memberId}/role`, { role });
+  },
+
   async aiRewriteDraft(payload: AiRewriteRequest): Promise<AiRewriteResponse> {
     const res = await api.post("/messages/ai-rewrite", payload);
     return res.data;

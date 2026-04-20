@@ -10,6 +10,10 @@ import type { Message, Conversation } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import GroupChatAvatar from "./GroupChatAvatar";
+import { TransferOwnershipDialog } from "./TransferOwnershipDialog";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { chatService } from "@/services/chatService";
+import { toast } from "sonner";
 import "yet-another-react-lightbox/styles.css";
 import Lightbox from "yet-another-react-lightbox";
 
@@ -53,9 +57,9 @@ const ChatInfoPanel = ({
   isOpen, 
   onClose,
   onLeaveGroup,
-  onDeleteHistory,
-  onLogout
+  onDeleteHistory
 }: ChatInfoPanelProps) => {
+  const { user } = useAuthStore();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     members: true,
     board: true,
@@ -69,7 +73,15 @@ const ChatInfoPanel = ({
   });
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [showAllImages, setShowAllImages] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [isLeavingGroup, setIsLeavingGroup] = useState(false);
+
+  // Check if current user is group owner
+  const currentUserRole = useMemo(() => {
+    if (!user) return null;
+    const participant = chat.participants.find(p => p.userId === user.id);
+    return participant?.role || null;
+  }, [chat.participants, user]);
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -82,19 +94,55 @@ const ChatInfoPanel = ({
     }
   };
 
-  const handleLeaveGroup = () => {
-    const confirmed = window.confirm("Bạn có chắc chắn muốn rời khỏi nhóm này không?");
+  const handleLeaveGroup = async () => {
+    // If user is owner and there are other members, must transfer ownership first
+    if (currentUserRole === "OWNER" && chat.participants.length > 1) {
+      setShowTransferDialog(true);
+      return;
+    }
+
+    // For members or owners of groups with 1 member, show confirmation and leave
+    const message = currentUserRole === "OWNER" 
+      ? "Bạn có chắc chắn muốn rời khỏi và xóa nhóm này không?"
+      : "Bạn có chắc chắn muốn rời khỏi nhóm này không?";
+    
+    const confirmed = window.confirm(message);
     if (confirmed) {
-      onLeaveGroup?.();
+      setIsLeavingGroup(true);
+      try {
+        if (user) {
+          await chatService.leaveGroup(chat.id, user.id);
+          toast.success(currentUserRole === "OWNER" ? "Đã xóa nhóm" : "Đã rời khỏi nhóm");
+          onLeaveGroup?.();
+          onClose();
+        }
+      } catch (error) {
+        console.error("Lỗi rời khỏi nhóm:", error);
+        toast.error("Không thể rời khỏi nhóm");
+      } finally {
+        setIsLeavingGroup(false);
+      }
     }
   };
 
-  const handleLogout = () => {
-    const confirmed = window.confirm("Bạn có chắc chắn muốn đăng xuất?");
-    if (confirmed) {
-      onLogout?.();
+  const handleTransferComplete = async () => {
+    // After successful transfer, leave the group
+    setIsLeavingGroup(true);
+    try {
+      if (user) {
+        await chatService.leaveGroup(chat.id, user.id);
+        toast.success("Đã chuyển quyền và rời khỏi nhóm");
+        onLeaveGroup?.();
+        onClose();
+      }
+    } catch (error) {
+      console.error("Lỗi rời khỏi nhóm:", error);
+      toast.error("Không thể rời khỏi nhóm");
+    } finally {
+      setIsLeavingGroup(false);
     }
   };
+
 
   const allMedia = useMemo(() => {
     const media: { src: string; width: number; height: number; type: "image" }[] = [];
@@ -441,17 +489,41 @@ const ChatInfoPanel = ({
             <Trash2 className="size-4 mr-2" />
             Xóa lịch sử cuộc trò chuyện
           </Button>
+          {currentUserRole === "OWNER" && chat.participants.length > 1 && (
+            <div className="px-2 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-700 dark:text-yellow-400">
+              <p className="font-medium">Bạn là quản lý nhóm</p>
+              <p className="text-[11px] mt-1">Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm</p>
+            </div>
+          )}
           <Button
             variant="secondary"
             size="sm"
             className="w-full h-9 text-xs text-destructive hover:text-destructive"
             onClick={handleLeaveGroup}
+            disabled={isLeavingGroup}
           >
             <LogOut className="size-4 mr-2" />
-            Rời khỏi nhóm
+            {isLeavingGroup 
+              ? "Đang xử lý..." 
+              : currentUserRole === "OWNER" && chat.participants.length > 1
+              ? "Chuyển quyền & Rời" 
+              : currentUserRole === "OWNER" 
+              ? "Xóa nhóm"
+              : "Rời khỏi nhóm"}
           </Button>
         </div>
       </div>
+
+      {/* Transfer Ownership Dialog */}
+      {user && (
+        <TransferOwnershipDialog
+          isOpen={showTransferDialog}
+          onClose={() => setShowTransferDialog(false)}
+          conversation={chat}
+          currentUserId={user.id}
+          onTransferComplete={handleTransferComplete}
+        />
+      )}
 
       {/* Bottom Section with Pin Toggle and Logout Button */}
      

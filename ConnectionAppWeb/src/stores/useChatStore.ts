@@ -336,6 +336,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
+  updateConversationParticipants: (conversationId, participants) => {
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId ? { ...c, participants } : c,
+      ),
+    }));
+  },
+
   upsertTypingUser: (typingUser) => {
     const user = useAuthStore.getState().user;
     if (!typingUser.conversationId || !typingUser.userId) {
@@ -539,5 +547,32 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  removeConversation: (conversationId) => {
+    set((state) => {
+      const filteredConvos = state.conversations.filter(
+        (c) => c.id !== conversationId
+      );
+      const newActiveId = 
+        state.activeConversationId === conversationId 
+          ? null 
+          : state.activeConversationId;
+
+      // Clear messages for this conversation
+      const messagesClone = { ...state.messages };
+      delete messagesClone[conversationId];
+
+      // Clear typing users for this conversation
+      const typingClone = { ...state.typingByConversation };
+      delete typingClone[conversationId];
+
+      return {
+        conversations: filteredConvos,
+        activeConversationId: newActiveId,
+        messages: messagesClone,
+        typingByConversation: typingClone,
+      };
+    });
   },
 }));
