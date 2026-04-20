@@ -6,7 +6,7 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState, type AppStateStatus } from "react-native";
 import type { Attachment, Message, Conversation } from "../types";
 import { chatService } from "../services/chat.service";
 import { chatSocketService } from "../services/socket.service";
@@ -67,10 +67,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<TypingPresence[]>([]);
+  const [appState, setAppState] = useState<AppStateStatus>(
+    AppState.currentState,
+  );
 
   // Ref so socket handlers always access latest state without reconnecting
   const currentConversationRef = useRef<number | null>(null);
   const userIdRef = useRef<number | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const messageFetchVersionRef = useRef(0);
   const typingTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
@@ -81,6 +85,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     userIdRef.current = user?.id ?? null;
   }, [user?.id]);
+
+  useEffect(() => {
+    appStateRef.current = appState;
+  }, [appState]);
 
   const sortConversations = (items: Conversation[]): Conversation[] =>
     [...items].sort((a, b) => {
@@ -170,6 +178,29 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      setAppState(nextState);
+
+      const resumedFromBackground =
+        /inactive|background/.test(previousState) && nextState === "active";
+
+      if (resumedFromBackground && isAuthenticated && user?.id && accessToken) {
+        // App resumed: clear stale socket error and refresh list once.
+        setError(null);
+        fetchConversations().catch(() => {
+          // Best effort refresh; keep existing realtime state if request fails.
+        });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [accessToken, fetchConversations, isAuthenticated, user?.id]);
 
   // ─── Socket handlers (stable functions, state accessed via refs/setters) ───
 
@@ -367,7 +398,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // ─── Single socket connect effect — only depends on userId/token ───
   useEffect(() => {
+    const isAppActive = appState === "active";
+
     if (!isAuthenticated || !user?.id || !accessToken) {
+      chatSocketService.disconnect();
+      return;
+    }
+
+    if (!isAppActive) {
+      // Keep socket fully closed while app is backgrounded.
       chatSocketService.disconnect();
       return;
     }
@@ -388,7 +427,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onUserStoppedTyping,
       onSecurityNotification,
       onConnectionError: (socketError) => {
-        console.error("[ChatContext] Socket error:", socketError);
+        if (appStateRef.current !== "active") {
+          console.log("[ChatContext] Ignored socket error while app inactive.");
+          return;
+        }
+
+        console.warn("[ChatContext] Socket error:", socketError);
         setError(socketError);
       },
     });
@@ -397,7 +441,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       chatSocketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user?.id, accessToken, onSecurityNotification]);
+  }, [
+    isAuthenticated,
+    user?.id,
+    accessToken,
+    appState,
+    onSecurityNotification,
+  ]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
 
@@ -411,7 +461,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onUserTyping,
         onUserStoppedTyping,
         onSecurityNotification,
-        onConnectionError: setError,
+        onConnectionError: (socketError) => {
+          if (appStateRef.current === "active") {
+            setError(socketError);
+          }
+        },
       });
     }
   }, [
