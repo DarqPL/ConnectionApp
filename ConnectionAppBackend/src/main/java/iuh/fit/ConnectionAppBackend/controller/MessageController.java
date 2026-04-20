@@ -1,5 +1,7 @@
 package iuh.fit.ConnectionAppBackend.controller;
 
+import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PageResponse;
@@ -174,4 +176,20 @@ public class MessageController {
         long unreadCount = messageService.getUnreadMessageCount(conversationId, userId);
         return ResponseEntity.ok(unreadCount);
     }
+
+        /**
+         * AI rewrite for drafted message content
+         */
+        @PostMapping("/ai-rewrite")
+        public ResponseEntity<AiRewriteResponse> aiRewriteDraft(
+                        Authentication authentication,
+                        @RequestBody AiRewriteRequest request) {
+
+                Long userId = userService.getUserByUsername(authentication.getName())
+                                .orElseThrow(() -> new RuntimeException("User not found"))
+                                .getId();
+
+                AiRewriteResponse response = messageService.aiRewriteDraft(userId, request);
+                return ResponseEntity.ok(response);
+        }
 }

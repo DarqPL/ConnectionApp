@@ -36,6 +36,16 @@ export class ChatApiError extends Error {
   }
 }
 
+export type AiRewriteAction = "TRANSLATE" | "SUGGEST_REPLY" | "REWRITE_STYLE";
+
+export interface AiRewriteResponse {
+  conversationId: number;
+  action: AiRewriteAction;
+  rewrittenText?: string | null;
+  suggestions?: string[];
+  targetLanguage?: "EN" | "VI" | null;
+}
+
 const resolveAttachmentType = (
   mimeType?: string | null,
   fileName?: string,
@@ -257,6 +267,27 @@ export class ChatService {
     }
 
     return (await response.json()) as Conversation;
+  }
+
+  async aiRewriteDraft(payload: {
+    conversationId: number;
+    draftContent: string;
+    action: AiRewriteAction;
+    targetLanguage?: "EN" | "VI";
+  }): Promise<AiRewriteResponse> {
+    const response = await authService.authFetch("/messages/ai-rewrite", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể xử lý AI Rewrite");
+    }
+
+    return (await response.json()) as AiRewriteResponse;
   }
 }
 
