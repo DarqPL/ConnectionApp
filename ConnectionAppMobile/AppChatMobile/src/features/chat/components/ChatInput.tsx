@@ -11,6 +11,7 @@ import {
   Image,
   Text,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../theme";
@@ -19,6 +20,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import type { PendingAttachment } from "../context/ChatContext";
 import { useChat } from "../context/ChatContext";
+import { chatService, type AiRewriteAction } from "../services/chat.service";
 import type { Message } from "../types";
 import {
   MAX_UPLOAD_FILE_SIZE_BYTES,
@@ -82,7 +84,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const { notifyTyping, notifyStoppedTyping } = useChat();
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [isAiActionModalOpen, setIsAiActionModalOpen] = useState(false);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<LocalAttachment[]>([]);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
@@ -231,6 +237,75 @@ const ChatInput: React.FC<ChatInputProps> = ({
     handleTextChange(`${text}${emoji}`);
   };
 
+  const applyAiDraft = (nextDraft: string) => {
+    handleTextChange(nextDraft);
+  };
+
+  const runAiRewrite = async (
+    action: AiRewriteAction,
+    targetLanguage?: "EN" | "VI",
+  ) => {
+    const draft = text.trim();
+    if (action !== "SUGGEST_REPLY" && !draft) {
+      Alert.alert(
+        "Thông báo",
+        "Vui lòng nhập nội dung trước khi dùng AI Rewrite.",
+      );
+      return;
+    }
+
+    setIsAiProcessing(true);
+    try {
+      const result = await chatService.aiRewriteDraft({
+        conversationId,
+        draftContent: draft,
+        action,
+        targetLanguage,
+      });
+
+      if (action === "SUGGEST_REPLY") {
+        const suggestions = (result.suggestions ?? [])
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 3);
+
+        if (suggestions.length === 0) {
+          Alert.alert("AI Rewrite", "AI chưa tạo được gợi ý trả lời.");
+          return;
+        }
+
+        setAiSuggestions(suggestions);
+        setIsSuggestionModalOpen(true);
+        return;
+      }
+
+      const rewritten = result.rewrittenText?.trim();
+      if (!rewritten) {
+        Alert.alert("AI Rewrite", "AI Rewrite trả về dữ liệu không hợp lệ.");
+        return;
+      }
+
+      applyAiDraft(rewritten);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Không thể xử lý AI Rewrite.";
+      Alert.alert("AI Rewrite", message);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
+
+  const openAiMenu = () => {
+    Keyboard.dismiss();
+    setIsAiActionModalOpen(true);
+  };
+
+  const handleSuggestionSelect = (suggestion: string) => {
+    applyAiDraft(suggestion);
+    setIsSuggestionModalOpen(false);
+    setAiSuggestions([]);
+  };
+
   // NEW: Handle text input with typing notification
   const handleTextChange = (newText: string) => {
     setText(newText);
@@ -368,6 +443,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <Ionicons name="happy-outline" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={openAiMenu}
+            disabled={isSending || disabled || isAiProcessing}
+          >
+            {isAiProcessing ? (
+              <ActivityIndicator size="small" color={COLORS.textMuted} />
+            ) : (
+              <Ionicons
+                name="sparkles-outline"
+                size={22}
+                color={COLORS.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+
           <View style={styles.inputWrap}>
             <TextInput
               value={text}
@@ -408,6 +499,122 @@ const ChatInput: React.FC<ChatInputProps> = ({
         onClose={() => setIsEmojiPickerOpen(false)}
         onEmojiSelected={handleSelectEmoji}
       />
+
+      <Modal
+        visible={isAiActionModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAiActionModalOpen(false)}
+      >
+        <View style={styles.suggestionOverlay}>
+          <View style={styles.suggestionCard}>
+            <Text style={styles.suggestionTitle}>AI Rewrite</Text>
+            <Text style={styles.suggestionDesc}>
+              Chọn chức năng bạn muốn dùng.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.suggestionButton}
+              onPress={() => {
+                setIsAiActionModalOpen(false);
+                runAiRewrite("TRANSLATE", "VI").catch(() => {});
+              }}
+            >
+              <Text style={styles.suggestionButtonText}>
+                Dịch sang tiếng Việt
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.suggestionButton}
+              onPress={() => {
+                setIsAiActionModalOpen(false);
+                runAiRewrite("TRANSLATE", "EN").catch(() => {});
+              }}
+            >
+              <Text style={styles.suggestionButtonText}>
+                Translate to English
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.suggestionButton}
+              onPress={() => {
+                setIsAiActionModalOpen(false);
+                runAiRewrite("SUGGEST_REPLY").catch(() => {});
+              }}
+            >
+              <Text style={styles.suggestionButtonText}>
+                Gợi ý 3 câu trả lời
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.suggestionButton}
+              onPress={() => {
+                setIsAiActionModalOpen(false);
+                runAiRewrite("REWRITE_STYLE").catch(() => {});
+              }}
+            >
+              <Text style={styles.suggestionButtonText}>
+                Viết lịch sự, ngắn gọn
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.suggestionCancelBtn}
+              onPress={() => setIsAiActionModalOpen(false)}
+            >
+              <Text style={styles.suggestionCancelText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={isSuggestionModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setIsSuggestionModalOpen(false);
+          setAiSuggestions([]);
+        }}
+      >
+        <View style={styles.suggestionOverlay}>
+          <View style={styles.suggestionCard}>
+            <Text style={styles.suggestionTitle}>Gợi ý trả lời từ AI</Text>
+            <Text style={styles.suggestionDesc}>
+              Chọn 1 gợi ý để thay thế nội dung đang soạn.
+            </Text>
+
+            <ScrollView
+              style={styles.suggestionList}
+              contentContainerStyle={{ gap: 10 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {aiSuggestions.map((suggestion, index) => (
+                <TouchableOpacity
+                  key={`${index}-${suggestion}`}
+                  style={styles.suggestionButton}
+                  onPress={() => handleSuggestionSelect(suggestion)}
+                >
+                  <Text style={styles.suggestionButtonText}>{suggestion}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.suggestionCancelBtn}
+              onPress={() => {
+                setIsSuggestionModalOpen(false);
+                setAiSuggestions([]);
+              }}
+            >
+              <Text style={styles.suggestionCancelText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -541,5 +748,57 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 4,
+  },
+  suggestionOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  suggestionCard: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "75%",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
+    gap: 10,
+  },
+  suggestionTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  suggestionDesc: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+  suggestionList: {
+    maxHeight: 320,
+  },
+  suggestionButton: {
+    borderWidth: 1,
+    borderColor: "#dedee8",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#fafafe",
+  },
+  suggestionButtonText: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 20,
+  },
+  suggestionCancelBtn: {
+    alignSelf: "flex-end",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#efeff6",
+  },
+  suggestionCancelText: {
+    color: COLORS.text,
+    fontWeight: "600",
   },
 });

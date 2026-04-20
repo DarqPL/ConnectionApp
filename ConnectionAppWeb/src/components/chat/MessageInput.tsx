@@ -2,17 +2,38 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import type { Conversation, Message } from "@/types/chat";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
-import { FileText, ImagePlus, Loader2, Send, X } from "lucide-react";
+import {
+  FileText,
+  ImagePlus,
+  Languages,
+  Loader2,
+  Send,
+  Sparkles,
+  Wand2,
+  X,
+} from "lucide-react";
 import { Input } from "../ui/input";
 import EmojiPicker from "./EmojiPicker";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { toast } from "sonner";
-import { chatService } from "@/services/chatService";
+import {
+  chatService,
+  type AiRewriteAction,
+  type AiRewriteRequest,
+} from "@/services/chatService";
 import {
   MAX_UPLOAD_FILE_SIZE_BYTES,
   MAX_UPLOAD_FILE_SIZE_LABEL,
 } from "@/config/upload";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 const LOCK_NOTICE_KEY = "auth_lock_notice";
 
@@ -62,6 +83,10 @@ const MessageInput = ({
   const { clearState } = useAuthStore();
   const [value, setValue] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
+  const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
   const pendingFilesRef = useRef<PendingAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -305,6 +330,74 @@ const MessageInput = ({
     applyTypingState(nextValue);
   };
 
+  const applyAiRewrittenDraft = (nextDraft: string) => {
+    setValue(nextDraft);
+    applyTypingState(nextDraft);
+  };
+
+  const callAiRewrite = async (
+    action: AiRewriteAction,
+    targetLanguage?: "EN" | "VI",
+  ) => {
+    const draft = value.trim();
+    if (action !== "SUGGEST_REPLY" && !draft) {
+      toast.error("Vui lòng nhập nội dung trước khi dùng AI Rewrite.");
+      return;
+    }
+
+    const payload: AiRewriteRequest = {
+      conversationId: selectedConvo.id,
+      draftContent: draft,
+      action,
+      targetLanguage,
+    };
+
+    setIsAiMenuOpen(false);
+    setIsAiProcessing(true);
+
+    try {
+      const result = await chatService.aiRewriteDraft(payload);
+
+      if (action === "SUGGEST_REPLY") {
+        const suggestions = (result.suggestions ?? [])
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 3);
+
+        if (suggestions.length === 0) {
+          toast.error("AI chưa tạo được gợi ý trả lời.");
+          return;
+        }
+
+        setAiSuggestions(suggestions);
+        setIsSuggestionDialogOpen(true);
+        return;
+      }
+
+      const rewritten = result.rewrittenText?.trim();
+      if (!rewritten) {
+        toast.error("AI Rewrite trả về dữ liệu không hợp lệ.");
+        return;
+      }
+
+      applyAiRewrittenDraft(rewritten);
+      toast.success("Đã thay nội dung soạn bằng kết quả AI.");
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || "Không thể xử lý AI Rewrite lúc này.";
+      toast.error(message);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
+
+  const handleSuggestionSelect = (suggestion: string) => {
+    applyAiRewrittenDraft(suggestion);
+    setIsSuggestionDialogOpen(false);
+    setAiSuggestions([]);
+    toast.success("Đã thay nội dung soạn bằng gợi ý AI.");
+  };
+
   return (
     <div className="bg-background">
       {/* Reply banner */}
@@ -402,9 +495,66 @@ const MessageInput = ({
             value={value}
             onChange={(e) => handleValueChange(e.target.value)}
             placeholder="Soạn tin nhắn..."
-            className="pr-20 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none"
+            className="pr-28 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none"
           ></Input>
           <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+            <Popover open={isAiMenuOpen} onOpenChange={setIsAiMenuOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 hover:bg-primary/10 transition-smooth"
+                  disabled={isUploading || isAiProcessing}
+                >
+                  {isAiProcessing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="end">
+                <div className="space-y-1">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => callAiRewrite("TRANSLATE", "VI")}
+                    disabled={isAiProcessing}
+                  >
+                    <Languages className="size-4 mr-2" />
+                    Dịch sang tiếng Việt
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => callAiRewrite("TRANSLATE", "EN")}
+                    disabled={isAiProcessing}
+                  >
+                    <Languages className="size-4 mr-2" />
+                    Translate to English
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => callAiRewrite("SUGGEST_REPLY")}
+                    disabled={isAiProcessing}
+                  >
+                    <Sparkles className="size-4 mr-2" />
+                    Gợi ý 3 câu trả lời
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={() => callAiRewrite("REWRITE_STYLE")}
+                    disabled={isAiProcessing}
+                  >
+                    <Wand2 className="size-4 mr-2" />
+                    Viết lịch sự, ngắn gọn
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
             <Button
               asChild
               variant="ghost"
@@ -438,6 +588,39 @@ const MessageInput = ({
           )}
         </Button>
       </div>
+
+      <Dialog
+        open={isSuggestionDialogOpen}
+        onOpenChange={(open) => {
+          setIsSuggestionDialogOpen(open);
+          if (!open) {
+            setAiSuggestions([]);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gợi ý trả lời từ AI</DialogTitle>
+            <DialogDescription>
+              Chọn 1 gợi ý, nội dung sẽ thay thế toàn bộ ô soạn hiện tại.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {aiSuggestions.map((suggestion, index) => (
+              <Button
+                key={`${index}-${suggestion}`}
+                type="button"
+                variant="outline"
+                className="w-full h-auto whitespace-normal text-left justify-start"
+                onClick={() => handleSuggestionSelect(suggestion)}
+              >
+                {suggestion}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

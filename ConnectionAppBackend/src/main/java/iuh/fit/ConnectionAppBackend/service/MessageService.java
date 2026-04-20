@@ -2,6 +2,8 @@ package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.domain.common.AttachmentType;
 import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
+import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.AttachmentRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
@@ -23,7 +25,9 @@ import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +73,9 @@ public class MessageService {
 
     @Autowired
     private SecurityNotificationService securityNotificationService;
+
+    @Autowired
+    private MessageAiRewriteService messageAiRewriteService;
 
     /**
      * Send a message
@@ -328,6 +335,38 @@ public class MessageService {
      */
     public long getUnreadMessageCount(Long conversationId, Long userId) {
         return messageRepository.countUnreadMessages(conversationId, userId);
+    }
+
+    public AiRewriteResponse aiRewriteDraft(Long userId, AiRewriteRequest request) {
+        if (request == null) {
+            throw new BadRequestException("AI Rewrite payload is required");
+        }
+
+        if (request.getConversationId() == null) {
+            throw new BadRequestException("Conversation ID is required");
+        }
+
+        Conversation conversation = conversationRepository.findById(request.getConversationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + request.getConversationId()));
+
+        boolean isMember = conversationUserRepository.isMember(request.getConversationId(), userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        validatePrivateConversationBlock(conversation, userId);
+
+        Pageable pageable = PageRequest.of(
+                0,
+                messageAiRewriteService.getMaxContextMessages(),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        List<Message> recentMessages = messageRepository
+                .findByConversationIdAndIsDeletedFalseOrderByCreatedAtDesc(request.getConversationId(), pageable)
+                .getContent();
+
+        return messageAiRewriteService.rewriteDraft(request, recentMessages, conversation.getType());
     }
 
     /**
