@@ -25,6 +25,7 @@ public class MessageResponse {
     private LocalDateTime recalledAt;
     private ReplyInfoResponse replyInfo;
     private PollResponse poll;
+    private List<MessageReactionResponse> reactions;
 
     @Data
     @NoArgsConstructor
@@ -56,5 +57,15 @@ public class MessageResponse {
         private String parentSenderName;
         private List<AttachmentResponse> parentAttachments;
         private boolean parentRecalled;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class MessageReactionResponse {
+        private Long userId;
+        private String reactionCode;
+        private LocalDateTime reactedAt;
     }
 }

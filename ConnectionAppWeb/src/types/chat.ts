@@ -61,7 +61,14 @@ export interface Message {
   recalledAt: string | null;
   replyInfo: ReplyInfo | null;
   poll: Poll | null;
+  reactions?: MessageReaction[];
   isOwn?: boolean; // computed on frontend
+}
+
+export interface MessageReaction {
+  userId: number;
+  reactionCode: string;
+  reactedAt?: string | null;
 }
 
 export interface Poll {

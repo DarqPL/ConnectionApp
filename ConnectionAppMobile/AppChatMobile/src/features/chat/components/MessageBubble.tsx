@@ -17,7 +17,7 @@ import { ResizeMode, Video } from "expo-av";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import PollMessage from "./PollMessage";
-import type { Attachment, ReplyInfo, Poll } from "../types";
+import type { Attachment, ReplyInfo, Poll, MessageReaction } from "../types";
 import {
   detectEmailInMessage,
   isValidEmailFormat,
@@ -45,6 +45,9 @@ interface Props {
   onPollVote?: () => void;
   replyInfo?: ReplyInfo | null;
   isHighlighted?: boolean;
+  reactions?: MessageReaction[];
+  currentUserId?: number;
+  onReact?: (reactionCode: string | null) => void;
 }
 
 const formatTime = (dateStr: string) => {
@@ -125,10 +128,32 @@ const MessageBubble: React.FC<Props> = ({
   replyInfo,
   isHighlighted = false,
   poll,
+  reactions = [],
+  currentUserId,
+  onReact,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
   const { user: currentUser } = useAuth();
+  const myReaction = reactions.find(
+    (reaction) => reaction.userId === currentUserId,
+  );
+
+  const groupedReactions = reactions.reduce((acc, reaction) => {
+    const existing = acc.get(reaction.reactionCode);
+    if (existing) {
+      existing.count += 1;
+      existing.userIds.push(reaction.userId);
+    } else {
+      acc.set(reaction.reactionCode, {
+        emoji: reaction.reactionCode,
+        count: 1,
+        userIds: [reaction.userId],
+      });
+    }
+    return acc;
+  }, new Map<string, { emoji: string; count: number; userIds: number[] }>());
+  const reactionSummary = Array.from(groupedReactions.values());
 
   // ── Email / Business card state ──────────────────────────────────────────
   const [emailUser, setEmailUser] = useState<User | null>(null);
@@ -508,10 +533,12 @@ const MessageBubble: React.FC<Props> = ({
   };
 
   return (
-    <View style={[
-      styles.row, 
-      poll ? styles.rowCenter : (isMe ? styles.rowRight : styles.rowLeft)
-    ]}>
+    <View
+      style={[
+        styles.row,
+        poll ? styles.rowCenter : isMe ? styles.rowRight : styles.rowLeft,
+      ]}
+    >
       {/* Avatar for received messages in groups */}
       {!isMe && isGroup && (
         <Image source={{ uri: avatarUrl || FALLBACK }} style={styles.avatar} />
@@ -528,7 +555,11 @@ const MessageBubble: React.FC<Props> = ({
           onLongPress={!isRecalled ? onLongPress : undefined}
           style={[
             styles.bubble,
-            poll ? styles.bubblePoll : (isMe ? styles.bubbleSent : styles.bubbleReceived),
+            poll
+              ? styles.bubblePoll
+              : isMe
+                ? styles.bubbleSent
+                : styles.bubbleReceived,
             isRecalled && styles.bubbleRecalled,
             replyInfo && !isRecalled && styles.bubbleWithReply,
             isHighlighted && styles.bubbleHighlighted,
@@ -683,10 +714,10 @@ const MessageBubble: React.FC<Props> = ({
               )}
 
               {poll && (
-                <PollMessage 
-                  poll={poll} 
-                  onVote={onPollVote || (() => {})} 
-                  isMe={isMe} 
+                <PollMessage
+                  poll={poll}
+                  onVote={onPollVote || (() => {})}
+                  isMe={isMe}
                 />
               )}
 
@@ -709,6 +740,51 @@ const MessageBubble: React.FC<Props> = ({
           >
             {formatTime(createdAt)}
           </Text>
+        )}
+
+        {reactionSummary.length > 0 && (
+          <View
+            style={[
+              styles.reactionWrap,
+              isMe ? styles.reactionWrapRight : styles.reactionWrapLeft,
+            ]}
+          >
+            {reactionSummary.map((reaction) => {
+              const isMine =
+                currentUserId != null &&
+                reaction.userIds.includes(currentUserId);
+              return (
+                <TouchableOpacity
+                  key={reaction.emoji}
+                  activeOpacity={0.8}
+                  onPress={() => onReact?.(isMine ? null : reaction.emoji)}
+                  style={[
+                    styles.reactionChip,
+                    isMine && styles.reactionChipMine,
+                  ]}
+                >
+                  <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                  <Text style={styles.reactionCount}>{reaction.count}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {!isRecalled && onReact && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() =>
+              onReact(myReaction?.reactionCode === "👍" ? null : "👍")
+            }
+            style={[
+              styles.quickReactionBtn,
+              myReaction?.reactionCode === "👍" &&
+                styles.quickReactionBtnActive,
+            ]}
+          >
+            <Text style={styles.quickReactionIcon}>👍</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -1107,5 +1183,57 @@ const styles = StyleSheet.create({
   },
   timeRight: {
     alignSelf: "flex-end",
+  },
+  reactionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+  reactionWrapLeft: {
+    alignSelf: "flex-start",
+  },
+  reactionWrapRight: {
+    alignSelf: "flex-end",
+  },
+  reactionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#d8d8e6",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  reactionChipMine: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#efe9ff",
+  },
+  reactionEmoji: {
+    fontSize: 13,
+  },
+  reactionCount: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+  },
+  quickReactionBtn: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#d8d8e6",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: "#fff",
+  },
+  quickReactionBtnActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#efe9ff",
+  },
+  quickReactionIcon: {
+    fontSize: 13,
   },
 });

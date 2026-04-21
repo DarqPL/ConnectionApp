@@ -90,6 +90,7 @@ const TypingDots = () => {
 };
 
 const ChatRoomScreen = ({ route }: any) => {
+  const REACTION_OPTIONS = ["👍", "❤️", "😆", "😮", "😢", "😡"] as const;
   const insets = useSafeAreaInsets();
   const { conversationId, name, avatarUrl, type, participants } = route.params;
   const {
@@ -100,6 +101,7 @@ const ChatRoomScreen = ({ route }: any) => {
     sendMessage,
     recallMessage,
     deleteMessage,
+    reactMessage,
     pinMessage,
     unpinMessage,
     conversations,
@@ -136,7 +138,9 @@ const ChatRoomScreen = ({ route }: any) => {
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
 
-  const currentConversation = conversations.find((c) => Number(c.id) === Number(conversationId));
+  const currentConversation = conversations.find(
+    (c) => Number(c.id) === Number(conversationId),
+  );
 
   const currentParticipants = useMemo(() => {
     if (currentConversation && currentConversation.participants) {
@@ -206,7 +210,10 @@ const ChatRoomScreen = ({ route }: any) => {
   };
 
   const handleClosePoll = async () => {
-    console.log("[ChatRoom] handleClosePoll called. activePollMessage ID:", activePollMessage?.id);
+    console.log(
+      "[ChatRoom] handleClosePoll called. activePollMessage ID:",
+      activePollMessage?.id,
+    );
     if (!activePollMessage) return;
 
     try {
@@ -540,10 +547,10 @@ const ChatRoomScreen = ({ route }: any) => {
 
     Alert.alert(
       isOwnMessage ? "Thu hồi hoặc xóa" : "Xóa tin nhắn",
-      isOwnMessage 
-        ? "Bạn muốn làm gì với tin nhắn này?" 
+      isOwnMessage
+        ? "Bạn muốn làm gì với tin nhắn này?"
         : "Tin nhắn này sẽ bị xóa khỏi lịch sử chat của bạn.",
-      options
+      options,
     );
   };
 
@@ -556,8 +563,53 @@ const ChatRoomScreen = ({ route }: any) => {
       ? currentConv.pinnedMessageIds.split(",")
       : [];
     const isPinned = pinnedIds.includes(item.id);
+    const myReaction = item.reactions?.find(
+      (reaction) => reaction.userId === user?.id,
+    );
+
+    const openReactionPicker = () => {
+      const reactionActions: any[] = REACTION_OPTIONS.map((emoji) => ({
+        text: `${emoji}  Thả ${emoji}`,
+        onPress: () => {
+          const nextReaction =
+            myReaction?.reactionCode === emoji ? null : emoji;
+          reactMessage(conversationId, item.id, nextReaction).catch((err) => {
+            Alert.alert(
+              "Lỗi",
+              err instanceof Error ? err.message : "Không thể thả cảm xúc",
+            );
+          });
+        },
+      }));
+
+      if (myReaction) {
+        reactionActions.push({
+          text: "Bỏ cảm xúc",
+          style: "destructive",
+          onPress: () => {
+            reactMessage(conversationId, item.id, null).catch((err) => {
+              Alert.alert(
+                "Lỗi",
+                err instanceof Error ? err.message : "Không thể bỏ cảm xúc",
+              );
+            });
+          },
+        });
+      }
+
+      reactionActions.push({
+        text: "Hủy",
+        style: "cancel",
+      });
+
+      Alert.alert("Thả cảm xúc", "Chọn cảm xúc cho tin nhắn", reactionActions);
+    };
 
     const actions: any[] = [
+      {
+        text: myReaction ? "Đổi cảm xúc" : "Thả cảm xúc",
+        onPress: openReactionPicker,
+      },
       {
         text: "Trả lời",
         onPress: () => setReplyTo(item),
@@ -667,7 +719,10 @@ const ChatRoomScreen = ({ route }: any) => {
             <View style={styles.pinnedContent}>
               <Text style={styles.pinnedLabel}>Tin nhắn đã ghim</Text>
               <Text style={styles.pinnedText} numberOfLines={1}>
-                {pinnedMessages[0].content || (pinnedMessages[0].attachments?.length ? "Tệp đính kèm" : "Tin nhắn bình chọn")}
+                {pinnedMessages[0].content ||
+                  (pinnedMessages[0].attachments?.length
+                    ? "Tệp đính kèm"
+                    : "Tin nhắn bình chọn")}
               </Text>
             </View>
             <TouchableOpacity
@@ -695,6 +750,20 @@ const ChatRoomScreen = ({ route }: any) => {
                 message={item.content || ""}
                 attachments={item.attachments || []}
                 poll={item.poll}
+                reactions={item.reactions || []}
+                currentUserId={user?.id}
+                onReact={(reactionCode) => {
+                  reactMessage(conversationId, item.id, reactionCode).catch(
+                    (err) => {
+                      Alert.alert(
+                        "Lỗi",
+                        err instanceof Error
+                          ? err.message
+                          : "Không thể thả cảm xúc",
+                      );
+                    },
+                  );
+                }}
                 isMe={item.senderInfo?.senderId === user?.id}
                 senderName={item.senderInfo?.displayName}
                 avatarUrl={item.senderInfo?.avatarUrl}
@@ -783,14 +852,18 @@ const ChatRoomScreen = ({ route }: any) => {
             groupAvatar={avatarUrl}
             participants={currentParticipants}
             messages={displayMessages}
-            conversation={{
-              id: conversationId,
-              type: type || "GROUP",
-              participants: currentParticipants,
-            } as any}
+            conversation={
+              {
+                id: conversationId,
+                type: type || "GROUP",
+                participants: currentParticipants,
+              } as any
+            }
             currentUserId={user?.id || 0}
             currentUserRole={
-              currentParticipants?.find((p: Participant) => p.userId === user?.id)?.role || null
+              currentParticipants?.find(
+                (p: Participant) => p.userId === user?.id,
+              )?.role || null
             }
             onLeaveGroup={async (convId, userId, transferToUserId) => {
               if (transferToUserId) {
@@ -832,11 +905,14 @@ const ChatRoomScreen = ({ route }: any) => {
             onConfirm={handleVote}
             currentUserId={user?.id || 0}
             isCreator={(() => {
-              const check = !!user && Number(activePollMessage.senderInfo?.senderId) === Number(user?.id);
+              const check =
+                !!user &&
+                Number(activePollMessage.senderInfo?.senderId) ===
+                  Number(user?.id);
               console.log("[ChatRoom] Creator check:", {
                 senderId: activePollMessage.senderInfo?.senderId,
                 userId: user?.id,
-                isCreator: check
+                isCreator: check,
               });
               return check;
             })()}

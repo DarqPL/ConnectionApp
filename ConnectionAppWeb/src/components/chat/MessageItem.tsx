@@ -21,6 +21,7 @@ import {
   MoreVertical,
   Trash2,
   Pin,
+  ThumbsUp,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,6 +41,8 @@ import BusinessCard from "../profile/BusinessCard";
 import { getOrFetchEmailUser } from "@/lib/userCache";
 import { useAuthStore } from "@/stores/useAuthStore";
 import PollMessage from "./PollMessage";
+
+const QUICK_REACTIONS = ["👍", "❤️", "😆", "😮", "😢", "😡"] as const;
 
 const isImageAttachment = (attachment: Attachment): boolean => {
   if (attachment.type === "IMAGE") {
@@ -96,11 +99,8 @@ const MessageItem = ({
   isHighlighted = false,
 }: MessageItemProps) => {
   const { user: currentUser } = useAuthStore();
-  const {
-    recallMessage,
-    deleteMessage,
-    pinMessage,
-  } = useChatStore();
+  const { recallMessage, deleteMessage, pinMessage, reactMessage } =
+    useChatStore();
 
   type ActionType = "recall" | "delete" | "pin";
 
@@ -139,8 +139,8 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-    new Date(prev?.createdAt || 0).getTime() >
-    300000; // 5 phút
+      new Date(prev?.createdAt || 0).getTime() >
+      300000; // 5 phút
 
   const isGroupBreak =
     isShowTime || message.senderInfo.senderId !== prev?.senderInfo.senderId;
@@ -180,6 +180,53 @@ const MessageItem = ({
 
   const isRecalled = !!message.recalledAt;
   const attachments = message.attachments ?? [];
+  const reactions = message.reactions ?? [];
+  const myReaction = reactions.find(
+    (reaction) => reaction.userId === currentUser?.id,
+  );
+  const groupedReactions = reactions.reduce((acc, reaction) => {
+    const key = reaction.reactionCode;
+    const current = acc.get(key);
+    if (current) {
+      current.count += 1;
+      current.userIds.push(reaction.userId);
+    } else {
+      acc.set(key, {
+        emoji: key,
+        count: 1,
+        userIds: [reaction.userId],
+      });
+    }
+    return acc;
+  }, new Map<string, { emoji: string; count: number; userIds: number[] }>());
+  const reactionSummary = Array.from(groupedReactions.values());
+
+  const handleReact = async (reactionCode: string | null) => {
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      await reactMessage(message.conversationId, message.id, reactionCode);
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error
+          ? error.message
+          : "Khong the tha cam xuc luc nay";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleQuickLike = () => {
+    const nextReaction = myReaction?.reactionCode === "👍" ? null : "👍";
+    void handleReact(nextReaction);
+  };
+
+  const handlePickReaction = (reactionCode: string) => {
+    const nextReaction =
+      myReaction?.reactionCode === reactionCode ? null : reactionCode;
+    void handleReact(nextReaction);
+  };
 
   // Close menu on outside click
   useEffect(() => {
@@ -468,10 +515,10 @@ const MessageItem = ({
 
       {message.poll ? (
         <div className="flex justify-center w-full my-4 px-4">
-          <PollMessage 
-            messageId={message.id} 
-            poll={message.poll} 
-            senderId={message.senderInfo.senderId} 
+          <PollMessage
+            messageId={message.id}
+            poll={message.poll}
+            senderId={message.senderInfo.senderId}
           />
         </div>
       ) : (
@@ -534,8 +581,10 @@ const MessageItem = ({
                     </span>
                     <p className="truncate text-muted-foreground text-[11px]">
                       {(() => {
-                        if (replyInfo.parentRecalled) return "Tin nhắn đã được thu hồi";
-                        if (replyInfo.parentContent) return replyInfo.parentContent;
+                        if (replyInfo.parentRecalled)
+                          return "Tin nhắn đã được thu hồi";
+                        if (replyInfo.parentContent)
+                          return replyInfo.parentContent;
                         const atts = replyInfo.parentAttachments;
                         if (atts && atts.length > 0) {
                           const first = atts[0];
@@ -633,7 +682,9 @@ const MessageItem = ({
                             <button
                               type="button"
                               key={`${attachment.fileUrl}-${idx}`}
-                              onClick={() => handleDownloadAttachment(attachment)}
+                              onClick={() =>
+                                handleDownloadAttachment(attachment)
+                              }
                               className="flex w-full items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 hover:bg-muted/40"
                             >
                               <FileText className="size-4 shrink-0" />
@@ -679,6 +730,43 @@ const MessageItem = ({
                   </div>
                 )}
               </Card>
+
+              {reactionSummary.length > 0 && (
+                <div
+                  className={cn(
+                    "mt-1 flex flex-wrap gap-1",
+                    message.isOwn ? "justify-end" : "justify-start",
+                  )}
+                >
+                  {reactionSummary.map((reaction) => {
+                    const isMine =
+                      currentUser != null &&
+                      reaction.userIds.includes(currentUser.id);
+
+                    return (
+                      <button
+                        key={reaction.emoji}
+                        type="button"
+                        onClick={() =>
+                          isMine
+                            ? void handleReact(null)
+                            : void handleReact(reaction.emoji)
+                        }
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
+                          isMine
+                            ? "border-primary/40 bg-primary/10"
+                            : "border-border/70 bg-background",
+                        )}
+                        title={isMine ? "Bo cam xuc" : "Tha cam xuc"}
+                      >
+                        <span>{reaction.emoji}</span>
+                        <span>{reaction.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Action buttons — inline next to bubble */}
@@ -697,298 +785,350 @@ const MessageItem = ({
                       <Forward className="size-3.5 text-muted-foreground" />
                     </button>
                   )}
+                  <div className="relative group/reaction">
                     <button
-                      onClick={handleReply}
-                      className="p-1.5 rounded-full hover:bg-muted transition-colors"
-                      title="Trả lời"
+                      onClick={handleQuickLike}
+                      className={cn(
+                        "p-1.5 rounded-full transition-colors",
+                        myReaction?.reactionCode === "👍"
+                          ? "bg-primary/15"
+                          : "hover:bg-muted",
+                      )}
+                      title="Thả cảm xúc"
                     >
-                      <CornerUpLeft className="size-3.5 text-muted-foreground" />
+                      <ThumbsUp
+                        className={cn(
+                          "size-3.5",
+                          myReaction?.reactionCode === "👍"
+                            ? "text-primary"
+                            : "text-muted-foreground",
+                        )}
+                      />
                     </button>
-                    <button
-                      onClick={handleMoreClick}
-                      className="p-1.5 rounded-full hover:bg-primary/10 transition-colors"
-                      title="Thêm tùy chọn"
+                    <div
+                      className={cn(
+                        "absolute z-20 top-full mt-1 rounded-full border bg-popover px-2 py-1 shadow-sm",
+                        message.isOwn ? "right-0" : "left-0",
+                        "pointer-events-none opacity-0 transition-opacity",
+                        "group-hover/reaction:pointer-events-auto group-hover/reaction:opacity-100",
+                      )}
                     >
-                      <MoreVertical className="size-3.5 text-muted-foreground hover:text-primary" />
-                    </button>
+                      <div className="flex items-center gap-1">
+                        {QUICK_REACTIONS.map((reactionCode) => (
+                          <button
+                            key={reactionCode}
+                            type="button"
+                            onClick={() => handlePickReaction(reactionCode)}
+                            className={cn(
+                              "rounded-full px-1.5 py-1 text-lg transition-transform hover:scale-110",
+                              myReaction?.reactionCode === reactionCode &&
+                                "bg-primary/15",
+                            )}
+                          >
+                            {reactionCode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
+                  <button
+                    onClick={handleReply}
+                    className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                    title="Trả lời"
+                  >
+                    <CornerUpLeft className="size-3.5 text-muted-foreground" />
+                  </button>
+                  <button
+                    onClick={handleMoreClick}
+                    className="p-1.5 rounded-full hover:bg-primary/10 transition-colors"
+                    title="Thêm tùy chọn"
+                  >
+                    <MoreVertical className="size-3.5 text-muted-foreground hover:text-primary" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
       )}
 
-          {/* Message action dialog (recall vs delete) */}
-          <Dialog
-            open={showActionDialog}
-            onOpenChange={(open) => {
-              if (!open && !isProcessing) {
-                setShowActionDialog(false);
-                setActionType(null);
-              }
-            }}
-          >
-            <DialogContent showCloseButton={false} className="max-w-sm">
-              {actionType === null ? (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>Lựa chọn hành động</DialogTitle>
-                    <DialogDescription>
-                      Bạn muốn xóa tin nhắn này như thế nào?
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-3">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left h-auto py-3"
-                      onClick={() => handleActionSelect('recall')}
-                      disabled={isProcessing}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-semibold">⏮️ Thu hồi</span>
-                        <span className="text-xs text-muted-foreground">Xóa từ tất cả mọi người</span>
-                      </div>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left h-auto py-3"
-                      onClick={() => handleActionSelect("pin")}
-                      disabled={isProcessing}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-semibold">📌 Ghim tin nhắn</span>
-                        <span className="text-xs text-muted-foreground">Hiện thị ở đầu đoạn chat cho mọi người</span>
-                      </div>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left h-auto py-3"
-                      onClick={() => handleActionSelect("delete")}
-                      disabled={isProcessing}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-semibold">🗑️ Xóa ở phía tôi</span>
-                        <span className="text-xs text-muted-foreground">Chỉ bạn sẽ không thấy</span>
-                      </div>
-                    </Button>
+      {/* Message action dialog (recall vs delete) */}
+      <Dialog
+        open={showActionDialog}
+        onOpenChange={(open) => {
+          if (!open && !isProcessing) {
+            setShowActionDialog(false);
+            setActionType(null);
+          }
+        }}
+      >
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          {actionType === null ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Lựa chọn hành động</DialogTitle>
+                <DialogDescription>
+                  Bạn muốn xóa tin nhắn này như thế nào?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => handleActionSelect("recall")}
+                  disabled={isProcessing}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold">⏮️ Thu hồi</span>
+                    <span className="text-xs text-muted-foreground">
+                      Xóa từ tất cả mọi người
+                    </span>
                   </div>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowActionDialog(false)}
-                      disabled={isProcessing}
-                    >
-                      Hủy
-                    </Button>
-                  </DialogFooter>
-                </>
-              ) : (
-                <>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      {actionType === "recall" ? (
-                        <>
-                          <Undo2 className="size-4 text-destructive" />
-                          Thu hồi tin nhắn
-                        </>
-                      ) : actionType === "pin" ? (
-                        <>
-                          <Pin className="size-4 text-primary" />
-                          Ghim tin nhắn
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="size-4 text-destructive" />
-                          Xóa tin nhắn
-                        </>
-                      )}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {actionType === "recall"
-                        ? "Tin nhắn sẽ bị thu hồi từ tất cả mọi người trong cuộc trò chuyện."
-                        : actionType === "pin"
-                          ? "Tin nhắn này sẽ được ghim ở đầu đoạn chat để mọi người cùng thấy."
-                          : "Tin nhắn sẽ bị xóa khỏi thiết bị của bạn. Những người khác vẫn sẽ thấy."}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setActionType(null)}
-                      disabled={isProcessing}
-                    >
-                      Quay lại
-                    </Button>
-                    <Button
-                      variant={actionType === "pin" ? "default" : "destructive"}
-                      onClick={handleActionConfirm}
-                      disabled={isProcessing}
-                    >
-                      {isProcessing
-                        ? actionType === "recall"
-                          ? "Đang thu hồi..."
-                          : actionType === "pin"
-                            ? "Đang ghim..."
-                            : "Đang xóa..."
-                        : actionType === "recall"
-                          ? "Thu hồi"
-                          : actionType === "pin"
-                            ? "Ghim"
-                            : "Xóa"}
-                    </Button>
-                  </DialogFooter>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => handleActionSelect("pin")}
+                  disabled={isProcessing}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold">📌 Ghim tin nhắn</span>
+                    <span className="text-xs text-muted-foreground">
+                      Hiện thị ở đầu đoạn chat cho mọi người
+                    </span>
+                  </div>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => handleActionSelect("delete")}
+                  disabled={isProcessing}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-semibold">🗑️ Xóa ở phía tôi</span>
+                    <span className="text-xs text-muted-foreground">
+                      Chỉ bạn sẽ không thấy
+                    </span>
+                  </div>
+                </Button>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowActionDialog(false)}
+                  disabled={isProcessing}
+                >
+                  Hủy
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {actionType === "recall" ? (
+                    <>
+                      <Undo2 className="size-4 text-destructive" />
+                      Thu hồi tin nhắn
+                    </>
+                  ) : actionType === "pin" ? (
+                    <>
+                      <Pin className="size-4 text-primary" />
+                      Ghim tin nhắn
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-4 text-destructive" />
+                      Xóa tin nhắn
+                    </>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  {actionType === "recall"
+                    ? "Tin nhắn sẽ bị thu hồi từ tất cả mọi người trong cuộc trò chuyện."
+                    : actionType === "pin"
+                      ? "Tin nhắn này sẽ được ghim ở đầu đoạn chat để mọi người cùng thấy."
+                      : "Tin nhắn sẽ bị xóa khỏi thiết bị của bạn. Những người khác vẫn sẽ thấy."}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setActionType(null)}
+                  disabled={isProcessing}
+                >
+                  Quay lại
+                </Button>
+                <Button
+                  variant={actionType === "pin" ? "default" : "destructive"}
+                  onClick={handleActionConfirm}
+                  disabled={isProcessing}
+                >
+                  {isProcessing
+                    ? actionType === "recall"
+                      ? "Đang thu hồi..."
+                      : actionType === "pin"
+                        ? "Đang ghim..."
+                        : "Đang xóa..."
+                    : actionType === "recall"
+                      ? "Thu hồi"
+                      : actionType === "pin"
+                        ? "Ghim"
+                        : "Xóa"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
-          <Dialog
-            open={!!previewImage}
-            onOpenChange={(open) => {
-              if (!open) {
-                closeImagePreview();
-              }
-            }}
-          >
-            <DialogContent
-              showCloseButton={false}
-              className="max-w-4xl border-none bg-transparent p-0 shadow-none"
-            >
-              {previewImage && (
-                <div className="relative pt-2">
+      <Dialog
+        open={!!previewImage}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeImagePreview();
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-4xl border-none bg-transparent p-0 shadow-none"
+        >
+          {previewImage && (
+            <div className="relative pt-2">
+              <button
+                type="button"
+                onClick={closeImagePreview}
+                className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
+                title="Close"
+              >
+                <X className="size-4" />
+              </button>
+
+              <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
+                <div
+                  ref={previewViewportRef}
+                  className="relative h-[72vh] overflow-hidden bg-zinc-900"
+                  onWheel={handlePreviewWheel}
+                  onMouseDown={handlePreviewMouseDown}
+                >
+                  <img
+                    src={previewImage.fileUrl}
+                    alt={resolveFileName(
+                      previewImage.originalFileName,
+                      previewImage.fileUrl,
+                    )}
+                    draggable={false}
+                    onLoad={(event) => {
+                      setPreviewImageSize({
+                        width: event.currentTarget.naturalWidth,
+                        height: event.currentTarget.naturalHeight,
+                      });
+                    }}
+                    className="mx-auto h-full w-full select-none object-contain"
+                    style={{
+                      transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
+                      transformOrigin: "center center",
+                      transition: isPanning
+                        ? "none"
+                        : "transform 140ms ease-out",
+                      cursor:
+                        previewZoom > 1
+                          ? isPanning
+                            ? "grabbing"
+                            : "grab"
+                          : "default",
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-center gap-2 border-t border-zinc-700 bg-black/90 px-3 pb-3 pt-2 text-white">
                   <button
                     type="button"
-                    onClick={closeImagePreview}
-                    className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
-                    title="Close"
+                    onClick={() =>
+                      setPreviewZoom((prev) => clampZoom(prev - 0.25))
+                    }
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Zoom out"
                   >
-                    <X className="size-4" />
+                    <ZoomOut className="size-4" />
                   </button>
-
-                  <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
-                    <div
-                      ref={previewViewportRef}
-                      className="relative h-[72vh] overflow-hidden bg-zinc-900"
-                      onWheel={handlePreviewWheel}
-                      onMouseDown={handlePreviewMouseDown}
-                    >
-                      <img
-                        src={previewImage.fileUrl}
-                        alt={resolveFileName(
-                          previewImage.originalFileName,
-                          previewImage.fileUrl,
-                        )}
-                        draggable={false}
-                        onLoad={(event) => {
-                          setPreviewImageSize({
-                            width: event.currentTarget.naturalWidth,
-                            height: event.currentTarget.naturalHeight,
-                          });
-                        }}
-                        className="mx-auto h-full w-full select-none object-contain"
-                        style={{
-                          transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
-                          transformOrigin: "center center",
-                          transition: isPanning
-                            ? "none"
-                            : "transform 140ms ease-out",
-                          cursor:
-                            previewZoom > 1
-                              ? isPanning
-                                ? "grabbing"
-                                : "grab"
-                              : "default",
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 border-t border-zinc-700 bg-black/90 px-3 pb-3 pt-2 text-white">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPreviewZoom((prev) => clampZoom(prev - 0.25))
-                        }
-                        className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
-                        title="Zoom out"
-                      >
-                        <ZoomOut className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPreviewZoom((prev) => clampZoom(prev + 0.25))
-                        }
-                        className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
-                        title="Zoom in"
-                      >
-                        <ZoomIn className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadAttachment(previewImage)}
-                        className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
-                        title="Download"
-                      >
-                        <Download className="size-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-
-          <Dialog
-            open={!!previewVideo}
-            onOpenChange={(open) => {
-              if (!open) {
-                closeVideoPreview();
-              }
-            }}
-          >
-            <DialogContent
-              showCloseButton={false}
-              className="max-w-4xl border-none bg-transparent p-0 shadow-none"
-            >
-              {previewVideo && (
-                <div className="relative pt-2">
                   <button
                     type="button"
-                    onClick={closeVideoPreview}
-                    className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
-                    title="Close"
+                    onClick={() =>
+                      setPreviewZoom((prev) => clampZoom(prev + 0.25))
+                    }
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Zoom in"
                   >
-                    <X className="size-4" />
+                    <ZoomIn className="size-4" />
                   </button>
-
-                  <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
-                    <div className="relative h-[72vh] overflow-hidden bg-zinc-900">
-                      <video
-                        className="h-full w-full"
-                        src={previewVideo.fileUrl}
-                        controls
-                        autoPlay
-                        preload="metadata"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-center gap-2 border-t border-zinc-700 bg-black/90 px-3 pb-3 pt-2 text-white">
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadAttachment(previewVideo)}
-                        className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
-                        title="Download"
-                      >
-                        <Download className="size-4" />
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment(previewImage)}
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Download"
+                  >
+                    <Download className="size-4" />
+                  </button>
                 </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        </>
-      );
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!previewVideo}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeVideoPreview();
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-4xl border-none bg-transparent p-0 shadow-none"
+        >
+          {previewVideo && (
+            <div className="relative pt-2">
+              <button
+                type="button"
+                onClick={closeVideoPreview}
+                className="absolute -top-4 -right-4 z-20 rounded-full border border-zinc-700 bg-black p-2 text-white hover:bg-zinc-900"
+                title="Close"
+              >
+                <X className="size-4" />
+              </button>
+
+              <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
+                <div className="relative h-[72vh] overflow-hidden bg-zinc-900">
+                  <video
+                    className="h-full w-full"
+                    src={previewVideo.fileUrl}
+                    controls
+                    autoPlay
+                    preload="metadata"
+                  />
+                </div>
+
+                <div className="flex items-center justify-center gap-2 border-t border-zinc-700 bg-black/90 px-3 pb-3 pt-2 text-white">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment(previewVideo)}
+                    className="rounded-full bg-zinc-900 p-2 hover:bg-zinc-800"
+                    title="Download"
+                  >
+                    <Download className="size-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 };
 
-      export default MessageItem;
+export default MessageItem;

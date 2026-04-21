@@ -92,6 +92,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           useChatStore.getState().updateMessage(recalledMessage);
         });
 
+        client.subscribe(`/topic/user.${userId}/reactions`, (message) => {
+          const updatedMessage = JSON.parse(message.body);
+          useChatStore.getState().updateMessage(updatedMessage);
+        });
+
         client.subscribe(`/topic/user.${userId}/typing`, (message) => {
           const payload: TypingPayload = JSON.parse(message.body);
           if (!payload?.conversationId || !payload?.userId) {
