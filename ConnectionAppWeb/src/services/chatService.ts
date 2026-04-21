@@ -219,6 +219,14 @@ export const chatService = {
     await api.put(`/conversations/${conversationId}/members/${memberId}/role`, { role });
   },
 
+  /**
+   * POST /api/conversations/{conversationId}/members/{memberId}
+   * Add a member to conversation
+   */
+  async addMemberToGroup(conversationId: number, memberId: number): Promise<void> {
+    await api.post(`/conversations/${conversationId}/members/${memberId}`);
+  },
+
   async aiRewriteDraft(payload: AiRewriteRequest): Promise<AiRewriteResponse> {
     const res = await api.post("/messages/ai-rewrite", payload);
     return res.data;

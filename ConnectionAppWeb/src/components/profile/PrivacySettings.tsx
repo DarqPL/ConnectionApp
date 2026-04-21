@@ -1,4 +1,4 @@
-import { Bell, Shield, ShieldBan, Unlock, ShieldCheck, KeyRound, Loader2 } from "lucide-react";
+import { Bell, Shield, ShieldBan, Unlock, ShieldCheck, Loader2 } from "lucide-react";
 
 import {
   Card,

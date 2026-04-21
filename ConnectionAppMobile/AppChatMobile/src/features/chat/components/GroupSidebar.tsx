@@ -18,6 +18,7 @@ import { COLORS } from "../../../theme";
 import { LeaveGroupModal } from "./LeaveGroupModal";
 import { MemberListModal } from "./MemberListModal";
 import { SuccessorPromotionModal } from "./SuccessorPromotionModal";
+import AddMemberModal from "./AddMemberModal";
 import type { Message, Attachment, AttachmentType, Conversation, Participant } from "../types";
 
 interface GroupParticipant {
@@ -87,6 +88,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showMemberListModal, setShowMemberListModal] = useState(false);
   const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -246,20 +248,27 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
             <View style={styles.quickActionRow}>
               {[
-                { icon: "search-outline" as const, label: "Tìm\ntin nhắn" },
+                { icon: "search-outline" as const, label: "Tìm\ntin nhắn", action: "search" },
                 {
                   icon: "person-add-outline" as const,
                   label: "Thêm\nthành viên",
+                  action: "add-member",
                 },
-                { icon: "color-wand-outline" as const, label: "Đổi\nhình nền" },
+                { icon: "color-wand-outline" as const, label: "Đổi\nhình nền", action: "wallpaper" },
                 {
                   icon: "notifications-outline" as const,
                   label: "Tắt\nthông báo",
+                  action: "mute",
                 },
               ].map((item) => (
                 <TouchableOpacity
                   key={item.label}
                   style={styles.quickActionItem}
+                  onPress={() => {
+                    if (item.action === "add-member") {
+                      setShowAddMemberModal(true);
+                    }
+                  }}
                 >
                   <View style={styles.quickActionIconWrap}>
                     <Ionicons name={item.icon} size={24} color="#2d333a" />
@@ -422,6 +431,13 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           currentUserId={currentUserId}
           conversationId={conversation?.id || 0}
           onRoleUpdate={onRoleUpdate || (async () => {})}
+        />
+
+        {/* Add Member Modal */}
+        <AddMemberModal
+          visible={showAddMemberModal}
+          onClose={() => setShowAddMemberModal(false)}
+          conversation={conversation}
         />
       </View>
     </Modal>

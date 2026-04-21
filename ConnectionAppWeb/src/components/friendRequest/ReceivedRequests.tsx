@@ -42,7 +42,7 @@ const ReceivedRequests = () => {
             <div className="flex gap-2">
               <Button
                 size="sm"
-                variant="primary"
+                variant="default"
                 onClick={() => handleAccept(req.friendId)}
                 disabled={loading}
               >
@@ -50,7 +50,7 @@ const ReceivedRequests = () => {
               </Button>
               <Button
                 size="sm"
-                variant="destructiveOutline"
+                variant="outline"
                 onClick={() => handleDecline(req.friendId)}
                 disabled={loading}
               >

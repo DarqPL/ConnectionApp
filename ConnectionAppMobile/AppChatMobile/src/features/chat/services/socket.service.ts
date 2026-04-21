@@ -18,7 +18,7 @@ export interface ChatSocketHandlers {
     remainingMinutes?: number;
     lockUntil?: string;
   }) => void;
-  onPinUpdate?: (payload: { conversationId: number; type: string }) => void;
+  onConversationUpdate?: (payload: any) => void;
   onConnectionError?: (error: string) => void;
 }
 
@@ -177,9 +177,7 @@ class ChatSocketService {
           (stompFrame) => {
             try {
               const payload = JSON.parse(stompFrame.body);
-              if (payload.type === "PIN_UPDATE") {
-                this.handlersRef?.onPinUpdate?.(payload);
-              }
+              this.handlersRef?.onConversationUpdate?.(payload);
             } catch (e) {
               console.error("[Socket] Failed to parse conversation update:", e);
             }

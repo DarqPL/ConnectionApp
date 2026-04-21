@@ -35,7 +35,6 @@ import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
 import { detectEmailInMessage, isValidEmailFormat } from "@/lib/emailDetector";
-import { userService } from "@/services/userService";
 import { friendService } from "@/services/friendService";
 import BusinessCard from "../profile/BusinessCard";
 import { getOrFetchEmailUser } from "@/lib/userCache";
@@ -90,7 +89,7 @@ const MessageItem = ({
   index,
   messages,
   selectedConvo,
-  lastMessageStatus,
+  lastMessageStatus: _lastMessageStatus,
   onReply,
   onForward,
   onReplyPreviewClick,

@@ -1,6 +1,3 @@
-import { useFriendStore } from "@/stores/useFriendStore";
-import FriendRequestItem from "./FriendRequestItem";
-
 const SentRequests = () => {
   // Note: Backend doesn't have a "sent requests" endpoint.
   // The pending requests endpoint returns requests where the current user is the receiver.

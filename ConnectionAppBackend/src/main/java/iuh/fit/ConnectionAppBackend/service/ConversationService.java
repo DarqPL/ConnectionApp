@@ -256,13 +256,23 @@ public class ConversationService {
 
             Map<String, Object> update = new java.util.HashMap<>();
             update.put("conversationId", conversationId);
+            update.put("type", "MEMBER_JOINED");
             update.put("participants", updatedParticipants);
             update.put("joinedUserId", newMemberId); // ID of user who joined
 
-            // Notify all members
+            // Notify existing members about the update, and send full conversation to the new member
+            ConversationResponse fullConvo = mapToConversationResponse(conversation);
             for (ConversationUser member : allMembers) {
+                Long mUserId = member.getUser().getId();
+                
+                // If this is the new member, send the full conversation object so it appears in their list
+                if (mUserId.equals(newMemberId)) {
+                    messagingTemplate.convertAndSend("/topic/user." + mUserId + "/conversations", fullConvo);
+                }
+                
+                // Always send the update notification (for participants list, etc.)
                 messagingTemplate.convertAndSend(
-                        "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                        "/topic/user." + mUserId + "/conversation-updates",
                         update
                 );
             }
@@ -302,6 +312,7 @@ public class ConversationService {
 
             Map<String, Object> update = new java.util.HashMap<>();
             update.put("conversationId", conversationId);
+            update.put("type", "MEMBER_LEFT");
             update.put("participants", updatedParticipants);
             update.put("leftUserId", userId); // ID of user who left
 
@@ -365,6 +376,7 @@ public class ConversationService {
 
             Map<String, Object> update = new java.util.HashMap<>();
             update.put("conversationId", conversationId);
+            update.put("type", "ROLE_UPDATED");
             update.put("participants", updatedParticipants);
             update.put("roleUpdatedUserId", memberId); // ID of user whose role changed
             update.put("newRole", newRole);
