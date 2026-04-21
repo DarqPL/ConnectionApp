@@ -59,7 +59,7 @@ export const TransferOwnershipDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Chuyển quyền quản lý nhóm</DialogTitle>
           <DialogDescription>
@@ -67,7 +67,7 @@ export const TransferOwnershipDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 max-h-[300px] overflow-y-auto">
+        <div className="space-y-3 max-h-96 overflow-y-auto">
           {eligibleMembers.length === 0 ? (
             <div className="py-6 text-center text-muted-foreground">
               <p className="text-sm">Không có thành viên khác để chuyển quyền</p>

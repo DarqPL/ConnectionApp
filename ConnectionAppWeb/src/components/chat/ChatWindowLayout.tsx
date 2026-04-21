@@ -72,11 +72,11 @@ const ChatWindowLayout = () => {
   const selectedConvo =
     conversations.find((c) => c.id === activeConversationId) ?? null;
 
-  const typingUsers = selectedConvo
-    ? (typingByConversation[selectedConvo.id] ?? [])
-    : [];
-
   const typingLabel = useMemo(() => {
+    const typingUsers = selectedConvo
+      ? (typingByConversation[selectedConvo.id] ?? [])
+      : [];
+
     if (!selectedConvo || typingUsers.length === 0) {
       return null;
     }
@@ -102,7 +102,7 @@ const ChatWindowLayout = () => {
     }
 
     return `${names[0]}, ${names[1]} và ${names.length - 2} người khác đang nhập`;
-  }, [selectedConvo, typingUsers]);
+  }, [selectedConvo, typingByConversation]);
 
   // 🔥 reset khi đổi conversation
   useEffect(() => {

@@ -86,7 +86,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const userIdRef = useRef<number | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const messageFetchVersionRef = useRef(0);
-  const typingTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const typingTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     currentConversationRef.current = currentConversationId;
