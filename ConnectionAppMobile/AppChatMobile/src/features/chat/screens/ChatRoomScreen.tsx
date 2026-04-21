@@ -6,6 +6,7 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
+  Modal,
   Text,
   StatusBar,
   TouchableOpacity,
@@ -90,6 +91,7 @@ const TypingDots = () => {
 };
 
 const ChatRoomScreen = ({ route }: any) => {
+  const REACTION_OPTIONS = ["❤️", "👍", "😆", "😮", "😢", "😡"] as const;
   const insets = useSafeAreaInsets();
   const { conversationId, name, avatarUrl, type, participants } = route.params;
   const {
@@ -100,6 +102,7 @@ const ChatRoomScreen = ({ route }: any) => {
     sendMessage,
     recallMessage,
     deleteMessage,
+    reactMessage,
     pinMessage,
     unpinMessage,
     conversations,
@@ -135,8 +138,12 @@ const ChatRoomScreen = ({ route }: any) => {
   const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
+  const [actionSheetMessage, setActionSheetMessage] =
+    React.useState<Message | null>(null);
 
-  const currentConversation = conversations.find((c) => Number(c.id) === Number(conversationId));
+  const currentConversation = conversations.find(
+    (c) => Number(c.id) === Number(conversationId),
+  );
 
   const currentParticipants = useMemo(() => {
     if (currentConversation && currentConversation.participants) {
@@ -206,7 +213,10 @@ const ChatRoomScreen = ({ route }: any) => {
   };
 
   const handleClosePoll = async () => {
-    console.log("[ChatRoom] handleClosePoll called. activePollMessage ID:", activePollMessage?.id);
+    console.log(
+      "[ChatRoom] handleClosePoll called. activePollMessage ID:",
+      activePollMessage?.id,
+    );
     if (!activePollMessage) return;
 
     try {
@@ -540,55 +550,101 @@ const ChatRoomScreen = ({ route }: any) => {
 
     Alert.alert(
       isOwnMessage ? "Thu hồi hoặc xóa" : "Xóa tin nhắn",
-      isOwnMessage 
-        ? "Bạn muốn làm gì với tin nhắn này?" 
+      isOwnMessage
+        ? "Bạn muốn làm gì với tin nhắn này?"
         : "Tin nhắn này sẽ bị xóa khỏi lịch sử chat của bạn.",
-      options
+      options,
     );
   };
 
-  const handleMessageLongPress = (item: Message) => {
-    if (item.recalledAt) return;
+  const closeActionSheet = () => setActionSheetMessage(null);
 
-    const isOwnMessage = item.senderInfo?.senderId === user?.id;
+  const handleActionSheetReaction = (emoji: string) => {
+    if (!actionSheetMessage) return;
+    const myReaction = actionSheetMessage.reactions?.find(
+      (reaction) => reaction.userId === user?.id,
+    );
+    const nextReaction = myReaction?.reactionCode === emoji ? null : emoji;
+
+    reactMessage(conversationId, actionSheetMessage.id, nextReaction)
+      .catch((err) => {
+        Alert.alert(
+          "Lỗi",
+          err instanceof Error ? err.message : "Không thể thả cảm xúc",
+        );
+      })
+      .finally(closeActionSheet);
+  };
+
+  const handleActionSheetSelect = (
+    action: "reply" | "forward" | "pin" | "remove-reaction" | "recall-delete",
+  ) => {
+    if (!actionSheetMessage) return;
+
+    const target = actionSheetMessage;
+    const isOwnMessage = target.senderInfo?.senderId === user?.id;
     const currentConv = conversations.find((c) => c.id === conversationId);
     const pinnedIds = currentConv?.pinnedMessageIds
       ? currentConv.pinnedMessageIds.split(",")
       : [];
-    const isPinned = pinnedIds.includes(item.id);
+    const isPinned = pinnedIds.includes(target.id);
 
-    const actions: any[] = [
-      {
-        text: "Trả lời",
-        onPress: () => setReplyTo(item),
-      },
-      {
-        text: "Chuyển tiếp",
-        onPress: () => setMessageToForward(item),
-      },
-      {
-        text: isPinned ? "Bỏ ghim" : "Ghim tin nhắn",
-        onPress: () => {
-          if (isPinned) {
-            unpinMessage(conversationId, item.id);
-          } else {
-            pinMessage(conversationId, item.id);
-          }
-        },
-      },
-      {
-        text: isOwnMessage ? "Thu hồi / Xóa" : "Xóa tin nhắn",
-        style: "destructive",
-        onPress: () => handleRecallMessage(item.id, isOwnMessage),
-      },
-      {
-        text: "Hủy",
-        style: "cancel",
-      },
-    ];
+    closeActionSheet();
 
-    Alert.alert("Tùy chọn", "Chọn hành động cho tin nhắn", actions);
+    if (action === "reply") {
+      setReplyTo(target);
+      return;
+    }
+
+    if (action === "forward") {
+      setMessageToForward(target);
+      return;
+    }
+
+    if (action === "pin") {
+      (isPinned
+        ? unpinMessage(conversationId, target.id)
+        : pinMessage(conversationId, target.id)
+      ).catch((err) => {
+        Alert.alert(
+          "Lỗi",
+          err instanceof Error ? err.message : "Không thể cập nhật ghim",
+        );
+      });
+      return;
+    }
+
+    if (action === "remove-reaction") {
+      reactMessage(conversationId, target.id, null).catch((err) => {
+        Alert.alert(
+          "Lỗi",
+          err instanceof Error ? err.message : "Không thể bỏ cảm xúc",
+        );
+      });
+      return;
+    }
+
+    handleRecallMessage(target.id, isOwnMessage);
   };
+
+  const handleMessageLongPress = (item: Message) => {
+    if (item.recalledAt) return;
+    setActionSheetMessage(item);
+  };
+
+  const actionSheetIsOwnMessage =
+    actionSheetMessage?.senderInfo?.senderId === user?.id;
+  const actionSheetMyReaction = actionSheetMessage?.reactions?.find(
+    (reaction) => reaction.userId === user?.id,
+  );
+  const actionSheetPinned = (() => {
+    if (!actionSheetMessage) return false;
+    const currentConv = conversations.find((c) => c.id === conversationId);
+    const pinnedIds = currentConv?.pinnedMessageIds
+      ? currentConv.pinnedMessageIds.split(",")
+      : [];
+    return pinnedIds.includes(actionSheetMessage.id);
+  })();
 
   if (isLoading && displayMessages.length === 0) {
     return (
@@ -667,7 +723,10 @@ const ChatRoomScreen = ({ route }: any) => {
             <View style={styles.pinnedContent}>
               <Text style={styles.pinnedLabel}>Tin nhắn đã ghim</Text>
               <Text style={styles.pinnedText} numberOfLines={1}>
-                {pinnedMessages[0].content || (pinnedMessages[0].attachments?.length ? "Tệp đính kèm" : "Tin nhắn bình chọn")}
+                {pinnedMessages[0].content ||
+                  (pinnedMessages[0].attachments?.length
+                    ? "Tệp đính kèm"
+                    : "Tin nhắn bình chọn")}
               </Text>
             </View>
             <TouchableOpacity
@@ -695,6 +754,20 @@ const ChatRoomScreen = ({ route }: any) => {
                 message={item.content || ""}
                 attachments={item.attachments || []}
                 poll={item.poll}
+                reactions={item.reactions || []}
+                currentUserId={user?.id}
+                onReact={(reactionCode) => {
+                  reactMessage(conversationId, item.id, reactionCode).catch(
+                    (err) => {
+                      Alert.alert(
+                        "Lỗi",
+                        err instanceof Error
+                          ? err.message
+                          : "Không thể thả cảm xúc",
+                      );
+                    },
+                  );
+                }}
                 isMe={item.senderInfo?.senderId === user?.id}
                 senderName={item.senderInfo?.displayName}
                 avatarUrl={item.senderInfo?.avatarUrl}
@@ -770,6 +843,109 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
+        <Modal
+          visible={!!actionSheetMessage}
+          transparent
+          animationType="fade"
+          onRequestClose={closeActionSheet}
+        >
+          <View style={styles.actionSheetOverlay}>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={StyleSheet.absoluteFillObject}
+              onPress={closeActionSheet}
+            />
+
+            <View style={styles.actionSheetWrap}>
+              <View style={styles.actionSheetReactionRow}>
+                {REACTION_OPTIONS.map((emoji) => {
+                  const isActive =
+                    actionSheetMyReaction?.reactionCode === emoji;
+                  return (
+                    <TouchableOpacity
+                      key={emoji}
+                      activeOpacity={0.85}
+                      onPress={() => handleActionSheetReaction(emoji)}
+                      style={[
+                        styles.actionSheetReactionBtn,
+                        isActive && styles.actionSheetReactionBtnActive,
+                      ]}
+                    >
+                      <Text style={styles.actionSheetReactionText}>
+                        {emoji}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.actionSheetGrid}>
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("reply")}
+                >
+                  <Ionicons
+                    name="arrow-undo-outline"
+                    size={24}
+                    color="#6a5acd"
+                  />
+                  <Text style={styles.actionSheetItemLabel}>Trả lời</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("forward")}
+                >
+                  <Ionicons
+                    name="arrow-redo-outline"
+                    size={24}
+                    color="#3b82f6"
+                  />
+                  <Text style={styles.actionSheetItemLabel}>Chuyển tiếp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("pin")}
+                >
+                  <Ionicons
+                    name={actionSheetPinned ? "pin-outline" : "attach-outline"}
+                    size={24}
+                    color="#f59e0b"
+                  />
+                  <Text style={styles.actionSheetItemLabel}>
+                    {actionSheetPinned ? "Bỏ ghim" : "Ghim"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("recall-delete")}
+                >
+                  <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                  <Text style={styles.actionSheetItemLabel}>
+                    {actionSheetIsOwnMessage ? "Thu hồi / Xóa" : "Xóa"}
+                  </Text>
+                </TouchableOpacity>
+
+                {actionSheetMyReaction && (
+                  <TouchableOpacity
+                    style={styles.actionSheetItem}
+                    onPress={() => handleActionSheetSelect("remove-reaction")}
+                  >
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={24}
+                      color="#f97316"
+                    />
+                    <Text style={styles.actionSheetItemLabel}>Bỏ cảm xúc</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <ForwardMessageModal
           message={messageToForward}
           onClose={() => setMessageToForward(null)}
@@ -783,14 +959,18 @@ const ChatRoomScreen = ({ route }: any) => {
             groupAvatar={avatarUrl}
             participants={currentParticipants}
             messages={displayMessages}
-            conversation={{
-              id: conversationId,
-              type: type || "GROUP",
-              participants: currentParticipants,
-            } as any}
+            conversation={
+              {
+                id: conversationId,
+                type: type || "GROUP",
+                participants: currentParticipants,
+              } as any
+            }
             currentUserId={user?.id || 0}
             currentUserRole={
-              currentParticipants?.find((p: Participant) => p.userId === user?.id)?.role || null
+              currentParticipants?.find(
+                (p: Participant) => p.userId === user?.id,
+              )?.role || null
             }
             onLeaveGroup={async (convId, userId, transferToUserId) => {
               if (transferToUserId) {
@@ -832,11 +1012,14 @@ const ChatRoomScreen = ({ route }: any) => {
             onConfirm={handleVote}
             currentUserId={user?.id || 0}
             isCreator={(() => {
-              const check = !!user && Number(activePollMessage.senderInfo?.senderId) === Number(user?.id);
+              const check =
+                !!user &&
+                Number(activePollMessage.senderInfo?.senderId) ===
+                  Number(user?.id);
               console.log("[ChatRoom] Creator check:", {
                 senderId: activePollMessage.senderInfo?.senderId,
                 userId: user?.id,
-                isCreator: check
+                isCreator: check,
               });
               return check;
             })()}
@@ -997,5 +1180,62 @@ const styles = StyleSheet.create({
   },
   unpinBannerBtn: {
     padding: 5,
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    justifyContent: "flex-end",
+  },
+  actionSheetWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  actionSheetReactionRow: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  actionSheetReactionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionSheetReactionBtnActive: {
+    backgroundColor: "#eef2ff",
+    borderWidth: 1,
+    borderColor: "#93c5fd",
+  },
+  actionSheetReactionText: {
+    fontSize: 30,
+  },
+  actionSheetGrid: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingTop: 10,
+    paddingBottom: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  actionSheetItem: {
+    width: "25%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 6,
+  },
+  actionSheetItemLabel: {
+    fontSize: 13,
+    color: "#293241",
+    textAlign: "center",
+    lineHeight: 16,
+    paddingHorizontal: 4,
   },
 });

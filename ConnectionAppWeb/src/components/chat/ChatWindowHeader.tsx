@@ -7,6 +7,7 @@ import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { useSocketStore } from "@/stores/useSocketStore";
+import { useCallStore } from "@/stores/useCallStore";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,10 +15,18 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { Ban, MoreVertical, ShieldCheck, PanelRight } from "lucide-react";
+import {
+  Ban,
+  MoreVertical,
+  ShieldCheck,
+  PanelRight,
+  Phone,
+  Video,
+} from "lucide-react";
 import { friendService } from "@/services/friendService";
 import { toast } from "sonner";
 import { useState } from "react";
+import type { CallMediaType } from "@/types/call";
 
 interface ChatWindowHeaderProps {
   chat?: Conversation;
@@ -39,7 +48,9 @@ const ChatWindowHeader = ({
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
+  const { startCall } = useCallStore();
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
 
   let otherUser;
 
@@ -62,6 +73,31 @@ const ChatWindowHeader = ({
 
   const showBlockActions =
     chat.type === "PRIVATE" && !!peerUserId && !!onBlockStatusChanged;
+  const canStartCall = !(
+    chat.type === "PRIVATE" &&
+    (blockedByMe || blockedByOther)
+  );
+
+  const handleStartCall = async (mediaType: CallMediaType) => {
+    if (!chat || isStartingCall || !canStartCall) {
+      return;
+    }
+
+    setIsStartingCall(true);
+    try {
+      await startCall(chat.id, mediaType);
+      toast.success(
+        mediaType === "VIDEO"
+          ? "Da bat dau cuoc goi video"
+          : "Da bat dau cuoc goi thoai",
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error("Khong the bat dau cuoc goi");
+    } finally {
+      setIsStartingCall(false);
+    }
+  };
 
   const handleBlock = async () => {
     if (!peerUserId || isUpdatingBlock) return;
@@ -141,6 +177,26 @@ const ChatWindowHeader = ({
                 variant="ghost"
                 size="icon"
                 className="size-8"
+                onClick={() => void handleStartCall("VOICE")}
+                disabled={!canStartCall || isStartingCall}
+                title="Goi thoai"
+              >
+                <Phone className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => void handleStartCall("VIDEO")}
+                disabled={!canStartCall || isStartingCall}
+                title="Goi video"
+              >
+                <Video className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
                 onClick={onFilesOpen}
                 title="Thông tin hội thoại"
               >
@@ -179,7 +235,27 @@ const ChatWindowHeader = ({
             </div>
           )}
           {!showBlockActions && (
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => void handleStartCall("VOICE")}
+                disabled={!canStartCall || isStartingCall}
+                title="Goi thoai"
+              >
+                <Phone className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => void handleStartCall("VIDEO")}
+                disabled={!canStartCall || isStartingCall}
+                title="Goi video"
+              >
+                <Video className="size-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

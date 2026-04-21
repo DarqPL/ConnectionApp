@@ -41,13 +41,21 @@ interface ChatContextType {
   deleteMessage: (messageId: string) => Promise<void>;
   pinMessage: (conversationId: number, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
-  removeMemberFromGroup: (conversationId: number, memberId: number) => Promise<void>;
+  removeMemberFromGroup: (
+    conversationId: number,
+    memberId: number,
+  ) => Promise<void>;
   setCurrentConversation: (
     conversationId: number | null,
     sourceConversationId?: number,
   ) => void;
   notifyTyping: (conversationId: number) => void;
   notifyStoppedTyping: (conversationId: number) => void;
+  reactMessage: (
+    conversationId: number,
+    messageId: string,
+    reactionCode: string | null,
+  ) => Promise<void>;
   leaveGroup: (conversationId: number, userId: number) => Promise<void>;
   addMemberToGroup: (conversationId: number, memberId: number) => Promise<void>;
   updateMemberRole: (
@@ -88,7 +96,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const userIdRef = useRef<number | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const messageFetchVersionRef = useRef(0);
-  const typingTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const typingTimeoutRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
 
   useEffect(() => {
     currentConversationRef.current = currentConversationId;
@@ -115,6 +125,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const next = [...messages];
     next[index] = incoming;
     return next;
+  };
+
+  const applyReactionForUser = (
+    message: Message,
+    userId: number,
+    reactionCode: string | null,
+  ): Message => {
+    const existing = message.reactions ?? [];
+    const others = existing.filter((reaction) => reaction.userId !== userId);
+    const mine = existing.find((reaction) => reaction.userId === userId);
+
+    if (!reactionCode) {
+      return {
+        ...message,
+        reactions: others,
+      };
+    }
+
+    if (mine?.reactionCode === reactionCode) {
+      return {
+        ...message,
+        reactions: others,
+      };
+    }
+
+    return {
+      ...message,
+      reactions: [
+        ...others,
+        {
+          userId,
+          reactionCode,
+        },
+      ],
+    };
   };
 
   const buildMessagePreview = (
@@ -373,14 +418,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const conversationId = payload.conversationId;
-    console.log(`[ChatContext] Update event: ${type} for conv: ${conversationId}`);
+    console.log(
+      `[ChatContext] Update event: ${type} for conv: ${conversationId}`,
+    );
 
     if (type === "PIN_UPDATE") {
       chatService
         .getConversation(conversationId)
         .then((updatedConvo) => {
           setConversations((prev) =>
-            prev.map((c) => (Number(c.id) === Number(updatedConvo.id) ? updatedConvo : c)),
+            prev.map((c) =>
+              Number(c.id) === Number(updatedConvo.id) ? updatedConvo : c,
+            ),
           );
         })
         .catch(console.error);
@@ -399,7 +448,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               };
             }
             return c;
-          })
+          }),
         );
       } else {
         const newParticipant = payload.newMember;
@@ -413,7 +462,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               };
 
               const exists = c.participants.some(
-                (p) => Number(p.userId) === Number(participantToAdd.userId)
+                (p) => Number(p.userId) === Number(participantToAdd.userId),
               );
               if (exists) return c;
 
@@ -435,7 +484,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       // If current user left, remove from list
       if (Number(leftUserId) === Number(userIdRef.current)) {
         console.log("[ChatContext] Current user removed:", conversationId);
-        setConversations((prev) => prev.filter((c) => Number(c.id) !== Number(conversationId)));
+        setConversations((prev) =>
+          prev.filter((c) => Number(c.id) !== Number(conversationId)),
+        );
         if (Number(currentConversationRef.current) === Number(conversationId)) {
           setCurrentConversationId(null);
           setCurrentMessages([]);
@@ -448,7 +499,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           if (Number(c.id) === Number(conversationId)) {
             return {
               ...c,
-              participants: c.participants.filter((p) => Number(p.userId) !== Number(leftUserId)),
+              participants: c.participants.filter(
+                (p) => Number(p.userId) !== Number(leftUserId),
+              ),
             };
           }
           return c;
@@ -591,49 +644,54 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // ─── Regular methods ───────────────────────────────────────────────────────
 
-  const fetchMessages = useCallback(async (conversationId: number) => {
-    const fetchVersion = ++messageFetchVersionRef.current;
-    currentConversationRef.current = conversationId;
-    setCurrentConversationId(conversationId);
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await chatService.getMessages(conversationId);
-
-      if (
-        fetchVersion !== messageFetchVersionRef.current ||
-        currentConversationRef.current !== conversationId
-      ) {
-        return;
-      }
-
-      setCurrentMessages(data);
+  const fetchMessages = useCallback(
+    async (conversationId: number) => {
+      const fetchVersion = ++messageFetchVersionRef.current;
+      currentConversationRef.current = conversationId;
       setCurrentConversationId(conversationId);
-      // Mark as read
-      chatService.markAsRead(conversationId).catch(() => { });
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conversationId ? { ...c, unreadCount: 0 } : c,
-        ),
-      );
-    } catch (err) {
-      if (
-        fetchVersion !== messageFetchVersionRef.current ||
-        currentConversationId !== conversationId
-      ) {
-        return;
-      }
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await chatService.getMessages(conversationId);
 
-      setError(err instanceof Error ? err.message : "Không tải được tin nhắn");
-    } finally {
-      if (
-        fetchVersion === messageFetchVersionRef.current &&
-        currentConversationRef.current === conversationId
-      ) {
-        setIsLoading(false);
+        if (
+          fetchVersion !== messageFetchVersionRef.current ||
+          currentConversationRef.current !== conversationId
+        ) {
+          return;
+        }
+
+        setCurrentMessages(data);
+        setCurrentConversationId(conversationId);
+        // Mark as read
+        chatService.markAsRead(conversationId).catch(() => {});
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conversationId ? { ...c, unreadCount: 0 } : c,
+          ),
+        );
+      } catch (err) {
+        if (
+          fetchVersion !== messageFetchVersionRef.current ||
+          currentConversationId !== conversationId
+        ) {
+          return;
+        }
+
+        setError(
+          err instanceof Error ? err.message : "Không tải được tin nhắn",
+        );
+      } finally {
+        if (
+          fetchVersion === messageFetchVersionRef.current &&
+          currentConversationRef.current === conversationId
+        ) {
+          setIsLoading(false);
+        }
       }
-    }
-  }, [currentConversationId]);
+    },
+    [currentConversationId],
+  );
 
   const updateMessage = useCallback((updatedMsg: Message) => {
     if (updatedMsg.conversationId === currentConversationRef.current) {
@@ -641,59 +699,77 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const pinMessage = useCallback(async (conversationId: number, messageId: string) => {
-    setError(null);
-    try {
-      await chatService.pinMessage(conversationId, messageId);
-      // Socket will handle update
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Ghim tin nhắn thất bại";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+  const pinMessage = useCallback(
+    async (conversationId: number, messageId: string) => {
+      setError(null);
+      try {
+        await chatService.pinMessage(conversationId, messageId);
+        // Socket will handle update
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Ghim tin nhắn thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
 
-  const unpinMessage = useCallback(async (conversationId: number, messageId: string) => {
-    setError(null);
-    try {
-      await chatService.unpinMessage(conversationId, messageId);
-      // Socket will handle update
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Bỏ ghim tin nhắn thất bại";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+  const unpinMessage = useCallback(
+    async (conversationId: number, messageId: string) => {
+      setError(null);
+      try {
+        await chatService.unpinMessage(conversationId, messageId);
+        // Socket will handle update
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Bỏ ghim tin nhắn thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
 
-  const removeMemberFromGroup = useCallback(async (conversationId: number, memberId: number) => {
-    setError(null);
-    try {
-      console.log(`[ChatContext] Calling API to remove member ${memberId} from ${conversationId}`);
-      await chatService.removeMemberFromGroup(conversationId, memberId);
-      console.log(`[ChatContext] API Success! Updating local state...`);
-      
-      // Update the conversation participants in the official state
-      setConversations((prev) => {
-        const next = prev.map((c) => {
-          if (Number(c.id) === Number(conversationId)) {
-            const newList = c.participants.filter((p) => Number(p.userId) !== Number(memberId));
-            console.log(`[ChatContext] Updating conv ${c.id}: participants count ${c.participants.length} -> ${newList.length}`);
-            return {
-              ...c,
-              participants: newList,
-            };
-          }
-          return c;
+  const removeMemberFromGroup = useCallback(
+    async (conversationId: number, memberId: number) => {
+      setError(null);
+      try {
+        console.log(
+          `[ChatContext] Calling API to remove member ${memberId} from ${conversationId}`,
+        );
+        await chatService.removeMemberFromGroup(conversationId, memberId);
+        console.log(`[ChatContext] API Success! Updating local state...`);
+
+        // Update the conversation participants in the official state
+        setConversations((prev) => {
+          const next = prev.map((c) => {
+            if (Number(c.id) === Number(conversationId)) {
+              const newList = c.participants.filter(
+                (p) => Number(p.userId) !== Number(memberId),
+              );
+              console.log(
+                `[ChatContext] Updating conv ${c.id}: participants count ${c.participants.length} -> ${newList.length}`,
+              );
+              return {
+                ...c,
+                participants: newList,
+              };
+            }
+            return c;
+          });
+          return [...next]; // Force a new array reference
         });
-        return [...next]; // Force a new array reference
-      });
-    } catch (err) {
-      console.error("[ChatContext] removeMemberFromGroup Error:", err);
-      const msg = err instanceof Error ? err.message : "Xóa thành viên thất bại";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+      } catch (err) {
+        console.error("[ChatContext] removeMemberFromGroup Error:", err);
+        const msg =
+          err instanceof Error ? err.message : "Xóa thành viên thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
 
   const sendMessage = useCallback(
     async (
@@ -709,14 +785,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           files.length === 0
             ? []
             : await Promise.all(
-              files.map((file) =>
-                chatService.uploadAttachment({
-                  uri: file.uri,
-                  name: file.name,
-                  mimeType: file.mimeType,
-                }),
-              ),
-            );
+                files.map((file) =>
+                  chatService.uploadAttachment({
+                    uri: file.uri,
+                    name: file.name,
+                    mimeType: file.mimeType,
+                  }),
+                ),
+              );
 
         const normalizedContent = content.trim();
         const newMsg = await chatService.sendMessage(
@@ -735,11 +811,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           prev.map((c) =>
             c.id === conversationId
               ? {
-                ...c,
-                lastMessageContent: preview,
-                lastMessageAt: new Date().toISOString(),
-                unreadCount: 0,
-              }
+                  ...c,
+                  lastMessageContent: preview,
+                  lastMessageAt: new Date().toISOString(),
+                  unreadCount: 0,
+                }
               : c,
           ),
         );
@@ -827,14 +903,51 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const reactMessage = useCallback(
+    async (
+      conversationId: number,
+      messageId: string,
+      reactionCode: string | null,
+    ) => {
+      if (!user) {
+        throw new Error("Vui long dang nhap lai");
+      }
+
+      const previousMessage =
+        currentMessages.find((message) => message.id === messageId) ?? null;
+
+      if (!previousMessage) {
+        return;
+      }
+
+      const optimistic = applyReactionForUser(
+        previousMessage,
+        user.id,
+        reactionCode,
+      );
+      setCurrentMessages((prev) => upsertMessage(prev, optimistic));
+
+      try {
+        const serverMessage = reactionCode
+          ? await chatService.reactMessage(messageId, reactionCode)
+          : await chatService.removeReaction(messageId);
+        setCurrentMessages((prev) => upsertMessage(prev, serverMessage));
+      } catch (err) {
+        setCurrentMessages((prev) => upsertMessage(prev, previousMessage));
+        const msg = err instanceof Error ? err.message : "Tha cam xuc that bai";
+        setError(msg);
+        throw err;
+      }
+    },
+    [currentMessages, user],
+  );
+
   const leaveGroup = useCallback(
     async (conversationId: number, userId: number) => {
       try {
         await chatService.leaveGroup(conversationId, userId);
         // Remove from conversations list
-        setConversations((prev) =>
-          prev.filter((c) => c.id !== conversationId)
-        );
+        setConversations((prev) => prev.filter((c) => c.id !== conversationId));
         // Clear current conversation if it's the one we're leaving
         if (currentConversationRef.current === conversationId) {
           setCurrentConversationId(null);
@@ -854,14 +967,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, memberId: number) => {
       try {
         await chatService.addMemberToGroup(conversationId, memberId);
-        
+
         // Refresh conversation to get latest participants list
         const updatedConvo = await chatService.getConversation(conversationId);
-        setConversations(prev =>
-          prev.map(c => c.id === conversationId ? updatedConvo : c)
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conversationId ? updatedConvo : c)),
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Không thể thêm thành viên";
+        const msg =
+          err instanceof Error ? err.message : "Không thể thêm thành viên";
         setError(msg);
         throw err;
       }
@@ -875,18 +989,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         await chatService.updateMemberRole(conversationId, memberId, role);
 
         // Update local state with new role
-        setConversations(prevConversations =>
-          prevConversations.map(conv => {
+        setConversations((prevConversations) =>
+          prevConversations.map((conv) => {
             if (conv.id === conversationId) {
               return {
                 ...conv,
-                participants: conv.participants.map(p =>
-                  p.userId === memberId ? { ...p, role } : p
+                participants: conv.participants.map((p) =>
+                  p.userId === memberId ? { ...p, role } : p,
                 ),
               };
             }
             return conv;
-          })
+          }),
         );
       } catch (err) {
         const msg =
@@ -917,6 +1031,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,
+    reactMessage,
     leaveGroup,
     addMemberToGroup,
     updateMemberRole,

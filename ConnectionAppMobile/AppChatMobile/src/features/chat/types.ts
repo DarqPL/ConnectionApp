@@ -64,6 +64,12 @@ export interface Poll {
   expiredAt: string | null;
 }
 
+export interface MessageReaction {
+  userId: number;
+  reactionCode: string;
+  reactedAt?: string | null;
+}
+
 export interface Message {
   id: string;
   conversationId: number;
@@ -77,6 +83,7 @@ export interface Message {
   recalledAt: string | null;
   replyInfo?: ReplyInfo | null;
   poll?: Poll | null;
+  reactions?: MessageReaction[];
 }
 
 export interface PageResponse<T> {

@@ -311,7 +311,10 @@ export class ChatService {
     }
   }
 
-  async removeMemberFromGroup(conversationId: number, userId: number): Promise<void> {
+  async removeMemberFromGroup(
+    conversationId: number,
+    userId: number,
+  ): Promise<void> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}/members/${userId}`,
       {
@@ -404,7 +407,47 @@ export class ChatService {
     return (await response.json()) as Message;
   }
 
-  async pinMessage(conversationId: number, messageId: string): Promise<Message> {
+  async reactMessage(
+    messageId: string,
+    reactionCode: string,
+  ): Promise<Message> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/reaction`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reactionCode }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Tha cam xuc that bai");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async removeReaction(messageId: string): Promise<Message> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/reaction`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Bo cam xuc that bai");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async pinMessage(
+    conversationId: number,
+    messageId: string,
+  ): Promise<Message> {
     const response = await authService.authFetch(
       `/messages/${messageId}/pin?conversationId=${conversationId}`,
       {
@@ -419,10 +462,7 @@ export class ChatService {
     return (await response.json()) as Message;
   }
 
-  async unpinMessage(
-    conversationId: number,
-    messageId: string,
-  ): Promise<void> {
+  async unpinMessage(conversationId: number, messageId: string): Promise<void> {
     const response = await authService.authFetch(
       `/messages/${messageId}/unpin?conversationId=${conversationId}`,
       {

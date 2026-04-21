@@ -215,15 +215,24 @@ export const chatService = {
    * PUT /api/conversations/{conversationId}/members/{memberId}/role
    * Transfer ownership to another member
    */
-  async updateMemberRole(conversationId: number, memberId: number, role: string): Promise<void> {
-    await api.put(`/conversations/${conversationId}/members/${memberId}/role`, { role });
+  async updateMemberRole(
+    conversationId: number,
+    memberId: number,
+    role: string,
+  ): Promise<void> {
+    await api.put(`/conversations/${conversationId}/members/${memberId}/role`, {
+      role,
+    });
   },
 
   /**
    * POST /api/conversations/{conversationId}/members/{memberId}
    * Add a member to conversation
    */
-  async addMemberToGroup(conversationId: number, memberId: number): Promise<void> {
+  async addMemberToGroup(
+    conversationId: number,
+    memberId: number,
+  ): Promise<void> {
     await api.post(`/conversations/${conversationId}/members/${memberId}`);
   },
 
@@ -241,7 +250,23 @@ export const chatService = {
     const res = await api.put(`/messages/${messageId}/poll/close`);
     return res.data;
   },
-  async pinMessage(conversationId: number, messageId: string): Promise<Message> {
+  async reactMessage(
+    messageId: string,
+    reactionCode: string,
+  ): Promise<Message> {
+    const res = await api.post(`/messages/${messageId}/reaction`, {
+      reactionCode,
+    });
+    return res.data;
+  },
+  async removeReaction(messageId: string): Promise<Message> {
+    const res = await api.delete(`/messages/${messageId}/reaction`);
+    return res.data;
+  },
+  async pinMessage(
+    conversationId: number,
+    messageId: string,
+  ): Promise<Message> {
     const res = await api.post(`/messages/${messageId}/pin`, null, {
       params: { conversationId },
     });

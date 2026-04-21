@@ -137,6 +137,15 @@ class ChatSocketService {
           }
         });
 
+        client.subscribe(`/topic/user.${userId}/reactions`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onIncomingMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse reaction update:", e);
+          }
+        });
+
         // NEW: Subscribe to typing notifications
         client.subscribe(`/topic/user.${userId}/typing`, (stompFrame) => {
           try {

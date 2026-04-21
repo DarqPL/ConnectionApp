@@ -2,6 +2,7 @@ package iuh.fit.ConnectionAppBackend.controller;
 
 import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.MessageReactionRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PageResponse;
@@ -143,6 +144,39 @@ public class MessageController {
         MessageResponse message = messageService.recallMessage(messageId, userId);
         return ResponseEntity.ok(message);
     }
+
+        /**
+         * Add/update reaction for a message. If same reaction already exists for user, it toggles off.
+         */
+        @PostMapping("/{messageId}/reaction")
+        public ResponseEntity<MessageResponse> reactToMessage(
+                        Authentication authentication,
+                        @PathVariable String messageId,
+                        @RequestBody MessageReactionRequest request) {
+
+                Long userId = userService.getUserByUsername(authentication.getName())
+                                .orElseThrow(() -> new RuntimeException("User not found"))
+                                .getId();
+
+                MessageResponse message = messageService.reactToMessage(messageId, userId, request.getReactionCode());
+                return ResponseEntity.ok(message);
+        }
+
+        /**
+         * Remove current user's reaction from a message.
+         */
+        @DeleteMapping("/{messageId}/reaction")
+        public ResponseEntity<MessageResponse> removeReaction(
+                        Authentication authentication,
+                        @PathVariable String messageId) {
+
+                Long userId = userService.getUserByUsername(authentication.getName())
+                                .orElseThrow(() -> new RuntimeException("User not found"))
+                                .getId();
+
+                MessageResponse message = messageService.removeReaction(messageId, userId);
+                return ResponseEntity.ok(message);
+        }
 
     /**
      * Vote in a poll

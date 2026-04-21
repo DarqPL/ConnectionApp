@@ -56,6 +56,41 @@ const buildMessagePreview = (message: Message): string => {
   return "";
 };
 
+const applyReactionForUser = (
+  message: Message,
+  userId: number,
+  reactionCode: string | null,
+): Message => {
+  const existing = message.reactions ?? [];
+  const others = existing.filter((reaction) => reaction.userId !== userId);
+  const mine = existing.find((reaction) => reaction.userId === userId);
+
+  if (!reactionCode) {
+    return {
+      ...message,
+      reactions: others,
+    };
+  }
+
+  if (mine?.reactionCode === reactionCode) {
+    return {
+      ...message,
+      reactions: others,
+    };
+  }
+
+  return {
+    ...message,
+    reactions: [
+      ...others,
+      {
+        userId,
+        reactionCode,
+      },
+    ],
+  };
+};
+
 export const useChatStore = create<ChatState>()((set, get) => ({
   conversations: [],
   typingByConversation: {},
@@ -168,7 +203,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  sendMessage: async (conversationId, content, parentId, attachments = [], poll = null) => {
+  sendMessage: async (
+    conversationId,
+    content,
+    parentId,
+    attachments = [],
+    poll = null,
+  ) => {
     try {
       const response = await chatService.sendMessage(
         conversationId,
@@ -250,7 +291,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // or a manual update. We remove the old one to re-add at the correct position.
     const exists = prevItems.some((m) => m.id === message.id);
     let updatedItems = prevItems;
-    
+
     if (exists) {
       updatedItems = prevItems.filter((m) => m.id !== message.id);
     }
@@ -557,11 +598,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   removeConversation: (conversationId) => {
     set((state) => {
       const filteredConvos = state.conversations.filter(
-        (c) => c.id !== conversationId
+        (c) => c.id !== conversationId,
       );
-      const newActiveId = 
-        state.activeConversationId === conversationId 
-          ? null 
+      const newActiveId =
+        state.activeConversationId === conversationId
+          ? null
           : state.activeConversationId;
 
       // Clear messages for this conversation
@@ -601,6 +642,40 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  reactMessage: async (conversationId, messageId, reactionCode) => {
+    const user = useAuthStore.getState().user;
+    if (!user) {
+      throw new Error("Vui long dang nhap lai");
+    }
+
+    const previousMessage =
+      get().messages[conversationId]?.items.find(
+        (item) => item.id === messageId,
+      ) ?? null;
+
+    if (!previousMessage) {
+      return;
+    }
+
+    const optimisticMessage = applyReactionForUser(
+      previousMessage,
+      user.id,
+      reactionCode,
+    );
+
+    get().updateMessage(optimisticMessage);
+
+    try {
+      const serverMessage = reactionCode
+        ? await chatService.reactMessage(messageId, reactionCode)
+        : await chatService.removeReaction(messageId);
+      get().updateMessage(serverMessage);
+    } catch (error) {
+      get().updateMessage(previousMessage);
+      throw error;
+    }
+  },
+
   pinMessage: async (conversationId, messageId) => {
     try {
       await chatService.pinMessage(conversationId, messageId);
@@ -624,15 +699,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   fetchConversationById: async (conversationId) => {
     try {
-      const conversation = await chatService.fetchConversationById(conversationId);
+      const conversation =
+        await chatService.fetchConversationById(conversationId);
       const user = useAuthStore.getState().user;
-      
+
       const myParticipant = conversation.participants?.find(
         (p) => p.userId === user?.id,
       );
       const updatedConvo = {
         ...conversation,
-        unreadCount: conversation.unreadCount ?? (myParticipant?.unreadCounts || 0),
+        unreadCount:
+          conversation.unreadCount ?? (myParticipant?.unreadCounts || 0),
       };
 
       set((state) => {
