@@ -34,9 +34,13 @@ interface ChatContextType {
     content: string,
     files?: PendingAttachment[],
     parentId?: string | null,
+    poll?: any,
   ) => Promise<void>;
+  updateMessage: (updatedMsg: Message) => void;
   recallMessage: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
+  pinMessage: (conversationId: number, messageId: string) => Promise<void>;
+  unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
   setCurrentConversation: (
     conversationId: number | null,
     sourceConversationId?: number,
@@ -350,6 +354,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, []);
 
+  const onPinUpdate = useCallback((payload: { conversationId: number }) => {
+    console.log("[ChatContext] Pin update for:", payload.conversationId);
+    chatService.getConversation(payload.conversationId)
+      .then(updatedConvo => {
+        setConversations(prev => prev.map(c => c.id === updatedConvo.id ? updatedConvo : c));
+      })
+      .catch(console.error);
+  }, []);
+
   const onSecurityNotification = useCallback(
     (payload: {
       type?: string;
@@ -426,6 +439,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onUserTyping,
       onUserStoppedTyping,
       onSecurityNotification,
+      onPinUpdate,
       onConnectionError: (socketError) => {
         if (appStateRef.current !== "active") {
           console.log("[ChatContext] Ignored socket error while app inactive.");
@@ -447,10 +461,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     accessToken,
     appState,
     onSecurityNotification,
+    onPinUpdate,
   ]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
-
+ 
   // ─── Update handlers ref when callbacks change (shouldn't happen with empty deps) ───
   useEffect(() => {
     if (chatSocketService.isConnected) {
@@ -461,6 +476,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onUserTyping,
         onUserStoppedTyping,
         onSecurityNotification,
+        onPinUpdate,
         onConnectionError: (socketError) => {
           if (appStateRef.current === "active") {
             setError(socketError);
@@ -475,10 +491,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     onUserTyping,
     onUserStoppedTyping,
     onSecurityNotification,
+    onPinUpdate,
   ]);
 
   // ─── Regular methods ───────────────────────────────────────────────────────
-
+ 
   const fetchMessages = useCallback(async (conversationId: number) => {
     const fetchVersion = ++messageFetchVersionRef.current;
     currentConversationRef.current = conversationId;
@@ -507,7 +524,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (err) {
       if (
         fetchVersion !== messageFetchVersionRef.current ||
-        currentConversationRef.current !== conversationId
+        currentConversationId !== conversationId
       ) {
         return;
       }
@@ -521,6 +538,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsLoading(false);
       }
     }
+  }, [currentConversationId]);
+
+  const updateMessage = useCallback((updatedMsg: Message) => {
+    if (updatedMsg.conversationId === currentConversationRef.current) {
+      setCurrentMessages((prev) => upsertMessage(prev, updatedMsg));
+    }
+  }, []);
+
+  const pinMessage = useCallback(async (conversationId: number, messageId: string) => {
+    setError(null);
+    try {
+      await chatService.pinMessage(conversationId, messageId);
+      // Socket will handle update
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Ghim tin nhắn thất bại";
+      setError(msg);
+      throw err;
+    }
+  }, []);
+
+  const unpinMessage = useCallback(async (conversationId: number, messageId: string) => {
+    setError(null);
+    try {
+      await chatService.unpinMessage(conversationId, messageId);
+      // Socket will handle update
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Bỏ ghim tin nhắn thất bại";
+      setError(msg);
+      throw err;
+    }
   }, []);
 
   const sendMessage = useCallback(
@@ -529,6 +576,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       content: string,
       files: PendingAttachment[] = [],
       parentId?: string | null,
+      poll?: any,
     ) => {
       setError(null);
       try {
@@ -551,6 +599,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           normalizedContent,
           parentId,
           attachments,
+          poll,
         );
         const preview = buildMessagePreview(newMsg.content, newMsg.attachments);
 
@@ -663,8 +712,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchConversations,
     fetchMessages,
     sendMessage,
+    updateMessage,
     recallMessage,
     deleteMessage,
+    pinMessage,
+    unpinMessage,
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,

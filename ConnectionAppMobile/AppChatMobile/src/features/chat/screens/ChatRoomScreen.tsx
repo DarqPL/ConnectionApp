@@ -21,10 +21,13 @@ import ForwardMessageModal from "../components/ForwardMessageModal";
 import ChatInput from "../components/ChatInput";
 import ChatHeader from "../components/ChatHeader";
 import GroupSidebar from "../components/GroupSidebar";
+import PollCreatorModal from "../components/PollCreatorModal";
+import VotePollModal from "../components/VotePollModal";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
-import type { Message } from "../types";
+import type { Message, Poll } from "../types";
+import { chatService } from "../services/chat.service";
 import { friendService, type BlockStatus } from "../services/friend.service";
 
 const TypingDots = () => {
@@ -97,6 +100,9 @@ const ChatRoomScreen = ({ route }: any) => {
     sendMessage,
     recallMessage,
     deleteMessage,
+    pinMessage,
+    unpinMessage,
+    conversations,
     setCurrentConversation,
   } = useChat();
   const { user, signOut } = useAuth();
@@ -123,6 +129,86 @@ const ChatRoomScreen = ({ route }: any) => {
   });
   const [isBlockStatusLoading, setIsBlockStatusLoading] = React.useState(false);
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
+  const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
+  const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
+  const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
+
+  const currentConversation = conversations.find((c) => c.id === conversationId);
+
+  useEffect(() => {
+    if (!currentConversation?.pinnedMessageIds) {
+      setPinnedMessages([]);
+      return;
+    }
+
+    const ids = currentConversation.pinnedMessageIds
+      .split(",")
+      .filter((id) => id.trim().length > 0);
+    if (ids.length === 0) {
+      setPinnedMessages([]);
+      return;
+    }
+
+    const fetchPinned = async () => {
+      try {
+        const results = await Promise.all(
+          ids.map(async (id) => {
+            const existing = currentMessages.find((m) => m.id === id);
+            if (existing) return existing;
+            try {
+              return await chatService.getMessage(id);
+            } catch (e) {
+              return null;
+            }
+          }),
+        );
+        setPinnedMessages(results.filter((m): m is Message => m !== null));
+      } catch (error) {
+        console.error("[ChatRoom] Error fetching pinned messages:", error);
+      }
+    };
+
+    fetchPinned();
+  }, [currentConversation?.pinnedMessageIds, currentMessages]);
+
+  const activePollMessage = React.useMemo(() => {
+    if (!pollToVote) return null;
+    return currentMessages.find((m) => m.id === pollToVote.id) || pollToVote;
+  }, [pollToVote, currentMessages]);
+
+  const handleCreatePoll = async (pollData: any) => {
+    try {
+      await sendMessage(conversationId, "", [], null, pollData);
+    } catch (error) {
+      console.error("Create poll error", error);
+      throw error;
+    }
+  };
+
+  const handleVote = async (selectedOptionIds: string[]) => {
+    if (!pollToVote) return;
+    try {
+      await chatService.votePoll(pollToVote.id, selectedOptionIds);
+      // Socket will update the message
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể thực hiện bình chọn");
+    }
+  };
+
+  const handleClosePoll = async () => {
+    console.log("[ChatRoom] handleClosePoll called. activePollMessage ID:", activePollMessage?.id);
+    if (!activePollMessage) return;
+
+    try {
+      console.log("[ChatRoom] Closing poll via service...");
+      const res = await chatService.closePoll(activePollMessage.id);
+      console.log("[ChatRoom] Close poll success:", res.id);
+      setPollToVote(null);
+    } catch (error) {
+      console.error("[ChatRoom] Close poll failed:", error);
+      Alert.alert("Lỗi", "Không thể kết thúc cuộc bình chọn");
+    }
+  };
 
   const showScrollThreshold = 120;
   const nearBottomThreshold = 24;
@@ -440,17 +526,19 @@ const ChatRoomScreen = ({ route }: any) => {
     ]);
   };
 
-  const handleMessageAction = (item: Message) => {
-    if (item.recalledAt) {
-      return;
-    }
+  const handleMessageLongPress = (item: Message) => {
+    if (item.recalledAt) return;
 
     const isOwnMessage = item.senderInfo?.senderId === user?.id;
-    const actions: Array<{
-      text: string;
-      style?: "default" | "cancel" | "destructive";
-      onPress?: () => void;
-    }> = [
+    const currentConversation = conversations.find(
+      (c) => c.id === conversationId,
+    );
+    const pinnedIds = currentConversation?.pinnedMessageIds
+      ? currentConversation.pinnedMessageIds.split(",")
+      : [];
+    const isPinned = pinnedIds.includes(item.id);
+
+    const actions: any[] = [
       {
         text: "Trả lời",
         onPress: () => setReplyTo(item),
@@ -460,13 +548,23 @@ const ChatRoomScreen = ({ route }: any) => {
         onPress: () => setMessageToForward(item),
       },
       {
+        text: isPinned ? "Bỏ ghim" : "Ghim tin nhắn",
+        onPress: () => {
+          if (isPinned) {
+            unpinMessage(conversationId, item.id);
+          } else {
+            pinMessage(conversationId, item.id);
+          }
+        },
+      },
+      {
         text: "Hủy",
         style: "cancel",
       },
     ];
 
     if (isOwnMessage) {
-      actions.splice(2, 0, {
+      actions.splice(3, 0, {
         text: "Thu hồi",
         style: "destructive",
         onPress: () => handleRecallMessage(item.id),
@@ -541,6 +639,30 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
+        {pinnedMessages.length > 0 && (
+          <TouchableOpacity
+            style={styles.pinnedBanner}
+            onPress={() => handleScrollToParent(pinnedMessages[0].id)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.pinnedIcon}>
+              <Ionicons name="pin" size={18} color={COLORS.primary} />
+            </View>
+            <View style={styles.pinnedContent}>
+              <Text style={styles.pinnedLabel}>Tin nhắn đã ghim</Text>
+              <Text style={styles.pinnedText} numberOfLines={1}>
+                {pinnedMessages[0].content || (pinnedMessages[0].attachments?.length ? "Tệp đính kèm" : "Tin nhắn bình chọn")}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.unpinBannerBtn}
+              onPress={() => unpinMessage(conversationId, pinnedMessages[0].id)}
+            >
+              <Ionicons name="close" size={20} color="#666" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        )}
+
         {displayMessages.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
@@ -556,6 +678,7 @@ const ChatRoomScreen = ({ route }: any) => {
               <MessageBubble
                 message={item.content || ""}
                 attachments={item.attachments || []}
+                poll={item.poll}
                 isMe={item.senderInfo?.senderId === user?.id}
                 senderName={item.senderInfo?.displayName}
                 avatarUrl={item.senderInfo?.avatarUrl}
@@ -563,12 +686,13 @@ const ChatRoomScreen = ({ route }: any) => {
                 recalledAt={item.recalledAt}
                 replyInfo={item.replyInfo}
                 isGroup={isGroup}
-                onLongPress={() => handleMessageAction(item)}
+                onLongPress={() => handleMessageLongPress(item)}
                 onReplyPreviewPress={
                   item.replyInfo?.parentId
                     ? () => handleScrollToParent(item.replyInfo.parentId)
                     : undefined
                 }
+                onPollVote={() => setPollToVote(item)}
                 isHighlighted={item.id === highlightedMsgId}
               />
             )}
@@ -619,6 +743,7 @@ const ChatRoomScreen = ({ route }: any) => {
               disabled={sending || (isPrivateChat && isBlockStatusLoading)}
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
+              onOpenPollCreator={() => setIsPollCreatorOpen(true)}
             />
           </>
         ) : (
@@ -642,6 +767,32 @@ const ChatRoomScreen = ({ route }: any) => {
             groupAvatar={avatarUrl}
             participants={participants || []}
             messages={displayMessages}
+          />
+        )}
+
+        <PollCreatorModal
+          visible={isPollCreatorOpen}
+          onClose={() => setIsPollCreatorOpen(false)}
+          onCreate={handleCreatePoll}
+        />
+
+        {activePollMessage && activePollMessage.poll && (
+          <VotePollModal
+            visible={!!activePollMessage}
+            onClose={() => setPollToVote(null)}
+            poll={activePollMessage.poll}
+            onConfirm={handleVote}
+            currentUserId={user?.id || 0}
+            isCreator={(() => {
+              const check = !!user && Number(activePollMessage.senderInfo?.senderId) === Number(user?.id);
+              console.log("[ChatRoom] Creator check:", {
+                senderId: activePollMessage.senderInfo?.senderId,
+                userId: user?.id,
+                isCreator: check
+              });
+              return check;
+            })()}
+            onClosePoll={handleClosePoll}
           />
         )}
       </View>
@@ -769,5 +920,34 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 15,
     lineHeight: 24,
+  },
+  pinnedBanner: {
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  pinnedIcon: {
+    marginRight: 10,
+  },
+  pinnedContent: {
+    flex: 1,
+  },
+  pinnedLabel: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "bold",
+    marginBottom: 2,
+  },
+  pinnedText: {
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  unpinBannerBtn: {
+    padding: 5,
   },
 });

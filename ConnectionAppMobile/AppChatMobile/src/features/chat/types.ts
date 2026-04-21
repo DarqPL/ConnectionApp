@@ -23,6 +23,7 @@ export interface Conversation {
   updatedAt: string | null;
   participants: Participant[];
   unreadCount: number;
+  pinnedMessageIds?: string | null;
 }
 
 export interface SenderInfo {
@@ -47,6 +48,22 @@ export interface ReplyInfo {
   parentRecalled?: boolean;
 }
 
+export interface PollOption {
+  id: string;
+  text: string;
+  voterIds: number[];
+}
+
+export interface Poll {
+  question: string;
+  options: PollOption[];
+  multiChoice: boolean;
+  allowAddOptions: boolean;
+  isAnonymous: boolean;
+  closed: boolean;
+  expiredAt: string | null;
+}
+
 export interface Message {
   id: string;
   conversationId: number;
@@ -59,6 +76,7 @@ export interface Message {
   isDeleted: boolean;
   recalledAt: string | null;
   replyInfo?: ReplyInfo | null;
+  poll?: Poll | null;
 }
 
 export interface PageResponse<T> {
