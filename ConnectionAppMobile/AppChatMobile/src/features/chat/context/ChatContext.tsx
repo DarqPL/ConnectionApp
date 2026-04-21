@@ -45,8 +45,14 @@ interface ChatContextType {
     conversationId: number | null,
     sourceConversationId?: number,
   ) => void;
-  notifyTyping: (conversationId: number) => void; // NEW: Send typing notification
-  notifyStoppedTyping: (conversationId: number) => void; // NEW: Send stopped typing notification
+  notifyTyping: (conversationId: number) => void;
+  notifyStoppedTyping: (conversationId: number) => void;
+  leaveGroup: (conversationId: number, userId: number) => Promise<void>;
+  updateMemberRole: (
+    conversationId: number,
+    memberId: number,
+    role: string,
+  ) => Promise<void>;
   clearError: () => void;
 }
 
@@ -702,6 +708,43 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const leaveGroup = useCallback(
+    async (conversationId: number, userId: number) => {
+      try {
+        await chatService.leaveGroup(conversationId, userId);
+        // Remove from conversations list
+        setConversations((prev) =>
+          prev.filter((c) => c.id !== conversationId)
+        );
+        // Clear current conversation if it's the one we're leaving
+        if (currentConversationRef.current === conversationId) {
+          setCurrentConversationId(null);
+          setCurrentMessages([]);
+        }
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Không thể rời khỏi nhóm";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const updateMemberRole = useCallback(
+    async (conversationId: number, memberId: number, role: string) => {
+      try {
+        await chatService.updateMemberRole(conversationId, memberId, role);
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Không thể cập nhật quyền";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
   const value: ChatContextType = {
     conversations,
     currentMessages,
@@ -720,6 +763,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,
+    leaveGroup,
+    updateMemberRole,
     clearError,
   };
 
