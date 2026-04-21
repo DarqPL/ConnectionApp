@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { TransferOwnershipDialog } from "./TransferOwnershipDialog";
+import { MemberListDialog } from "./MemberListDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
@@ -75,6 +76,7 @@ const ChatInfoPanel = ({
   const [showAllImages, setShowAllImages] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
+  const [showMemberListDialog, setShowMemberListDialog] = useState(false);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -140,6 +142,17 @@ const ChatInfoPanel = ({
       toast.error("Không thể rời khỏi nhóm");
     } finally {
       setIsLeavingGroup(false);
+    }
+  };
+
+  const handleUpdateMemberRole = async (memberId: number, newRole: string) => {
+    try {
+      await chatService.updateMemberRole(chat.id, memberId, newRole);
+      toast.success("Đã cập nhật vai trò thành viên");
+    } catch (error) {
+      console.error("Lỗi cập nhật vai trò:", error);
+      toast.error("Không thể cập nhật vai trò");
+      throw error;
     }
   };
 
@@ -254,14 +267,25 @@ const ChatInfoPanel = ({
         />
         {openSections.members && (
           <div className="px-4 pb-4 space-y-3">
-            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors">
+            <div 
+              className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
+              onClick={() => setShowMemberListDialog(true)}
+            >
               <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Users className="size-4" />
               </div>
               <span className="text-sm font-medium">{chat.participants.length} thành viên</span>
             </div>
             {chat.participants.slice(0, 3).map((p) => (
-              <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group">
+              <div 
+                key={p.id} 
+                className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
+                onClick={() => {
+                  if (currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") {
+                    setShowMemberListDialog(true);
+                  }
+                }}
+              >
                 <UserAvatar type="chat" name={p.displayName} avatarUrl={p.avatarUrl || undefined} className="size-8" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{p.displayName}</p>
@@ -270,8 +294,12 @@ const ChatInfoPanel = ({
               </div>
             ))}
             {chat.participants.length > 3 && (
-              <Button variant="ghost" className="w-full text-xs text-muted-foreground hover:bg-accent/50">
-                Xem tất cả
+              <Button 
+                variant="ghost" 
+                className="w-full text-xs text-muted-foreground hover:bg-accent/50"
+                onClick={() => setShowMemberListDialog(true)}
+              >
+                Xem tất cả ({chat.participants.length})
               </Button>
             )}
           </div>
@@ -524,6 +552,17 @@ const ChatInfoPanel = ({
           onTransferComplete={handleTransferComplete}
         />
       )}
+
+      {/* Member List Dialog */}
+      <MemberListDialog
+        isOpen={showMemberListDialog}
+        conversation={chat}
+        currentUserRole={currentUserRole}
+        currentUserId={user?.id || null}
+        conversationId={chat.id}
+        onClose={() => setShowMemberListDialog(false)}
+        onRoleUpdate={handleUpdateMemberRole}
+      />
 
       {/* Bottom Section with Pin Toggle and Logout Button */}
      
