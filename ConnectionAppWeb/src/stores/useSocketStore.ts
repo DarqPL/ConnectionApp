@@ -3,9 +3,11 @@ import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
+import { useCallStore } from "./useCallStore";
 import { useFriendStore } from "./useFriendStore";
 import { toast } from "sonner";
 import api from "@/lib/axios";
+import type { CallSession } from "@/types/call";
 
 const LOCK_NOTICE_KEY = "auth_lock_notice";
 
@@ -119,6 +121,27 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             .removeTypingUser(payload.conversationId, payload.userId);
         });
 
+        client.subscribe(`/topic/user.${userId}/call-invite`, (message) => {
+          const payload: CallSession = JSON.parse(message.body);
+          useCallStore.getState().setIncomingCall(payload);
+
+          const callerName = payload.participants.find(
+            (participant) => participant.userId === payload.initiatedBy,
+          )?.displayName;
+
+          toast.info("Cuoc goi den", {
+            description: callerName
+              ? `${callerName} dang goi ${payload.mediaType === "VIDEO" ? "video" : "thoai"}`
+              : "Ban co cuoc goi moi",
+            duration: 6000,
+          });
+        });
+
+        client.subscribe(`/topic/user.${userId}/call-status`, (message) => {
+          const payload: CallSession = JSON.parse(message.body);
+          useCallStore.getState().handleCallStatus(payload);
+        });
+
         // Subscribe to security warnings (unknown-device login).
         client.subscribe(`/topic/user.${userId}/security`, (message) => {
           const payload: SecurityNotification = JSON.parse(message.body);
@@ -203,21 +226,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         });
 
         // Subscribe to conversation updates (member joined/left)
-        client.subscribe(`/topic/user.${userId}/conversation-updates`, (message) => {
-          const update = JSON.parse(message.body);
-          
-          if (update?.type === "PIN_UPDATE" && update?.conversationId) {
-             useChatStore.getState().fetchConversationById(update.conversationId);
-             return;
-          }
+        client.subscribe(
+          `/topic/user.${userId}/conversation-updates`,
+          (message) => {
+            const update = JSON.parse(message.body);
 
-          // update: { conversationId, participants }
-          if (update?.conversationId && update?.participants) {
-            useChatStore
-              .getState()
-              .updateConversationParticipants(update.conversationId, update.participants);
-          }
-        });
+            if (update?.type === "PIN_UPDATE" && update?.conversationId) {
+              useChatStore
+                .getState()
+                .fetchConversationById(update.conversationId);
+              return;
+            }
+
+            // update: { conversationId, participants }
+            if (update?.conversationId && update?.participants) {
+              useChatStore
+                .getState()
+                .updateConversationParticipants(
+                  update.conversationId,
+                  update.participants,
+                );
+            }
+          },
+        );
 
         // Subscribe to online users
         client.subscribe("/topic/online-users", (message) => {

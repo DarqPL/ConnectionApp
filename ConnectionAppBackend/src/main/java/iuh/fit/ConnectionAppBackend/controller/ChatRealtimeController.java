@@ -1,8 +1,11 @@
 package iuh.fit.ConnectionAppBackend.controller;
 
+import iuh.fit.ConnectionAppBackend.domain.dto.CallParticipantStateRequest;
+import iuh.fit.ConnectionAppBackend.service.CallService;
 import iuh.fit.ConnectionAppBackend.service.TypingNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 
@@ -13,6 +16,9 @@ public class ChatRealtimeController {
 
     @Autowired
     private TypingNotificationService typingNotificationService;
+
+    @Autowired
+    private CallService callService;
 
     @MessageMapping("/chat/{conversationId}/typing")
     public void notifyTyping(@DestinationVariable Long conversationId, Principal principal) {
@@ -30,5 +36,16 @@ public class ChatRealtimeController {
         }
 
         typingNotificationService.notifyStoppedTyping(principal.getName(), conversationId);
+    }
+
+    @MessageMapping("/calls/{callId}/participants/me")
+    public void updateCallParticipantState(@DestinationVariable Long callId,
+                                           @Payload CallParticipantStateRequest request,
+                                           Principal principal) {
+        if (principal == null || principal.getName() == null) {
+            return;
+        }
+
+        callService.updateParticipantState(principal.getName(), callId, request);
     }
 }
