@@ -135,9 +135,6 @@ const MessageBubble: React.FC<Props> = ({
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
   const { user: currentUser } = useAuth();
-  const myReaction = reactions.find(
-    (reaction) => reaction.userId === currentUserId,
-  );
 
   const groupedReactions = reactions.reduce((acc, reaction) => {
     const existing = acc.get(reaction.reactionCode);
@@ -550,189 +547,191 @@ const MessageBubble: React.FC<Props> = ({
           <Text style={styles.senderName}>{senderName}</Text>
         )}
 
-        <TouchableOpacity
-          activeOpacity={onLongPress && !isRecalled ? 0.75 : 1}
-          onLongPress={!isRecalled ? onLongPress : undefined}
-          style={[
-            styles.bubble,
-            poll
-              ? styles.bubblePoll
-              : isMe
-                ? styles.bubbleSent
-                : styles.bubbleReceived,
-            isRecalled && styles.bubbleRecalled,
-            replyInfo && !isRecalled && styles.bubbleWithReply,
-            isHighlighted && styles.bubbleHighlighted,
-          ]}
-        >
-          {isRecalled ? (
-            <Text
-              style={[
-                styles.messageText,
-                isMe ? styles.sentText : styles.receivedText,
-                styles.recalledText,
-              ]}
-            >
-              Tin nhắn đã được thu hồi
-            </Text>
-          ) : (
-            <View style={styles.contentWrap}>
-              {replyInfo && (
-                <TouchableOpacity
-                  activeOpacity={onReplyPreviewPress ? 0.65 : 1}
-                  onPress={onReplyPreviewPress}
-                  style={[
-                    styles.replyPreviewWrap,
-                    isMe
-                      ? styles.replyPreviewWrapSent
-                      : styles.replyPreviewWrapReceived,
-                  ]}
-                >
-                  <Text
+        <View style={styles.bubbleShell}>
+          <TouchableOpacity
+            activeOpacity={onLongPress && !isRecalled ? 0.75 : 1}
+            onLongPress={!isRecalled ? onLongPress : undefined}
+            style={[
+              styles.bubble,
+              poll
+                ? styles.bubblePoll
+                : isMe
+                  ? styles.bubbleSent
+                  : styles.bubbleReceived,
+              isRecalled && styles.bubbleRecalled,
+              replyInfo && !isRecalled && styles.bubbleWithReply,
+              isHighlighted && styles.bubbleHighlighted,
+            ]}
+          >
+            {isRecalled ? (
+              <Text
+                style={[
+                  styles.messageText,
+                  isMe ? styles.sentText : styles.receivedText,
+                  styles.recalledText,
+                ]}
+              >
+                Tin nhắn đã được thu hồi
+              </Text>
+            ) : (
+              <View style={styles.contentWrap}>
+                {replyInfo && (
+                  <TouchableOpacity
+                    activeOpacity={onReplyPreviewPress ? 0.65 : 1}
+                    onPress={onReplyPreviewPress}
                     style={[
-                      styles.replySender,
+                      styles.replyPreviewWrap,
                       isMe
-                        ? styles.replySenderSent
-                        : styles.replySenderReceived,
+                        ? styles.replyPreviewWrapSent
+                        : styles.replyPreviewWrapReceived,
                     ]}
-                    numberOfLines={1}
                   >
-                    {replyInfo.parentSenderName}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.replyContent,
-                      isMe
-                        ? styles.replyContentSent
-                        : styles.replyContentReceived,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {getReplyPreviewText(replyInfo)}
-                  </Text>
-                </TouchableOpacity>
-              )}
+                    <Text
+                      style={[
+                        styles.replySender,
+                        isMe
+                          ? styles.replySenderSent
+                          : styles.replySenderReceived,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {replyInfo.parentSenderName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.replyContent,
+                        isMe
+                          ? styles.replyContentSent
+                          : styles.replyContentReceived,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {getReplyPreviewText(replyInfo)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
-              {attachments.length > 0 && (
-                <View style={styles.attachmentsWrap}>
-                  {attachments.map((attachment, index) =>
-                    isImageAttachment(attachment) ? (
-                      <TouchableOpacity
-                        key={`${attachment.fileUrl}-${index}`}
-                        onPress={() => openImagePreview(attachment)}
-                        onLongPress={!isRecalled ? onLongPress : undefined}
-                        delayLongPress={350}
-                        activeOpacity={0.85}
-                      >
-                        <Image
-                          source={{ uri: attachment.fileUrl }}
-                          style={styles.attachmentImage}
-                        />
-                      </TouchableOpacity>
-                    ) : isVideoAttachment(attachment) ? (
-                      <TouchableOpacity
-                        key={`${attachment.fileUrl}-${index}`}
-                        onPress={() => openVideoPreview(attachment)}
-                        onLongPress={!isRecalled ? onLongPress : undefined}
-                        delayLongPress={350}
-                        style={styles.videoCard}
-                        activeOpacity={0.85}
-                      >
-                        <View style={styles.videoThumb}>
-                          {videoThumbnailByUrl[attachment.fileUrl] ? (
-                            <Image
-                              source={{
-                                uri: videoThumbnailByUrl[attachment.fileUrl],
-                              }}
-                              style={styles.videoThumbImage}
-                            />
-                          ) : (
-                            <View style={styles.videoThumbFallback} />
-                          )}
-                          <View style={styles.videoThumbOverlay}>
-                            <Ionicons
-                              name="play-circle"
-                              size={40}
-                              color="#fff"
-                            />
+                {attachments.length > 0 && (
+                  <View style={styles.attachmentsWrap}>
+                    {attachments.map((attachment, index) =>
+                      isImageAttachment(attachment) ? (
+                        <TouchableOpacity
+                          key={`${attachment.fileUrl}-${index}`}
+                          onPress={() => openImagePreview(attachment)}
+                          onLongPress={!isRecalled ? onLongPress : undefined}
+                          delayLongPress={350}
+                          activeOpacity={0.85}
+                        >
+                          <Image
+                            source={{ uri: attachment.fileUrl }}
+                            style={styles.attachmentImage}
+                          />
+                        </TouchableOpacity>
+                      ) : isVideoAttachment(attachment) ? (
+                        <TouchableOpacity
+                          key={`${attachment.fileUrl}-${index}`}
+                          onPress={() => openVideoPreview(attachment)}
+                          onLongPress={!isRecalled ? onLongPress : undefined}
+                          delayLongPress={350}
+                          style={styles.videoCard}
+                          activeOpacity={0.85}
+                        >
+                          <View style={styles.videoThumb}>
+                            {videoThumbnailByUrl[attachment.fileUrl] ? (
+                              <Image
+                                source={{
+                                  uri: videoThumbnailByUrl[attachment.fileUrl],
+                                }}
+                                style={styles.videoThumbImage}
+                              />
+                            ) : (
+                              <View style={styles.videoThumbFallback} />
+                            )}
+                            <View style={styles.videoThumbOverlay}>
+                              <Ionicons
+                                name="play-circle"
+                                size={40}
+                                color="#fff"
+                              />
+                            </View>
                           </View>
-                        </View>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.videoLabel,
-                            isMe ? styles.sentText : styles.receivedText,
-                          ]}
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.videoLabel,
+                              isMe ? styles.sentText : styles.receivedText,
+                            ]}
+                          >
+                            {resolveFileName(
+                              attachment.originalFileName,
+                              attachment.fileUrl,
+                            )}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          key={`${attachment.fileUrl}-${index}`}
+                          onPress={() => handleOpenAttachment(attachment)}
+                          onLongPress={!isRecalled ? onLongPress : undefined}
+                          delayLongPress={350}
+                          style={styles.fileCard}
+                          activeOpacity={0.85}
                         >
-                          {resolveFileName(
-                            attachment.originalFileName,
-                            attachment.fileUrl,
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        key={`${attachment.fileUrl}-${index}`}
-                        onPress={() => handleOpenAttachment(attachment)}
-                        onLongPress={!isRecalled ? onLongPress : undefined}
-                        delayLongPress={350}
-                        style={styles.fileCard}
-                        activeOpacity={0.85}
-                      >
-                        <Ionicons
-                          name="document-outline"
-                          size={16}
-                          color={isMe ? "#fff" : COLORS.text}
-                        />
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.fileName,
-                            isMe ? styles.sentText : styles.receivedText,
-                          ]}
-                        >
-                          {resolveFileName(
-                            attachment.originalFileName,
-                            attachment.fileUrl,
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    ),
-                  )}
-                </View>
-              )}
+                          <Ionicons
+                            name="document-outline"
+                            size={16}
+                            color={isMe ? "#fff" : COLORS.text}
+                          />
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.fileName,
+                              isMe ? styles.sentText : styles.receivedText,
+                            ]}
+                          >
+                            {resolveFileName(
+                              attachment.originalFileName,
+                              attachment.fileUrl,
+                            )}
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
+                  </View>
+                )}
 
-              {!!message && (
-                <Text
-                  style={[
-                    styles.messageText,
-                    isMe ? styles.sentText : styles.receivedText,
-                  ]}
-                >
-                  {message}
-                </Text>
-              )}
+                {!!message && (
+                  <Text
+                    style={[
+                      styles.messageText,
+                      isMe ? styles.sentText : styles.receivedText,
+                    ]}
+                  >
+                    {message}
+                  </Text>
+                )}
 
-              {poll && (
-                <PollMessage
-                  poll={poll}
-                  onVote={onPollVote || (() => {})}
-                  isMe={isMe}
-                />
-              )}
+                {poll && (
+                  <PollMessage
+                    poll={poll}
+                    onVote={onPollVote || (() => {})}
+                    isMe={isMe}
+                  />
+                )}
 
-              {/* Business card — shown when message contains a known email */}
-              {!isRecalled && emailUser && detectedEmail && (
-                <BusinessCard
-                  email={detectedEmail}
-                  user={emailUser}
-                  initialStatus={emailStatus}
-                  currentUserId={currentUser?.id}
-                />
-              )}
-            </View>
-          )}
-        </TouchableOpacity>
+                {/* Business card — shown when message contains a known email */}
+                {!isRecalled && emailUser && detectedEmail && (
+                  <BusinessCard
+                    email={detectedEmail}
+                    user={emailUser}
+                    initialStatus={emailStatus}
+                    currentUserId={currentUser?.id}
+                  />
+                )}
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {createdAt && !isRecalled && (
           <Text
@@ -769,22 +768,6 @@ const MessageBubble: React.FC<Props> = ({
               );
             })}
           </View>
-        )}
-
-        {!isRecalled && onReact && (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() =>
-              onReact(myReaction?.reactionCode === "👍" ? null : "👍")
-            }
-            style={[
-              styles.quickReactionBtn,
-              myReaction?.reactionCode === "👍" &&
-                styles.quickReactionBtnActive,
-            ]}
-          >
-            <Text style={styles.quickReactionIcon}>👍</Text>
-          </TouchableOpacity>
         )}
       </View>
 
@@ -952,6 +935,10 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 18,
     maxWidth: "100%",
+  },
+  bubbleShell: {
+    position: "relative",
+    marginBottom: 4,
   },
   bubbleWithReply: {
     borderTopLeftRadius: 8,
@@ -1218,22 +1205,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: COLORS.textMuted,
-  },
-  quickReactionBtn: {
-    marginTop: 4,
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#d8d8e6",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#fff",
-  },
-  quickReactionBtnActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: "#efe9ff",
-  },
-  quickReactionIcon: {
-    fontSize: 13,
   },
 });

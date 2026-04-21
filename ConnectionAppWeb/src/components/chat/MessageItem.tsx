@@ -638,203 +638,156 @@ const MessageItem = ({
                 );
               })()}
 
-              <Card
-                className={cn(
-                  "p-3",
-                  isRecalled
-                    ? "bg-muted/30 border-dashed border-muted-foreground/30"
-                    : message.isOwn
-                      ? "chat-bubble-sent border-0"
-                      : "chat-bubble-received",
-                  message.replyInfo && !isRecalled ? "rounded-t-none" : "",
-                )}
-              >
-                {isRecalled ? (
-                  <p className="text-sm leading-relaxed italic text-muted-foreground">
-                    Tin nhắn đã được thu hồi
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {attachments.length > 0 && (
-                      <div className="space-y-2">
-                        {attachments.map((attachment, idx) => {
-                          if (isImageAttachment(attachment)) {
-                            return (
-                              <button
-                                type="button"
-                                key={`${attachment.fileUrl}-${idx}`}
-                                onClick={() => openImagePreview(attachment)}
-                                className="block"
-                              >
-                                <img
-                                  src={attachment.fileUrl}
-                                  alt="attachment"
-                                  className="rounded-md max-h-52 w-auto object-cover border border-border/40"
-                                />
-                              </button>
-                            );
-                          }
-
-                          if (isVideoAttachment(attachment)) {
-                            return (
-                              <button
-                                type="button"
-                                key={`${attachment.fileUrl}-${idx}`}
-                                onClick={() => openVideoPreview(attachment)}
-                                className="block w-full overflow-hidden rounded-md border border-border/40 bg-zinc-900/70"
-                              >
-                                <div className="relative h-36 w-full bg-zinc-900">
-                                  <video
-                                    src={attachment.fileUrl}
-                                    preload="metadata"
-                                    muted
-                                    playsInline
-                                    className="pointer-events-none h-full w-full object-cover"
-                                  />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-                                    <PlayCircle className="size-10 text-white" />
-                                  </div>
-                                </div>
-                                <div className="min-w-0 bg-black/35 px-2 py-1.5 text-left">
-                                  <p className="truncate text-xs font-medium text-white">
-                                    {resolveFileName(
-                                      attachment.originalFileName,
-                                      attachment.fileUrl,
-                                    )}
-                                  </p>
-                                  <p className="text-[11px] text-zinc-300">
-                                    Nhấn để xem video
-                                  </p>
-                                </div>
-                              </button>
-                            );
-                          }
-
-                          return (
-                            <button
-                              type="button"
-                              key={`${attachment.fileUrl}-${idx}`}
-                              onClick={() =>
-                                handleDownloadAttachment(attachment)
-                              }
-                              className="flex w-full items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 hover:bg-muted/40"
-                            >
-                              <FileText className="size-4 shrink-0" />
-                              <span className="text-xs truncate text-left">
-                                {resolveFileName(
-                                  attachment.originalFileName,
-                                  attachment.fileUrl,
-                                )}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {message.content && (
-                      <p className="text-sm leading-relaxed wrap-break-word">
-                        {message.content}
-                      </p>
-                    )}
-
-                    {/* Display business card if email is detected and the user is found in the system */}
-                    {emailUser && (
-                      <div className="mt-3 -m-3 p-3 bg-muted/30 rounded-md">
-                        <p className="text-xs text-muted-foreground mb-2 font-medium">
-                          Danh thiếp từ {detectedEmail}
-                        </p>
-                        <BusinessCard
-                          user={emailUser}
-                          relationshipStatus={emailUserStatus}
-                          isModal={false}
-                          variant="compact"
-                          hideActions={
-                            emailUser.id === currentUser?.id ||
-                            (message.isOwn && emailUserStatus === "FRIEND")
-                          }
-                          onAddFriend={handleAddFriend}
-                          onAccept={handleAcceptFriend}
-                          onCancel={handleCancelRequest}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Card>
-
-              {reactionSummary.length > 0 && (
-                <div
+              <div className="relative pb-1">
+                <Card
                   className={cn(
-                    "mt-1 flex flex-wrap gap-1",
-                    message.isOwn ? "justify-end" : "justify-start",
+                    "p-3",
+                    isRecalled
+                      ? "bg-muted/30 border-dashed border-muted-foreground/30"
+                      : message.isOwn
+                        ? "chat-bubble-sent border-0"
+                        : "chat-bubble-received",
+                    message.replyInfo && !isRecalled ? "rounded-t-none" : "",
                   )}
                 >
-                  {reactionSummary.map((reaction) => {
-                    const isMine =
-                      currentUser != null &&
-                      reaction.userIds.includes(currentUser.id);
+                  {isRecalled ? (
+                    <p className="text-sm leading-relaxed italic text-muted-foreground">
+                      Tin nhắn đã được thu hồi
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {attachments.length > 0 && (
+                        <div className="space-y-2">
+                          {attachments.map((attachment, idx) => {
+                            if (isImageAttachment(attachment)) {
+                              return (
+                                <button
+                                  type="button"
+                                  key={`${attachment.fileUrl}-${idx}`}
+                                  onClick={() => openImagePreview(attachment)}
+                                  className="block"
+                                >
+                                  <img
+                                    src={attachment.fileUrl}
+                                    alt="attachment"
+                                    className="rounded-md max-h-52 w-auto object-cover border border-border/40"
+                                  />
+                                </button>
+                              );
+                            }
 
-                    return (
-                      <button
-                        key={reaction.emoji}
-                        type="button"
-                        onClick={() =>
-                          isMine
-                            ? void handleReact(null)
-                            : void handleReact(reaction.emoji)
-                        }
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
-                          isMine
-                            ? "border-primary/40 bg-primary/10"
-                            : "border-border/70 bg-background",
-                        )}
-                        title={isMine ? "Bo cam xuc" : "Tha cam xuc"}
-                      >
-                        <span>{reaction.emoji}</span>
-                        <span>{reaction.count}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                            if (isVideoAttachment(attachment)) {
+                              return (
+                                <button
+                                  type="button"
+                                  key={`${attachment.fileUrl}-${idx}`}
+                                  onClick={() => openVideoPreview(attachment)}
+                                  className="block w-full overflow-hidden rounded-md border border-border/40 bg-zinc-900/70"
+                                >
+                                  <div className="relative h-36 w-full bg-zinc-900">
+                                    <video
+                                      src={attachment.fileUrl}
+                                      preload="metadata"
+                                      muted
+                                      playsInline
+                                      className="pointer-events-none h-full w-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+                                      <PlayCircle className="size-10 text-white" />
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0 bg-black/35 px-2 py-1.5 text-left">
+                                    <p className="truncate text-xs font-medium text-white">
+                                      {resolveFileName(
+                                        attachment.originalFileName,
+                                        attachment.fileUrl,
+                                      )}
+                                    </p>
+                                    <p className="text-[11px] text-zinc-300">
+                                      Nhấn để xem video
+                                    </p>
+                                  </div>
+                                </button>
+                              );
+                            }
 
-            {/* Action buttons — inline next to bubble */}
-            {!isRecalled && (
-              <div
-                ref={menuRef}
-                className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <div className="flex items-center gap-0.5">
-                  {onForward && (
-                    <button
-                      onClick={handleForward}
-                      className="p-1.5 rounded-full hover:bg-muted transition-colors"
-                      title="Chuyển tiếp"
-                    >
-                      <Forward className="size-3.5 text-muted-foreground" />
-                    </button>
+                            return (
+                              <button
+                                type="button"
+                                key={`${attachment.fileUrl}-${idx}`}
+                                onClick={() =>
+                                  handleDownloadAttachment(attachment)
+                                }
+                                className="flex w-full items-center gap-2 rounded-md border border-border/40 px-2 py-1.5 hover:bg-muted/40"
+                              >
+                                <FileText className="size-4 shrink-0" />
+                                <span className="text-xs truncate text-left">
+                                  {resolveFileName(
+                                    attachment.originalFileName,
+                                    attachment.fileUrl,
+                                  )}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {message.content && (
+                        <p className="text-sm leading-relaxed wrap-break-word">
+                          {message.content}
+                        </p>
+                      )}
+
+                      {/* Display business card if email is detected and the user is found in the system */}
+                      {emailUser && (
+                        <div className="mt-3 -m-3 p-3 bg-muted/30 rounded-md">
+                          <p className="text-xs text-muted-foreground mb-2 font-medium">
+                            Danh thiếp từ {detectedEmail}
+                          </p>
+                          <BusinessCard
+                            user={emailUser}
+                            relationshipStatus={emailUserStatus}
+                            isModal={false}
+                            variant="compact"
+                            hideActions={
+                              emailUser.id === currentUser?.id ||
+                              (message.isOwn && emailUserStatus === "FRIEND")
+                            }
+                            onAddFriend={handleAddFriend}
+                            onAccept={handleAcceptFriend}
+                            onCancel={handleCancelRequest}
+                          />
+                        </div>
+                      )}
+                    </div>
                   )}
+                </Card>
+
+                {!isRecalled && (
                   <div
-                    className="relative"
+                    className={cn(
+                      "absolute -bottom-2 z-20 transition-all duration-150",
+                      "opacity-0 scale-95 pointer-events-none",
+                      "group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto",
+                      message.isOwn ? "right-1" : "left-1",
+                    )}
                     onMouseEnter={openReactionPicker}
                     onMouseLeave={closeReactionPickerWithDelay}
                   >
                     <button
                       onClick={handleQuickLike}
                       className={cn(
-                        "p-1.5 rounded-full transition-colors",
+                        "h-6 w-6 rounded-full border border-border/80 bg-background/95 shadow-sm flex items-center justify-center transition-colors",
                         myReaction?.reactionCode === "👍"
-                          ? "bg-primary/15"
+                          ? "border-primary/40 bg-primary/10"
                           : "hover:bg-muted",
                       )}
                       title="Thả cảm xúc"
                     >
                       <ThumbsUp
                         className={cn(
-                          "size-3.5",
+                          "size-3",
                           myReaction?.reactionCode === "👍"
                             ? "text-primary"
                             : "text-muted-foreground",
@@ -843,9 +796,9 @@ const MessageItem = ({
                     </button>
                     <div
                       className={cn(
-                        "absolute z-20 top-full mt-1 rounded-full border bg-popover px-2 py-1 shadow-sm",
+                        "absolute z-20 bottom-full mb-2 rounded-full border border-zinc-700/80 bg-zinc-900/95 px-2 py-1 shadow-xl backdrop-blur-sm",
                         message.isOwn ? "right-0" : "left-0",
-                        "transition-opacity",
+                        "transition-opacity duration-150",
                         isReactionPickerOpen
                           ? "pointer-events-auto opacity-100"
                           : "pointer-events-none opacity-0",
@@ -869,6 +822,67 @@ const MessageItem = ({
                       </div>
                     </div>
                   </div>
+                )}
+              </div>
+
+              {reactionSummary.length > 0 && (
+                <div
+                  className={cn(
+                    "mt-1 flex",
+                    message.isOwn ? "justify-end" : "justify-start",
+                  )}
+                >
+                  <div className="inline-flex items-center gap-1 rounded-full border border-zinc-700/70 bg-zinc-900/90 px-1.5 py-1 text-white shadow-md backdrop-blur-sm">
+                    {reactionSummary.map((reaction) => {
+                      const isMine =
+                        currentUser != null &&
+                        reaction.userIds.includes(currentUser.id);
+
+                      return (
+                        <button
+                          key={reaction.emoji}
+                          type="button"
+                          onClick={() =>
+                            isMine
+                              ? void handleReact(null)
+                              : void handleReact(reaction.emoji)
+                          }
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs transition-colors",
+                            isMine && "bg-white/15",
+                          )}
+                          title={isMine ? "Bo cam xuc" : "Tha cam xuc"}
+                        >
+                          <span className="text-sm leading-none">
+                            {reaction.emoji}
+                          </span>
+                          <span className="font-medium text-zinc-200">
+                            {reaction.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons — inline next to bubble */}
+            {!isRecalled && (
+              <div
+                ref={menuRef}
+                className="relative shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <div className="flex items-center gap-0.5">
+                  {onForward && (
+                    <button
+                      onClick={handleForward}
+                      className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                      title="Chuyển tiếp"
+                    >
+                      <Forward className="size-3.5 text-muted-foreground" />
+                    </button>
+                  )}
                   <button
                     onClick={handleReply}
                     className="p-1.5 rounded-full hover:bg-muted transition-colors"
