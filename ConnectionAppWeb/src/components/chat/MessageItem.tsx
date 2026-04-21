@@ -108,6 +108,7 @@ const MessageItem = ({
   const [showActionDialog, setShowActionDialog] = useState(false);
   const [actionType, setActionType] = useState<ActionType | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
   const [previewVideo, setPreviewVideo] = useState<Attachment | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -130,6 +131,9 @@ const MessageItem = ({
   >("NONE");
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const reactionHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const previewViewportRef = useRef<HTMLDivElement>(null);
   const panStartRef = useRef({ x: 0, y: 0 });
   const pointerStartRef = useRef({ x: 0, y: 0 });
@@ -225,7 +229,27 @@ const MessageItem = ({
   const handlePickReaction = (reactionCode: string) => {
     const nextReaction =
       myReaction?.reactionCode === reactionCode ? null : reactionCode;
+    setIsReactionPickerOpen(false);
     void handleReact(nextReaction);
+  };
+
+  const openReactionPicker = () => {
+    if (reactionHoverTimeoutRef.current) {
+      clearTimeout(reactionHoverTimeoutRef.current);
+      reactionHoverTimeoutRef.current = null;
+    }
+    setIsReactionPickerOpen(true);
+  };
+
+  const closeReactionPickerWithDelay = () => {
+    if (reactionHoverTimeoutRef.current) {
+      clearTimeout(reactionHoverTimeoutRef.current);
+    }
+
+    reactionHoverTimeoutRef.current = setTimeout(() => {
+      setIsReactionPickerOpen(false);
+      reactionHoverTimeoutRef.current = null;
+    }, 160);
   };
 
   // Close menu on outside click
@@ -240,6 +264,14 @@ const MessageItem = ({
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showMenu]);
+
+  useEffect(() => {
+    return () => {
+      if (reactionHoverTimeoutRef.current) {
+        clearTimeout(reactionHoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleMoreClick = () => {
     setShowMenu(false);
@@ -785,7 +817,11 @@ const MessageItem = ({
                       <Forward className="size-3.5 text-muted-foreground" />
                     </button>
                   )}
-                  <div className="relative group/reaction">
+                  <div
+                    className="relative"
+                    onMouseEnter={openReactionPicker}
+                    onMouseLeave={closeReactionPickerWithDelay}
+                  >
                     <button
                       onClick={handleQuickLike}
                       className={cn(
@@ -809,8 +845,10 @@ const MessageItem = ({
                       className={cn(
                         "absolute z-20 top-full mt-1 rounded-full border bg-popover px-2 py-1 shadow-sm",
                         message.isOwn ? "right-0" : "left-0",
-                        "pointer-events-none opacity-0 transition-opacity",
-                        "group-hover/reaction:pointer-events-auto group-hover/reaction:opacity-100",
+                        "transition-opacity",
+                        isReactionPickerOpen
+                          ? "pointer-events-auto opacity-100"
+                          : "pointer-events-none opacity-0",
                       )}
                     >
                       <div className="flex items-center gap-1">
