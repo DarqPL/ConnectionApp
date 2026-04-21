@@ -26,7 +26,7 @@ import VotePollModal from "../components/VotePollModal";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
-import type { Message, Poll } from "../types";
+import type { Message, Poll, Participant } from "../types";
 import { chatService } from "../services/chat.service";
 import { friendService, type BlockStatus } from "../services/friend.service";
 
@@ -767,16 +767,16 @@ const ChatRoomScreen = ({ route }: any) => {
             onClose={() => setIsGroupSidebarOpen(false)}
             groupName={name}
             groupAvatar={avatarUrl}
-            participants={participants || []}
+            participants={currentConversation?.participants || participants || []}
             messages={displayMessages}
             conversation={{
               id: conversationId,
               type: type || "GROUP",
-              participants: participants || [],
+              participants: currentConversation?.participants || participants || [],
             } as any}
             currentUserId={user?.id || 0}
             currentUserRole={
-              participants?.find((p) => p.userId === user?.id)?.role || null
+              (currentConversation?.participants || participants)?.find((p: Participant) => p.userId === user?.id)?.role || null
             }
             onLeaveGroup={async (convId, userId, transferToUserId) => {
               if (transferToUserId) {
@@ -784,6 +784,14 @@ const ChatRoomScreen = ({ route }: any) => {
               }
               await leaveGroup(convId, userId);
               setIsGroupSidebarOpen(false);
+            }}
+            onRoleUpdate={async (memberId, newRole) => {
+              try {
+                await updateMemberRole(conversationId, memberId, newRole);
+              } catch (error) {
+                console.error("Lỗi cập nhật vai trò:", error);
+                Alert.alert("Lỗi", "Không thể cập nhật vai trò thành viên");
+              }
             }}
           />
         )}

@@ -16,7 +16,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../../../theme";
 import { LeaveGroupModal } from "./LeaveGroupModal";
-import type { Message, Attachment, AttachmentType, Conversation } from "../types";
+import { MemberListModal } from "./MemberListModal";
+import type { Message, Attachment, AttachmentType, Conversation, Participant } from "../types";
 
 interface GroupParticipant {
   userId: number;
@@ -40,6 +41,7 @@ interface GroupSidebarProps {
     userId: number,
     transferToUserId?: number,
   ) => Promise<void>;
+  onRoleUpdate?: (memberId: number, newRole: string) => Promise<void>;
 }
 
 interface MediaItem {
@@ -77,10 +79,12 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   currentUserId,
   currentUserRole,
   onLeaveGroup,
+  onRoleUpdate,
 }) => {
   const insets = useSafeAreaInsets();
   const [isPinned, setIsPinned] = useState(true);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showMemberListModal, setShowMemberListModal] = useState(false);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -310,10 +314,19 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
           <View style={styles.sectionGap} />
 
-          {sectionRow(
-            "people-outline",
-            `Xem thành viên (${participants.length})`,
-          )}
+          <TouchableOpacity 
+            style={styles.rowItem} 
+            activeOpacity={0.75}
+            onPress={() => setShowMemberListModal(true)}
+          >
+            <View style={styles.rowLeft}>
+              <Ionicons name="people-outline" size={22} color="#8b939f" />
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowLabel}>Xem thành viên ({participants.length})</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#a3a8b1" />
+          </TouchableOpacity>
           {sectionRow(
             "link-outline",
             "Link nhóm",
@@ -342,7 +355,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
             style={styles.leaveGroupButton}
             onPress={() => setShowLeaveModal(true)}
           >
-            <Ionicons name="exit-outline" size={22} color={COLORS.danger} />
+            <Ionicons name="exit-outline" size={22} color={COLORS.destructive} />
             <Text style={styles.leaveGroupText}>
               {currentUserRole === "OWNER" && participants.length === 1
                 ? "Xóa nhóm"
@@ -363,6 +376,17 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           currentUserId={currentUserId}
           currentUserRole={currentUserRole}
           onLeaveConfirmed={handleLeaveGroupConfirmed}
+        />
+
+        {/* Member List Modal */}
+        <MemberListModal
+          visible={showMemberListModal}
+          onClose={() => setShowMemberListModal(false)}
+          members={conversation?.participants || []}
+          currentUserRole={currentUserRole}
+          currentUserId={currentUserId}
+          conversationId={conversation?.id || 0}
+          onRoleUpdate={onRoleUpdate || (async () => {})}
         />
       </View>
     </Modal>

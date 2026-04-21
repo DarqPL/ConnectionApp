@@ -735,6 +735,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, memberId: number, role: string) => {
       try {
         await chatService.updateMemberRole(conversationId, memberId, role);
+        
+        // Update local state with new role
+        setConversations(prevConversations =>
+          prevConversations.map(conv => {
+            if (conv.id === conversationId) {
+              return {
+                ...conv,
+                participants: conv.participants.map(p =>
+                  p.userId === memberId ? { ...p, role } : p
+                ),
+              };
+            }
+            return conv;
+          })
+        );
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Không thể cập nhật quyền";
