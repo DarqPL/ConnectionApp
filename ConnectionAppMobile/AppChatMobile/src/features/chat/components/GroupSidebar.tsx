@@ -9,12 +9,14 @@ import {
   Image,
   Linking,
   Switch,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../../../theme";
-import type { Message, Attachment, AttachmentType } from "../types";
+import { LeaveGroupModal } from "./LeaveGroupModal";
+import type { Message, Attachment, AttachmentType, Conversation } from "../types";
 
 interface GroupParticipant {
   userId: number;
@@ -30,6 +32,14 @@ interface GroupSidebarProps {
   groupAvatar?: string | null;
   participants: GroupParticipant[];
   messages: Message[];
+  conversation: Conversation | null;
+  currentUserId: number;
+  currentUserRole: string | null;
+  onLeaveGroup: (
+    conversationId: number,
+    userId: number,
+    transferToUserId?: number,
+  ) => Promise<void>;
 }
 
 interface MediaItem {
@@ -63,9 +73,14 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   groupAvatar,
   participants,
   messages,
+  conversation,
+  currentUserId,
+  currentUserRole,
+  onLeaveGroup,
 }) => {
   const insets = useSafeAreaInsets();
   const [isPinned, setIsPinned] = useState(true);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -115,6 +130,24 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
       return;
     }
     await Linking.openURL(url);
+  };
+
+  const handleLeaveGroupConfirmed = async (transferToUserId?: number) => {
+    if (!conversation) return;
+    try {
+      // Call onLeaveGroup with transfer recipient if needed
+      await onLeaveGroup(
+        conversation.id,
+        currentUserId,
+        transferToUserId,
+      );
+      setShowLeaveModal(false);
+      onClose();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Không thể rời khỏi nhóm";
+      Alert.alert("Lỗi", message);
+    }
   };
 
   const renderGroupAvatar = () => {
@@ -301,11 +334,41 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
               thumbColor="#fff"
             />
           </View>
+
+          <View style={styles.sectionGap} />
+
+          {/* Leave Group Button */}
+          <TouchableOpacity
+            style={styles.leaveGroupButton}
+            onPress={() => setShowLeaveModal(true)}
+          >
+            <Ionicons name="exit-outline" size={22} color={COLORS.danger} />
+            <Text style={styles.leaveGroupText}>
+              {currentUserRole === "OWNER" && participants.length === 1
+                ? "Xóa nhóm"
+                : currentUserRole === "OWNER"
+                ? "Chuyển quyền & Rời"
+                : "Rời khỏi nhóm"}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.sectionGap} />
         </ScrollView>
+
+        {/* Leave Group Modal */}
+        <LeaveGroupModal
+          visible={showLeaveModal}
+          onClose={() => setShowLeaveModal(false)}
+          conversation={conversation}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          onLeaveConfirmed={handleLeaveGroupConfirmed}
+        />
       </View>
     </Modal>
   );
 };
+
 
 export default GroupSidebar;
 
@@ -524,5 +587,20 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: "#5f6b7a",
+  },
+  leaveGroupButton: {
+    paddingHorizontal: 14,
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  leaveGroupText: {
+    marginLeft: 14,
+    fontSize: 14,
+    fontWeight: "500",
+    color: COLORS.destructive,
   },
 });

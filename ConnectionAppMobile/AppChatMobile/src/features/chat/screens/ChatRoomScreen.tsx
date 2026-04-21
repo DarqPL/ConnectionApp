@@ -98,6 +98,8 @@ const ChatRoomScreen = ({ route }: any) => {
     recallMessage,
     deleteMessage,
     setCurrentConversation,
+    leaveGroup,
+    updateMemberRole,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -642,6 +644,22 @@ const ChatRoomScreen = ({ route }: any) => {
             groupAvatar={avatarUrl}
             participants={participants || []}
             messages={displayMessages}
+            conversation={{
+              id: conversationId,
+              type: type || "GROUP",
+              participants: participants || [],
+            } as any}
+            currentUserId={user?.id || 0}
+            currentUserRole={
+              participants?.find((p) => p.userId === user?.id)?.role || null
+            }
+            onLeaveGroup={async (convId, userId, transferToUserId) => {
+              if (transferToUserId) {
+                await updateMemberRole(convId, transferToUserId, "OWNER");
+              }
+              await leaveGroup(convId, userId);
+              setIsGroupSidebarOpen(false);
+            }}
           />
         )}
       </View>

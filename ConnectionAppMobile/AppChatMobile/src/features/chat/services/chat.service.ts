@@ -269,6 +269,40 @@ export class ChatService {
     return (await response.json()) as Conversation;
   }
 
+  async leaveGroup(conversationId: number, userId: number): Promise<void> {
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/members/${userId}`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể rời khỏi nhóm");
+    }
+  }
+
+  async updateMemberRole(
+    conversationId: number,
+    memberId: number,
+    role: string,
+  ): Promise<void> {
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/members/${memberId}/role`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể cập nhật quyền");
+    }
+  }
+
   async aiRewriteDraft(payload: {
     conversationId: number;
     draftContent: string;
