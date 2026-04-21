@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import UserAvatar from "./UserAvatar";
 import { MemberRoleDialog } from "./MemberRoleDialog";
-import { Shield, Zap } from "lucide-react";
+import { Shield, Zap, UserMinus } from "lucide-react";
 
 interface MemberListDialogProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ interface MemberListDialogProps {
   conversationId: number;
   onClose: () => void;
   onRoleUpdate: (memberId: number, newRole: string) => Promise<void>;
+  onRemoveMember: (memberId: number) => Promise<void>;
 }
 
 const getRoleIcon = (role: string) => {
@@ -48,6 +49,7 @@ export const MemberListDialog = ({
   conversationId,
   onClose,
   onRoleUpdate,
+  onRemoveMember,
 }: MemberListDialogProps) => {
   const [selectedMember, setSelectedMember] = useState<Participant | null>(null);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
@@ -61,10 +63,31 @@ export const MemberListDialog = ({
   });
 
   const handleMemberClick = (member: Participant) => {
-    if (canManageRoles) {
+    if (canManageRoles && member.userId !== currentUserId) {
       setSelectedMember(member);
       setIsRoleDialogOpen(true);
     }
+  };
+
+  const handleRemoveClick = async (e: React.MouseEvent, member: Participant) => {
+    e.stopPropagation();
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${member.displayName} khỏi nhóm?`)) {
+      return;
+    }
+
+    try {
+      await onRemoveMember(member.userId);
+    } catch (err) {
+      console.error("Failed to remove member:", err);
+      alert("Không thể xóa thành viên");
+    }
+  };
+
+  const canRemove = (member: Participant) => {
+    if (member.userId === currentUserId) return false;
+    if (currentUserRole === "OWNER") return true;
+    if (currentUserRole === "CO_OWNER" && member.role === "MEMBER") return true;
+    return false;
   };
 
   return (
@@ -111,8 +134,21 @@ export const MemberListDialog = ({
                   </div>
                 </div>
 
-                <div className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getRoleBadgeColor(member.role)}`}>
-                  {getRoleLabel(member.role)}
+                <div className="flex items-center gap-2">
+                  <div className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getRoleBadgeColor(member.role)}`}>
+                    {getRoleLabel(member.role)}
+                  </div>
+                  
+                  {canRemove(member) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => handleRemoveClick(e, member)}
+                    >
+                      <UserMinus className="size-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
