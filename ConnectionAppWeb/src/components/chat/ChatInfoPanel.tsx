@@ -171,6 +171,17 @@ const ChatInfoPanel = ({
     }
   };
 
+  const handleRemoveMember = async (memberId: number) => {
+    try {
+      await chatService.leaveGroup(chat.id, memberId);
+      toast.success("Đã xóa thành viên khỏi nhóm");
+    } catch (error) {
+      console.error("Lỗi xóa thành viên:", error);
+      toast.error("Không thể xóa thành viên");
+      throw error;
+    }
+  };
+
 
   const allMedia = useMemo(() => {
     const media: { src: string; width: number; height: number; type: "image" }[] = [];
@@ -597,6 +608,7 @@ const ChatInfoPanel = ({
         conversationId={chat.id}
         onClose={() => setShowMemberListDialog(false)}
         onRoleUpdate={handleUpdateMemberRole}
+        onRemoveMember={handleRemoveMember}
       />
 
       {/* Add Member Dialog */}

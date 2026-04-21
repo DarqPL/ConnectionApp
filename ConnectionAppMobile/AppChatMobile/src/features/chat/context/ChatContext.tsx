@@ -41,6 +41,7 @@ interface ChatContextType {
   deleteMessage: (messageId: string) => Promise<void>;
   pinMessage: (conversationId: number, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
+  removeMemberFromGroup: (conversationId: number, memberId: number) => Promise<void>;
   setCurrentConversation: (
     conversationId: number | null,
     sourceConversationId?: number,
@@ -361,25 +362,99 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, []);
 
-  const onConversationUpdate = useCallback((payload: any) => {
-    console.log("[ChatContext] Conversation update:", payload.type, "for:", payload.conversationId);
-    
-    if (payload.type === "PIN_UPDATE") {
-      chatService.getConversation(payload.conversationId)
-        .then(updatedConvo => {
-          setConversations(prev => prev.map(c => c.id === updatedConvo.id ? updatedConvo : c));
+  const onConversationUpdate = useCallback((data: any) => {
+    // data is MessageUpdateResponse: { type: string, payload: any }
+    const type = data.type;
+    const payload = data.payload;
+
+    if (!payload || !payload.conversationId) {
+      console.log("[ChatContext] Invalid conversation update:", data);
+      return;
+    }
+
+    const conversationId = payload.conversationId;
+    console.log(`[ChatContext] Update event: ${type} for conv: ${conversationId}`);
+
+    if (type === "PIN_UPDATE") {
+      chatService
+        .getConversation(conversationId)
+        .then((updatedConvo) => {
+          setConversations((prev) =>
+            prev.map((c) => (Number(c.id) === Number(updatedConvo.id) ? updatedConvo : c)),
+          );
         })
         .catch(console.error);
       return;
     }
 
-    if (payload.conversationId && payload.participants) {
-      setConversations(prev => prev.map(c => {
-        if (c.id === payload.conversationId) {
-          return { ...c, participants: payload.participants };
+    if (type === "MEMBER_JOINED" || type === "MEMBER_ADDED") {
+      const addedParticipants = payload.participants;
+      if (addedParticipants && Array.isArray(addedParticipants)) {
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (Number(c.id) === Number(conversationId)) {
+              return {
+                ...c,
+                participants: addedParticipants,
+              };
+            }
+            return c;
+          })
+        );
+      } else {
+        const newParticipant = payload.newMember;
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (Number(c.id) === Number(conversationId)) {
+              const participantToAdd = newParticipant || {
+                userId: payload.joinedUserId,
+                displayName: "Thành viên mới",
+                role: "MEMBER",
+              };
+
+              const exists = c.participants.some(
+                (p) => Number(p.userId) === Number(participantToAdd.userId)
+              );
+              if (exists) return c;
+
+              return {
+                ...c,
+                participants: [...c.participants, participantToAdd],
+              };
+            }
+            return c;
+          }),
+        );
+      }
+      return;
+    }
+
+    if (type === "MEMBER_LEFT") {
+      const leftUserId = payload.leftUserId;
+
+      // If current user left, remove from list
+      if (Number(leftUserId) === Number(userIdRef.current)) {
+        console.log("[ChatContext] Current user removed:", conversationId);
+        setConversations((prev) => prev.filter((c) => Number(c.id) !== Number(conversationId)));
+        if (Number(currentConversationRef.current) === Number(conversationId)) {
+          setCurrentConversationId(null);
+          setCurrentMessages([]);
         }
-        return c;
-      }));
+        return;
+      }
+
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (Number(c.id) === Number(conversationId)) {
+            return {
+              ...c,
+              participants: c.participants.filter((p) => Number(p.userId) !== Number(leftUserId)),
+            };
+          }
+          return c;
+        }),
+      );
+      return;
     }
   }, []);
 
@@ -485,7 +560,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   ]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
- 
+
   // ─── Update handlers ref when callbacks change (shouldn't happen with empty deps) ───
   useEffect(() => {
     if (chatSocketService.isConnected) {
@@ -515,7 +590,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   ]);
 
   // ─── Regular methods ───────────────────────────────────────────────────────
- 
+
   const fetchMessages = useCallback(async (conversationId: number) => {
     const fetchVersion = ++messageFetchVersionRef.current;
     currentConversationRef.current = conversationId;
@@ -535,7 +610,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       setCurrentMessages(data);
       setCurrentConversationId(conversationId);
       // Mark as read
-      chatService.markAsRead(conversationId).catch(() => {});
+      chatService.markAsRead(conversationId).catch(() => { });
       setConversations((prev) =>
         prev.map((c) =>
           c.id === conversationId ? { ...c, unreadCount: 0 } : c,
@@ -590,6 +665,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const removeMemberFromGroup = useCallback(async (conversationId: number, memberId: number) => {
+    setError(null);
+    try {
+      console.log(`[ChatContext] Calling API to remove member ${memberId} from ${conversationId}`);
+      await chatService.removeMemberFromGroup(conversationId, memberId);
+      console.log(`[ChatContext] API Success! Updating local state...`);
+      
+      // Update the conversation participants in the official state
+      setConversations((prev) => {
+        const next = prev.map((c) => {
+          if (Number(c.id) === Number(conversationId)) {
+            const newList = c.participants.filter((p) => Number(p.userId) !== Number(memberId));
+            console.log(`[ChatContext] Updating conv ${c.id}: participants count ${c.participants.length} -> ${newList.length}`);
+            return {
+              ...c,
+              participants: newList,
+            };
+          }
+          return c;
+        });
+        return [...next]; // Force a new array reference
+      });
+    } catch (err) {
+      console.error("[ChatContext] removeMemberFromGroup Error:", err);
+      const msg = err instanceof Error ? err.message : "Xóa thành viên thất bại";
+      setError(msg);
+      throw err;
+    }
+  }, []);
+
   const sendMessage = useCallback(
     async (
       conversationId: number,
@@ -604,14 +709,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           files.length === 0
             ? []
             : await Promise.all(
-                files.map((file) =>
-                  chatService.uploadAttachment({
-                    uri: file.uri,
-                    name: file.name,
-                    mimeType: file.mimeType,
-                  }),
-                ),
-              );
+              files.map((file) =>
+                chatService.uploadAttachment({
+                  uri: file.uri,
+                  name: file.name,
+                  mimeType: file.mimeType,
+                }),
+              ),
+            );
 
         const normalizedContent = content.trim();
         const newMsg = await chatService.sendMessage(
@@ -630,11 +735,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           prev.map((c) =>
             c.id === conversationId
               ? {
-                  ...c,
-                  lastMessageContent: preview,
-                  lastMessageAt: new Date().toISOString(),
-                  unreadCount: 0,
-                }
+                ...c,
+                lastMessageContent: preview,
+                lastMessageAt: new Date().toISOString(),
+                unreadCount: 0,
+              }
               : c,
           ),
         );
@@ -749,7 +854,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, memberId: number) => {
       try {
         await chatService.addMemberToGroup(conversationId, memberId);
-        // Participant list will be updated via WebSocket, but we can also manually refresh if needed
+        
+        // Refresh conversation to get latest participants list
+        const updatedConvo = await chatService.getConversation(conversationId);
+        setConversations(prev =>
+          prev.map(c => c.id === conversationId ? updatedConvo : c)
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Không thể thêm thành viên";
         setError(msg);
@@ -763,7 +873,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, memberId: number, role: string) => {
       try {
         await chatService.updateMemberRole(conversationId, memberId, role);
-        
+
         // Update local state with new role
         setConversations(prevConversations =>
           prevConversations.map(conv => {
@@ -803,6 +913,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     deleteMessage,
     pinMessage,
     unpinMessage,
+    removeMemberFromGroup,
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,

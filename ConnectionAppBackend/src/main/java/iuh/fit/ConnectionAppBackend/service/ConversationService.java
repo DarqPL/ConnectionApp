@@ -280,19 +280,43 @@ public class ConversationService {
     }
 
     /**
-     * Remove user from conversation
+     * Remove user from conversation or Leave conversation
+     * @param conversationId
+     * @param requesterId the user who initiated the action
+     * @param targetUserId the user to be removed (or leaving)
      */
     @Transactional
-    public void removeUserFromConversation(Long conversationId, Long userId) {
+    public void removeUserFromConversation(Long conversationId, Long requesterId, Long targetUserId) {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
 
-        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
-        if (!isMember) {
-            throw new BadRequestException("User is not a member of this conversation");
+        // 1. Verify requester is a member
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, requesterId)
+                .orElseThrow(() -> new BadRequestException("You are not a member of this conversation"));
+
+        // 2. If removing someone else, check permissions
+        if (!requesterId.equals(targetUserId)) {
+            if (requester.getRole() != ConversationRole.OWNER && requester.getRole() != ConversationRole.CO_OWNER) {
+                throw new BadRequestException("Only owner or co-owners can remove members");
+            }
+            
+            // Cannot remove the owner
+            ConversationUser targetMember = conversationUserRepository.findByConversationIdAndUserId(conversationId, targetUserId)
+                    .orElseThrow(() -> new BadRequestException("Target user is not a member of this conversation"));
+            
+            if (targetMember.getRole() == ConversationRole.OWNER) {
+                throw new BadRequestException("Cannot remove the owner of the group");
+            }
+
+            // Co-owners cannot remove other co-owners if requester is just co-owner? 
+            // Usually, only OWNER can remove CO_OWNER.
+            if (requester.getRole() == ConversationRole.CO_OWNER && targetMember.getRole() == ConversationRole.CO_OWNER) {
+                 throw new BadRequestException("Co-owners cannot remove other co-owners");
+            }
         }
 
-        conversationUserRepository.deleteByConversationIdAndUserId(conversationId, userId);
+        // 3. Perform removal
+        conversationUserRepository.deleteByConversationIdAndUserId(conversationId, targetUserId);
 
         // Check remaining members
         List<ConversationUser> remainingMembers = conversationUserRepository.findByConversationId(conversationId);
@@ -304,26 +328,32 @@ public class ConversationService {
             return;
         }
 
-        // 🔥 Send real-time notification to all remaining members
-        if (!remainingMembers.isEmpty()) {
-            List<ConversationUserResponse> updatedParticipants = remainingMembers.stream()
-                    .map(this::mapToConversationUserResponse)
-                    .collect(Collectors.toList());
+        // 🔥 Send real-time notification to all remaining members (and the removed user to clear their list?)
+        // The removed user should also be notified to hide the conversation.
+        
+        List<ConversationUserResponse> updatedParticipants = remainingMembers.stream()
+                .map(this::mapToConversationUserResponse)
+                .collect(Collectors.toList());
 
-            Map<String, Object> update = new java.util.HashMap<>();
-            update.put("conversationId", conversationId);
-            update.put("type", "MEMBER_LEFT");
-            update.put("participants", updatedParticipants);
-            update.put("leftUserId", userId); // ID of user who left
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "MEMBER_LEFT");
+        update.put("participants", updatedParticipants);
+        update.put("leftUserId", targetUserId); // ID of user who left or was removed
 
-            // Notify all remaining members
-            for (ConversationUser member : remainingMembers) {
-                messagingTemplate.convertAndSend(
-                        "/topic/user." + member.getUser().getId() + "/conversation-updates",
-                        update
-                );
-            }
+        // Notify all remaining members
+        for (ConversationUser member : remainingMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                    update
+            );
         }
+        
+        // Notify the removed user too
+        messagingTemplate.convertAndSend(
+                "/topic/user." + targetUserId + "/conversation-updates",
+                update
+        );
     }
 
     /**

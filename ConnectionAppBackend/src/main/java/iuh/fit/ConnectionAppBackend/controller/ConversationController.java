@@ -155,11 +155,7 @@ public class ConversationController {
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
 
-        if (!userId.equals(memberId)) {
-            conversationService.removeUserFromConversation(conversationId, userId);
-        } else {
-            conversationService.removeUserFromConversation(conversationId, memberId);
-        }
+        conversationService.removeUserFromConversation(conversationId, userId, memberId);
 
         return ResponseEntity.noContent().build();
     }

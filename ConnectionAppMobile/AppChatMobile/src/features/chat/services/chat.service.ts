@@ -311,7 +311,7 @@ export class ChatService {
     }
   }
 
-  async leaveGroup(conversationId: number, userId: number): Promise<void> {
+  async removeMemberFromGroup(conversationId: number, userId: number): Promise<void> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}/members/${userId}`,
       {
@@ -320,8 +320,12 @@ export class ChatService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Không thể rời khỏi nhóm");
+      throw await this.parseError(response, "Không thể xóa thành viên");
     }
+  }
+
+  async leaveGroup(conversationId: number, userId: number): Promise<void> {
+    return this.removeMemberFromGroup(conversationId, userId);
   }
 
   async updateMemberRole(
