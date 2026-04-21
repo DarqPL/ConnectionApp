@@ -18,6 +18,7 @@ export interface ChatSocketHandlers {
     remainingMinutes?: number;
     lockUntil?: string;
   }) => void;
+  onPinUpdate?: (payload: { conversationId: number; type: string }) => void;
   onConnectionError?: (error: string) => void;
 }
 
@@ -127,6 +128,15 @@ class ChatSocketService {
           }
         });
 
+        client.subscribe(`/topic/user.${userId}/poll`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onIncomingMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse poll update:", e);
+          }
+        });
+
         // NEW: Subscribe to typing notifications
         client.subscribe(`/topic/user.${userId}/typing`, (stompFrame) => {
           try {
@@ -161,6 +171,20 @@ class ChatSocketService {
             console.error("[Socket] Failed to parse security notification:", e);
           }
         });
+
+        client.subscribe(
+          `/topic/user.${userId}/conversation-updates`,
+          (stompFrame) => {
+            try {
+              const payload = JSON.parse(stompFrame.body);
+              if (payload.type === "PIN_UPDATE") {
+                this.handlersRef?.onPinUpdate?.(payload);
+              }
+            } catch (e) {
+              console.error("[Socket] Failed to parse conversation update:", e);
+            }
+          },
+        );
       },
 
       onStompError: (frame) => {

@@ -16,7 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { ResizeMode, Video } from "expo-av";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
-import type { Attachment, ReplyInfo } from "../types";
+import PollMessage from "./PollMessage";
+import type { Attachment, ReplyInfo, Poll } from "../types";
 import {
   detectEmailInMessage,
   isValidEmailFormat,
@@ -32,6 +33,7 @@ import type { User } from "../../auth/services/auth.service";
 interface Props {
   message: string;
   attachments?: Attachment[];
+  poll?: Poll | null;
   isMe?: boolean;
   senderName?: string;
   avatarUrl?: string | null;
@@ -40,6 +42,7 @@ interface Props {
   isGroup?: boolean;
   onLongPress?: () => void;
   onReplyPreviewPress?: () => void;
+  onPollVote?: () => void;
   replyInfo?: ReplyInfo | null;
   isHighlighted?: boolean;
 }
@@ -118,8 +121,10 @@ const MessageBubble: React.FC<Props> = ({
   isGroup = false,
   onLongPress,
   onReplyPreviewPress,
+  onPollVote,
   replyInfo,
   isHighlighted = false,
+  poll,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
@@ -503,7 +508,10 @@ const MessageBubble: React.FC<Props> = ({
   };
 
   return (
-    <View style={[styles.row, isMe ? styles.rowRight : styles.rowLeft]}>
+    <View style={[
+      styles.row, 
+      poll ? styles.rowCenter : (isMe ? styles.rowRight : styles.rowLeft)
+    ]}>
       {/* Avatar for received messages in groups */}
       {!isMe && isGroup && (
         <Image source={{ uri: avatarUrl || FALLBACK }} style={styles.avatar} />
@@ -520,7 +528,7 @@ const MessageBubble: React.FC<Props> = ({
           onLongPress={!isRecalled ? onLongPress : undefined}
           style={[
             styles.bubble,
-            isMe ? styles.bubbleSent : styles.bubbleReceived,
+            poll ? styles.bubblePoll : (isMe ? styles.bubbleSent : styles.bubbleReceived),
             isRecalled && styles.bubbleRecalled,
             replyInfo && !isRecalled && styles.bubbleWithReply,
             isHighlighted && styles.bubbleHighlighted,
@@ -672,6 +680,14 @@ const MessageBubble: React.FC<Props> = ({
                 >
                   {message}
                 </Text>
+              )}
+
+              {poll && (
+                <PollMessage 
+                  poll={poll} 
+                  onVote={onPollVote || (() => {})} 
+                  isMe={isMe} 
+                />
               )}
 
               {/* Business card — shown when message contains a known email */}
@@ -827,6 +843,9 @@ const styles = StyleSheet.create({
   },
   rowRight: {
     justifyContent: "flex-end",
+  },
+  rowCenter: {
+    justifyContent: "center",
   },
   col: {
     maxWidth: "75%",
@@ -1042,6 +1061,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 1,
+  },
+  bubblePoll: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#ede9fe",
+    width: "85%",
+    paddingHorizontal: 0, // Let PollMessage handle padding
+    paddingVertical: 0,
   },
   bubbleRecalled: {
     backgroundColor: COLORS.backgroundMuted,

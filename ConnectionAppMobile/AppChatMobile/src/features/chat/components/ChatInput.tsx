@@ -37,6 +37,7 @@ interface ChatInputProps {
   disabled?: boolean;
   replyTo?: Message | null;
   onCancelReply?: () => void;
+  onOpenPollCreator?: () => void;
 }
 
 const MAX_FILES = 5;
@@ -82,6 +83,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   disabled = false,
   replyTo = null,
   onCancelReply,
+  onOpenPollCreator,
 }) => {
   const { notifyTyping, notifyStoppedTyping } = useChat();
   const [text, setText] = useState("");
@@ -477,6 +479,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
           >
             <Ionicons name="happy-outline" size={24} color={COLORS.textMuted} />
           </TouchableOpacity>
+
+          {onOpenPollCreator && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={onOpenPollCreator}
+              disabled={isSending || disabled}
+            >
+              <Ionicons
+                name="stats-chart-outline"
+                size={22}
+                color={COLORS.textMuted}
+              />
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.iconBtn}

@@ -125,6 +125,30 @@ export class ChatService {
     return data.content ?? [];
   }
 
+  async getConversation(id: number): Promise<Conversation> {
+    const response = await authService.authFetch(`/conversations/${id}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không tải được hội thoại");
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
+  async getMessage(id: string): Promise<Message> {
+    const response = await authService.authFetch(`/messages/${id}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không tải được tin nhắn");
+    }
+
+    return (await response.json()) as Message;
+  }
+
   async getMessages(
     conversationId: number,
     page = 0,
@@ -157,6 +181,7 @@ export class ChatService {
     content: string,
     parentId?: string | null,
     attachments: Attachment[] = [],
+    poll?: any,
   ): Promise<Message> {
     const response = await authService.authFetch("/messages", {
       method: "POST",
@@ -168,6 +193,7 @@ export class ChatService {
         content,
         parentId: parentId ?? null,
         attachments,
+        poll,
       }),
     });
 
@@ -288,6 +314,71 @@ export class ChatService {
     }
 
     return (await response.json()) as AiRewriteResponse;
+  }
+
+  async votePoll(messageId: string, optionIds: string[]): Promise<Message> {
+    const query = new URLSearchParams({
+      optionIds: optionIds.join(","),
+    });
+
+    const response = await authService.authFetch(
+      `/messages/${messageId}/vote?${query.toString()}`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Bình chọn thất bại");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async closePoll(messageId: string): Promise<Message> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/poll/close`,
+      {
+        method: "PUT",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Kết thúc bình chọn thất bại");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async pinMessage(conversationId: number, messageId: string): Promise<Message> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/pin?conversationId=${conversationId}`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể ghim tin nhắn");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async unpinMessage(
+    conversationId: number,
+    messageId: string,
+  ): Promise<void> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/unpin?conversationId=${conversationId}`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể bỏ ghim tin nhắn");
+    }
   }
 }
 
