@@ -8,8 +8,8 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
-  ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,7 +20,7 @@ import { friendService } from "../services/friend.service";
 import { chatService } from "../services/chat.service";
 
 // Local item type for selection
-interface SelectableFriend extends Friend {}
+interface SelectableFriend extends Friend { }
 
 interface AddMemberModalProps {
   visible: boolean;
@@ -28,8 +28,6 @@ interface AddMemberModalProps {
   conversation: Conversation | null;
   onMemberAdded?: () => void;
 }
-
-const FALLBACK_AVATAR = "https://i.pravatar.cc/150?img=10";
 
 const AddMemberModal: React.FC<AddMemberModalProps> = ({
   visible,
@@ -43,12 +41,6 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searching, setSearching] = useState(false);
-
-  // Get existing member IDs
-  const existingMemberIds = new Set(
-    conversation?.participants.map((p) => p.userId) || []
-  );
 
   // Load friends on mount
   useEffect(() => {
@@ -56,11 +48,20 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
 
     const loadFriends = async () => {
       try {
+        console.log("[AddMemberModal] Loading friends...");
         setLoading(true);
         const friendsList = await friendService.getFriends();
-        setFriends(friendsList);
+        console.log(`[AddMemberModal] Loaded ${friendsList?.length || 0} friends`);
+
+        // Ensure friendsList is an array
+        if (Array.isArray(friendsList)) {
+          setFriends(friendsList);
+        } else {
+          console.warn("[AddMemberModal] getFriends returned non-array:", friendsList);
+          setFriends([]);
+        }
       } catch (error) {
-        console.error("Error loading friends:", error);
+        console.error("[AddMemberModal] Error loading friends:", error);
         Alert.alert("Lỗi", "Không thể tải danh sách bạn");
       } finally {
         setLoading(false);
@@ -69,6 +70,11 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
 
     loadFriends();
   }, [visible]);
+
+  const isAlreadyInGroup = (friendId: number) => {
+    if (!conversation?.participants) return false;
+    return conversation.participants.some((p) => Number(p.userId) === Number(friendId));
+  };
 
   const toggleMember = (memberId: number) => {
     setSelectedMembers((prev) =>
@@ -87,18 +93,21 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
     setIsSubmitting(true);
     try {
       if (!conversation) return;
-      
+
+      console.log(`[AddMemberModal] Adding ${selectedMembers.length} members to group: ${conversation.id}`);
+
       for (const memberId of selectedMembers) {
         await chatService.addMemberToGroup(conversation.id, memberId);
       }
+
       Alert.alert("Thành công", `Đã thêm ${selectedMembers.length} thành viên`);
       setSelectedMembers([]);
       setSearchQuery("");
       onMemberAdded?.();
       onClose();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Không thể thêm thành viên";
+      console.error("[AddMemberModal] Error adding members:", error);
+      const message = error instanceof Error ? error.message : "Không thể thêm thành viên";
       Alert.alert("Lỗi", message);
     } finally {
       setIsSubmitting(false);
@@ -107,14 +116,14 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
 
   const filteredFriends = searchQuery.trim()
     ? friends.filter(
-        (f) =>
-          f.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          f.username.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      (f) =>
+        f.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        f.username?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : friends;
 
   const availableFriends = filteredFriends.filter(
-    (f) => !existingMemberIds.has(f.friendId)
+    (f) => !isAlreadyInGroup(f.friendId)
   );
 
   const renderFriendItem = ({ item }: { item: SelectableFriend }) => (
@@ -137,18 +146,20 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
       </View>
 
       <View style={styles.avatarWrap}>
-        <View
-          style={[
-            styles.avatar,
-            { backgroundColor: COLORS.secondary + "40" },
-          ]}
-        >
-          <Ionicons
-            name="person-circle-outline"
-            size={32}
-            color={COLORS.primary}
-          />
-        </View>
+        {item.avatarUrl ? (
+          <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+        ) : (
+          <View
+            style={[
+              styles.avatar,
+              { backgroundColor: COLORS.primary + "10" },
+            ]}
+          >
+            <Text style={styles.avatarText}>
+              {item.displayName?.charAt(0).toUpperCase() || "?"}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.friendInfo}>
@@ -186,7 +197,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             <Text style={styles.headerTitle}>Thêm thành viên</Text>
             {selectedMembers.length > 0 && (
               <Text style={styles.headerSubtitle}>
-                Đã chọn {selectedMembers.length}
+                Đã chọn {selectedMembers.length} thành viên
               </Text>
             )}
           </View>
@@ -197,13 +208,13 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
           <Ionicons
             name="search"
             size={18}
-            color={COLORS.muted}
+            color={COLORS.background}
             style={styles.searchIcon}
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm theo tên..."
-            placeholderTextColor={COLORS.muted}
+            placeholder="Tìm kiếm theo tên hoặc username..."
+            placeholderTextColor={COLORS.background}
             value={searchQuery}
             onChangeText={setSearchQuery}
             editable={!isSubmitting}
@@ -213,16 +224,16 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
               onPress={() => setSearchQuery("")}
               style={styles.clearButton}
             >
-              <Ionicons name="close-circle" size={18} color={COLORS.muted} />
+              <Ionicons name="close-circle" size={18} color={COLORS.background} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Friend List */}
-        {loading || searching ? (
+        {loading ? (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Đang tải...</Text>
+            <Text style={styles.loadingText}>Đang tải danh sách bạn bè...</Text>
           </View>
         ) : availableFriends.length > 0 ? (
           <FlatList
@@ -237,28 +248,17 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
           <View style={styles.centerContainer}>
             <Ionicons
               name="people-outline"
-              size={40}
-              color={COLORS.muted + "40"}
+              size={64}
+              color={COLORS.background + "40"}
             />
             <Text style={styles.emptyText}>
-              {searchQuery ? "Không tìm thấy bạn bè nào" : "Không có bạn bè khả dụng"}
+              {searchQuery ? "Không tìm thấy bạn bè nào" : "Không có bạn bè khả dụng để thêm"}
             </Text>
           </View>
         )}
 
-        {/* Selected Members Info */}
-        {selectedMembers.length > 0 && (
-          <View style={styles.selectedInfo}>
-            <Text style={styles.selectedText}>
-              Đã chọn {selectedMembers.length} thành viên
-            </Text>
-          </View>
-        )}
-
-        {/* Action Buttons */}
-        <View
-          style={[styles.footerButtons, { paddingBottom: insets.bottom + 12 }]}
-        >
+        {/* Footer */}
+        <View style={styles.footerButtons}>
           <TouchableOpacity
             style={[styles.button, styles.cancelButton]}
             onPress={onClose}
@@ -270,7 +270,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             style={[
               styles.button,
               styles.confirmButton,
-              selectedMembers.length === 0 && styles.confirmButtonDisabled,
+              (selectedMembers.length === 0 || isSubmitting) && styles.confirmButtonDisabled,
             ]}
             onPress={handleAddMembers}
             disabled={selectedMembers.length === 0 || isSubmitting}
@@ -278,7 +278,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
             {isSubmitting ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.confirmButtonText}>Thêm thành viên</Text>
+              <Text style={styles.confirmButtonText}>Thêm vào nhóm</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: COLORS.background,
     borderWidth: 1,
     borderColor: COLORS.border + "40",
   },
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     fontSize: 14,
-    color: COLORS.foreground,
+    color: COLORS.background,
   },
   clearButton: {
     padding: 6,
@@ -379,54 +379,49 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.primary,
+  },
   friendInfo: {
     flex: 1,
   },
   friendName: {
     fontSize: 14,
     fontWeight: "500",
-    color: COLORS.foreground,
+    color: COLORS.background,
   },
   friendEmail: {
     fontSize: 12,
-    color: COLORS.muted,
+    color: COLORS.background,
     marginTop: 2,
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 32,
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: COLORS.background,
     marginTop: 12,
   },
   emptyText: {
     fontSize: 14,
-    color: COLORS.muted,
+    color: COLORS.background,
     marginTop: 12,
     textAlign: "center",
-  },
-  selectedInfo: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.primary + "10",
-    borderTopWidth: 1,
-    borderTopColor: COLORS.primary + "30",
-  },
-  selectedText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: COLORS.primary,
   },
   footerButtons: {
     flexDirection: "row",
     gap: 12,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: COLORS.border + "20",
+    backgroundColor: COLORS.background,
   },
   button: {
     flex: 1,
@@ -438,12 +433,12 @@ const styles = StyleSheet.create({
   cancelButton: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: COLORS.background,
   },
   cancelButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.foreground,
+    color: COLORS.background,
   },
   confirmButton: {
     backgroundColor: COLORS.primary,

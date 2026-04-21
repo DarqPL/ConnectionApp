@@ -44,6 +44,7 @@ interface GroupSidebarProps {
     transferToUserId?: number,
   ) => Promise<void>;
   onRoleUpdate?: (memberId: number, newRole: string) => Promise<void>;
+  onRemoveMember: (memberId: number) => Promise<void>;
 }
 
 interface MediaItem {
@@ -82,6 +83,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   currentUserRole,
   onLeaveGroup,
   onRoleUpdate,
+  onRemoveMember,
 }) => {
   const insets = useSafeAreaInsets();
   const [isPinned, setIsPinned] = useState(true);
@@ -431,6 +433,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           currentUserId={currentUserId}
           conversationId={conversation?.id || 0}
           onRoleUpdate={onRoleUpdate || (async () => {})}
+          onRemoveMember={onRemoveMember}
         />
 
         {/* Add Member Modal */}

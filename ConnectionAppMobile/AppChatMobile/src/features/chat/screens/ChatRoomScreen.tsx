@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import {
   View,
   FlatList,
@@ -106,6 +106,7 @@ const ChatRoomScreen = ({ route }: any) => {
     setCurrentConversation,
     leaveGroup,
     updateMemberRole,
+    removeMemberFromGroup,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -135,7 +136,14 @@ const ChatRoomScreen = ({ route }: any) => {
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
 
-  const currentConversation = conversations.find((c) => c.id === conversationId);
+  const currentConversation = conversations.find((c) => Number(c.id) === Number(conversationId));
+
+  const currentParticipants = useMemo(() => {
+    if (currentConversation && currentConversation.participants) {
+      return currentConversation.participants;
+    }
+    return participants || [];
+  }, [currentConversation]);
 
   useEffect(() => {
     if (!currentConversation?.pinnedMessageIds) {
@@ -498,8 +506,8 @@ const ChatRoomScreen = ({ route }: any) => {
     }
   };
 
-  const handleRecallMessage = (msgId: string) => {
-    Alert.alert("Thu hồi hoặc xóa", "Bạn muốn làm gì với tin nhắn này?", [
+  const handleRecallMessage = (msgId: string, isOwnMessage: boolean) => {
+    const options: any[] = [
       { text: "Hủy", style: "cancel" },
       {
         text: "Xóa ở phía tôi",
@@ -513,7 +521,10 @@ const ChatRoomScreen = ({ route }: any) => {
           });
         },
       },
-      {
+    ];
+
+    if (isOwnMessage) {
+      options.push({
         text: "Thu hồi từ tất cả",
         style: "destructive",
         onPress: () => {
@@ -524,19 +535,25 @@ const ChatRoomScreen = ({ route }: any) => {
             );
           });
         },
-      },
-    ]);
+      });
+    }
+
+    Alert.alert(
+      isOwnMessage ? "Thu hồi hoặc xóa" : "Xóa tin nhắn",
+      isOwnMessage 
+        ? "Bạn muốn làm gì với tin nhắn này?" 
+        : "Tin nhắn này sẽ bị xóa khỏi lịch sử chat của bạn.",
+      options
+    );
   };
 
   const handleMessageLongPress = (item: Message) => {
     if (item.recalledAt) return;
 
     const isOwnMessage = item.senderInfo?.senderId === user?.id;
-    const currentConversation = conversations.find(
-      (c) => c.id === conversationId,
-    );
-    const pinnedIds = currentConversation?.pinnedMessageIds
-      ? currentConversation.pinnedMessageIds.split(",")
+    const currentConv = conversations.find((c) => c.id === conversationId);
+    const pinnedIds = currentConv?.pinnedMessageIds
+      ? currentConv.pinnedMessageIds.split(",")
       : [];
     const isPinned = pinnedIds.includes(item.id);
 
@@ -560,18 +577,15 @@ const ChatRoomScreen = ({ route }: any) => {
         },
       },
       {
+        text: isOwnMessage ? "Thu hồi / Xóa" : "Xóa tin nhắn",
+        style: "destructive",
+        onPress: () => handleRecallMessage(item.id, isOwnMessage),
+      },
+      {
         text: "Hủy",
         style: "cancel",
       },
     ];
-
-    if (isOwnMessage) {
-      actions.splice(3, 0, {
-        text: "Thu hồi",
-        style: "destructive",
-        onPress: () => handleRecallMessage(item.id),
-      });
-    }
 
     Alert.alert("Tùy chọn", "Chọn hành động cho tin nhắn", actions);
   };
@@ -767,16 +781,16 @@ const ChatRoomScreen = ({ route }: any) => {
             onClose={() => setIsGroupSidebarOpen(false)}
             groupName={name}
             groupAvatar={avatarUrl}
-            participants={currentConversation?.participants || participants || []}
+            participants={currentParticipants}
             messages={displayMessages}
             conversation={{
               id: conversationId,
               type: type || "GROUP",
-              participants: currentConversation?.participants || participants || [],
+              participants: currentParticipants,
             } as any}
             currentUserId={user?.id || 0}
             currentUserRole={
-              (currentConversation?.participants || participants)?.find((p: Participant) => p.userId === user?.id)?.role || null
+              currentParticipants?.find((p: Participant) => p.userId === user?.id)?.role || null
             }
             onLeaveGroup={async (convId, userId, transferToUserId) => {
               if (transferToUserId) {
@@ -791,6 +805,14 @@ const ChatRoomScreen = ({ route }: any) => {
               } catch (error) {
                 console.error("Lỗi cập nhật vai trò:", error);
                 Alert.alert("Lỗi", "Không thể cập nhật vai trò thành viên");
+              }
+            }}
+            onRemoveMember={async (memberId) => {
+              try {
+                await removeMemberFromGroup(conversationId, memberId);
+              } catch (error) {
+                console.error("Lỗi xóa thành viên:", error);
+                throw error;
               }
             }}
           />
