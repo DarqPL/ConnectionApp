@@ -1,8 +1,7 @@
 import { useChatStore } from "@/stores/useChatStore";
-import { MessageSquare, Pin, X, ChevronRight, ChevronLeft } from "lucide-react";
+import { Pin, X, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "../ui/button";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 
 interface PinnedMessagesBarProps {
   conversationId: number;

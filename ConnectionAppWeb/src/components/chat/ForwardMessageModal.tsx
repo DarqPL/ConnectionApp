@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useChatStore } from "@/stores/useChatStore";
 import { useState, useEffect } from "react";
-import type { Message, Conversation, Participant } from "@/types/chat";
+import type { Message, Conversation } from "@/types/chat";
 import { Input } from "../ui/input";
 import { Search } from "lucide-react";
 import { Button } from "../ui/button";

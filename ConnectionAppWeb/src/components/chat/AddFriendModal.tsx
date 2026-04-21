@@ -19,6 +19,7 @@ import { friendService } from "@/services/friendService";
 
 export interface IFormValues {
   username: string;
+  message?: string;
 }
 
 const AddFriendModal = () => {
@@ -29,7 +30,7 @@ const AddFriendModal = () => {
   const [searchDone, setSearchDone] = useState(false);
   const [relationshipMap, setRelationshipMap] = useState<Record<number, string>>({});
 
-  const { loading, sendFriendRequest } = useFriendStore();
+  const { sendFriendRequest } = useFriendStore();
 
   const {
     checkFriendship,
@@ -53,14 +54,14 @@ const AddFriendModal = () => {
       const users = await userService.searchUsers(searchUsername);
 
       // ❌ lọc bỏ user DELETED
-      const filteredUsers = users.filter((u) => u.status !== "DELETED");
+      const filteredUsers = users.filter((u: User) => u.status !== "DELETED");
 
       setFoundUsers(filteredUsers);
 
       const map: Record<number, string> = {};
 
       await Promise.all(
-        filteredUsers.map(async (u) => {
+        filteredUsers.map(async (u: User) => {
           const [isFriend, isSending, isReceived] = await Promise.all([
             checkFriendship(u.id),
             checkIsSending(u.id),

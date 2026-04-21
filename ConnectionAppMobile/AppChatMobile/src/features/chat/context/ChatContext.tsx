@@ -48,6 +48,7 @@ interface ChatContextType {
   notifyTyping: (conversationId: number) => void;
   notifyStoppedTyping: (conversationId: number) => void;
   leaveGroup: (conversationId: number, userId: number) => Promise<void>;
+  addMemberToGroup: (conversationId: number, memberId: number) => Promise<void>;
   updateMemberRole: (
     conversationId: number,
     memberId: number,
@@ -360,13 +361,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, []);
 
-  const onPinUpdate = useCallback((payload: { conversationId: number }) => {
-    console.log("[ChatContext] Pin update for:", payload.conversationId);
-    chatService.getConversation(payload.conversationId)
-      .then(updatedConvo => {
-        setConversations(prev => prev.map(c => c.id === updatedConvo.id ? updatedConvo : c));
-      })
-      .catch(console.error);
+  const onConversationUpdate = useCallback((payload: any) => {
+    console.log("[ChatContext] Conversation update:", payload.type, "for:", payload.conversationId);
+    
+    if (payload.type === "PIN_UPDATE") {
+      chatService.getConversation(payload.conversationId)
+        .then(updatedConvo => {
+          setConversations(prev => prev.map(c => c.id === updatedConvo.id ? updatedConvo : c));
+        })
+        .catch(console.error);
+      return;
+    }
+
+    if (payload.conversationId && payload.participants) {
+      setConversations(prev => prev.map(c => {
+        if (c.id === payload.conversationId) {
+          return { ...c, participants: payload.participants };
+        }
+        return c;
+      }));
+    }
   }, []);
 
   const onSecurityNotification = useCallback(
@@ -445,7 +459,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onUserTyping,
       onUserStoppedTyping,
       onSecurityNotification,
-      onPinUpdate,
+      onConversationUpdate,
       onConnectionError: (socketError) => {
         if (appStateRef.current !== "active") {
           console.log("[ChatContext] Ignored socket error while app inactive.");
@@ -467,7 +481,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     accessToken,
     appState,
     onSecurityNotification,
-    onPinUpdate,
+    onConversationUpdate,
   ]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
@@ -482,7 +496,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onUserTyping,
         onUserStoppedTyping,
         onSecurityNotification,
-        onPinUpdate,
+        onConversationUpdate,
         onConnectionError: (socketError) => {
           if (appStateRef.current === "active") {
             setError(socketError);
@@ -497,7 +511,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     onUserTyping,
     onUserStoppedTyping,
     onSecurityNotification,
-    onPinUpdate,
+    onConversationUpdate,
   ]);
 
   // ─── Regular methods ───────────────────────────────────────────────────────
@@ -731,6 +745,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const addMemberToGroup = useCallback(
+    async (conversationId: number, memberId: number) => {
+      try {
+        await chatService.addMemberToGroup(conversationId, memberId);
+        // Participant list will be updated via WebSocket, but we can also manually refresh if needed
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Không thể thêm thành viên";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
   const updateMemberRole = useCallback(
     async (conversationId: number, memberId: number, role: string) => {
       try {
@@ -779,6 +807,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     notifyTyping,
     notifyStoppedTyping,
     leaveGroup,
+    addMemberToGroup,
     updateMemberRole,
     clearError,
   };

@@ -295,6 +295,22 @@ export class ChatService {
     return (await response.json()) as Conversation;
   }
 
+  async addMemberToGroup(
+    conversationId: number,
+    memberId: number,
+  ): Promise<void> {
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/members/${memberId}`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể thêm thành viên");
+    }
+  }
+
   async leaveGroup(conversationId: number, userId: number): Promise<void> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}/members/${userId}`,

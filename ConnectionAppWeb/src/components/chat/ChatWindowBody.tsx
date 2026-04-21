@@ -28,7 +28,7 @@ const ChatWindowBody = ({
     messageLoading,
   } = useChatStore();
 
-  const [lastMessageStatus, setLastMessageStatus] = useState<
+  const [lastMessageStatus] = useState<
     "delivered" | "seen"
   >("delivered");
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);

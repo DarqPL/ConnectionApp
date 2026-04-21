@@ -13,6 +13,7 @@ import GroupChatAvatar from "./GroupChatAvatar";
 import { TransferOwnershipDialog } from "./TransferOwnershipDialog";
 import { SuccessorPromotionDialog } from "./SuccessorPromotionDialog";
 import { MemberListDialog } from "./MemberListDialog";
+import AddMemberDialog from "./AddMemberDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
@@ -79,6 +80,7 @@ const ChatInfoPanel = ({
   const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
+  const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -254,19 +256,27 @@ const ChatInfoPanel = ({
 
           <div className="grid grid-cols-4 gap-4 w-full pt-2">
             {[
-              { icon: BellOff, label: "Tắt thông báo" },
-              { icon: Pin, label: "Ghim hội thoại" },
-              { icon: UserPlus, label: "Thêm thành viên" },
-              { icon: Settings, label: "Quản lý" },
+              { icon: BellOff, label: "Tắt thông báo", action: "mute" },
+              { icon: Pin, label: "Ghim hội thoại", action: "pin" },
+              { icon: UserPlus, label: "Thêm thành viên", action: "add-member" },
+              { icon: Settings, label: "Quản lý", action: "settings" },
             ].map((action, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5 cursor-pointer group">
-                <button className="size-10 rounded-full bg-secondary/50 flex items-center justify-center text-secondary-foreground group-hover:bg-secondary transition-colors">
+              <button
+                key={i}
+                onClick={() => {
+                  if (action.action === "add-member") {
+                    setShowAddMemberDialog(true);
+                  }
+                }}
+                className="flex flex-col items-center gap-1.5 cursor-pointer group"
+              >
+                <div className="size-10 rounded-full bg-secondary/50 flex items-center justify-center text-secondary-foreground group-hover:bg-secondary transition-colors">
                   <action.icon className="size-5" />
-                </button>
+                </div>
                 <span className="text-[10px] font-medium text-muted-foreground text-center leading-tight">
                   {action.label}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -587,6 +597,13 @@ const ChatInfoPanel = ({
         conversationId={chat.id}
         onClose={() => setShowMemberListDialog(false)}
         onRoleUpdate={handleUpdateMemberRole}
+      />
+
+      {/* Add Member Dialog */}
+      <AddMemberDialog
+        isOpen={showAddMemberDialog}
+        conversation={chat}
+        onClose={() => setShowAddMemberDialog(false)}
       />
 
       {/* Bottom Section with Pin Toggle and Logout Button */}

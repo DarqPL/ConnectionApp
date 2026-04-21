@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { Mail, Phone, Calendar, User, MessageSquare, Users, Clock, Camera, Loader2, Edit2, Lock, ShieldCheck, KeyRound } from "lucide-react";
+import { Mail, Phone, Calendar, MessageSquare, Users, Camera, Loader2, Edit2, Lock, ShieldCheck, KeyRound } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useState, useRef } from "react";
 import { userService } from "@/services/userService";
@@ -17,7 +17,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
