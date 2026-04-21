@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { TransferOwnershipDialog } from "./TransferOwnershipDialog";
+import { SuccessorPromotionDialog } from "./SuccessorPromotionDialog";
 import { MemberListDialog } from "./MemberListDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chatService";
@@ -75,6 +76,7 @@ const ChatInfoPanel = ({
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [showAllImages, setShowAllImages] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
 
@@ -84,6 +86,11 @@ const ChatInfoPanel = ({
     const participant = chat.participants.find(p => p.userId === user.id);
     return participant?.role || null;
   }, [chat.participants, user]);
+
+  // Find CO_OWNER if exists
+  const coOwner = useMemo(() => {
+    return chat.participants.find(p => p.role === "CO_OWNER") || null;
+  }, [chat.participants]);
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -97,8 +104,14 @@ const ChatInfoPanel = ({
   };
 
   const handleLeaveGroup = async () => {
-    // If user is owner and there are other members, must transfer ownership first
+    // If user is owner and there are other members, must handle succession
     if (currentUserRole === "OWNER" && chat.participants.length > 1) {
+      // If there's a CO_OWNER, show succession dialog with auto-promote option
+      if (coOwner) {
+        setShowSuccessorDialog(true);
+        return;
+      }
+      // Otherwise, show transfer dialog to manually select owner
       setShowTransferDialog(true);
       return;
     }
@@ -541,6 +554,18 @@ const ChatInfoPanel = ({
           </Button>
         </div>
       </div>
+
+      {/* Successor Promotion Dialog */}
+      {user && (
+        <SuccessorPromotionDialog
+          isOpen={showSuccessorDialog}
+          onClose={() => setShowSuccessorDialog(false)}
+          conversation={chat}
+          currentUserId={user.id}
+          coOwner={coOwner}
+          onPromotionComplete={handleTransferComplete}
+        />
+      )}
 
       {/* Transfer Ownership Dialog */}
       {user && (

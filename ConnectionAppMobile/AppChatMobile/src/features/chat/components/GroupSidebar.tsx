@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../../../theme";
 import { LeaveGroupModal } from "./LeaveGroupModal";
 import { MemberListModal } from "./MemberListModal";
+import { SuccessorPromotionModal } from "./SuccessorPromotionModal";
 import type { Message, Attachment, AttachmentType, Conversation, Participant } from "../types";
 
 interface GroupParticipant {
@@ -85,6 +86,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [isPinned, setIsPinned] = useState(true);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showMemberListModal, setShowMemberListModal] = useState(false);
+  const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -135,6 +137,12 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
     }
     await Linking.openURL(url);
   };
+
+  // Find CO_OWNER if exists
+  const coOwner = useMemo(() => {
+    if (!conversation) return null;
+    return conversation.participants.find((p) => p.role === "CO_OWNER") || null;
+  }, [conversation]);
 
   const handleLeaveGroupConfirmed = async (transferToUserId?: number) => {
     if (!conversation) return;
@@ -353,7 +361,19 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           {/* Leave Group Button */}
           <TouchableOpacity
             style={styles.leaveGroupButton}
-            onPress={() => setShowLeaveModal(true)}
+            onPress={() => {
+              // If owner with multiple members and there's a CO_OWNER, show successor promotion
+              if (
+                currentUserRole === "OWNER" &&
+                participants.length > 1 &&
+                coOwner
+              ) {
+                setShowSuccessorDialog(true);
+              } else {
+                // Otherwise, show leave group modal
+                setShowLeaveModal(true);
+              }
+            }}
           >
             <Ionicons name="exit-outline" size={22} color={COLORS.destructive} />
             <Text style={styles.leaveGroupText}>
@@ -367,6 +387,21 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
           <View style={styles.sectionGap} />
         </ScrollView>
+
+        {/* Successor Promotion Modal */}
+        <SuccessorPromotionModal
+          visible={showSuccessorDialog}
+          onClose={() => setShowSuccessorDialog(false)}
+          conversation={conversation}
+          currentUserId={currentUserId}
+          coOwner={coOwner}
+          onPromotionComplete={() => {
+            setShowSuccessorDialog(false);
+            // After succession is handled, leave the group
+            handleLeaveGroupConfirmed();
+          }}
+          onRoleUpdate={onRoleUpdate || (async () => {})}
+        />
 
         {/* Leave Group Modal */}
         <LeaveGroupModal
