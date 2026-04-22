@@ -195,6 +195,33 @@ public class ConversationService {
         conversation.setUpdateAt(LocalDateTime.now());
         Conversation updatedConversation = conversationRepository.save(conversation);
 
+        // 🔥 Send real-time notification to all members
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        if (!allMembers.isEmpty()) {
+            ConversationResponse response = mapToConversationResponse(updatedConversation);
+            
+            Map<String, Object> update = new java.util.HashMap<>();
+            update.put("conversationId", conversationId);
+            update.put("type", "CONVERSATION_UPDATED");
+            update.put("name", updatedConversation.getName());
+            update.put("updatedConversation", response);
+
+            // Notify all members
+            for (ConversationUser m : allMembers) {
+                // Send update notification
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + m.getUser().getId() + "/conversation-updates",
+                        update
+                );
+                
+                // Also update the conversation in their main list
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + m.getUser().getId() + "/conversations",
+                        response
+                );
+            }
+        }
+
         return mapToConversationResponse(updatedConversation);
     }
 

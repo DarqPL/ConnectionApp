@@ -18,6 +18,7 @@ import { COLORS } from "../../../theme";
 import { LeaveGroupModal } from "./LeaveGroupModal";
 import { MemberListModal } from "./MemberListModal";
 import { SuccessorPromotionModal } from "./SuccessorPromotionModal";
+import { RenameGroupModal } from "./RenameGroupModal";
 import AddMemberModal from "./AddMemberModal";
 import type { Message, Attachment, AttachmentType, Conversation, Participant } from "../types";
 
@@ -45,6 +46,7 @@ interface GroupSidebarProps {
   ) => Promise<void>;
   onRoleUpdate?: (memberId: number, newRole: string) => Promise<void>;
   onRemoveMember: (memberId: number) => Promise<void>;
+  onRenameGroup?: (newName: string) => Promise<void>;
 }
 
 interface MediaItem {
@@ -84,6 +86,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   onLeaveGroup,
   onRoleUpdate,
   onRemoveMember,
+  onRenameGroup,
 }) => {
   const insets = useSafeAreaInsets();
   const [isPinned, setIsPinned] = useState(true);
@@ -91,6 +94,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [showMemberListModal, setShowMemberListModal] = useState(false);
   const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -243,9 +247,14 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
             <View style={styles.groupNameRow}>
               <Text style={styles.groupName}>{groupName}</Text>
-              <TouchableOpacity style={styles.editBtn}>
-                <Ionicons name="pencil-outline" size={16} color="#333" />
-              </TouchableOpacity>
+              {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+                <TouchableOpacity 
+                  style={styles.editBtn}
+                  onPress={() => setShowRenameModal(true)}
+                >
+                  <Ionicons name="pencil-outline" size={16} color="#333" />
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.quickActionRow}>
@@ -441,6 +450,15 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           visible={showAddMemberModal}
           onClose={() => setShowAddMemberModal(false)}
           conversation={conversation}
+        />
+
+        <RenameGroupModal
+          visible={showRenameModal}
+          onClose={() => setShowRenameModal(false)}
+          currentName={groupName}
+          onConfirm={(newName) => {
+            if (onRenameGroup) onRenameGroup(newName);
+          }}
         />
       </View>
     </Modal>

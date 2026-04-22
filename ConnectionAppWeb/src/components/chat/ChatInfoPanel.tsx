@@ -14,6 +14,7 @@ import { TransferOwnershipDialog } from "./TransferOwnershipDialog";
 import { SuccessorPromotionDialog } from "./SuccessorPromotionDialog";
 import { MemberListDialog } from "./MemberListDialog";
 import AddMemberDialog from "./AddMemberDialog";
+import { RenameGroupDialog } from "./RenameGroupDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
@@ -81,6 +82,7 @@ const ChatInfoPanel = ({
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -257,11 +259,18 @@ const ChatInfoPanel = ({
           </div>
 
           <div className="space-y-1">
-            <h3 className="font-bold text-xl flex items-center justify-center gap-2">
+            <h3 className="font-bold text-xl flex items-center justify-center gap-2 group/title">
               {chat.name}
-              <Button variant="ghost" size="icon" className="size-5 rounded-full">
-                <Pencil className="size-3 text-muted-foreground" />
-              </Button>
+              {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="size-6 rounded-full opacity-0 group-hover/title:opacity-100 transition-opacity"
+                  onClick={() => setShowRenameDialog(true)}
+                >
+                  <Pencil className="size-3 text-muted-foreground" />
+                </Button>
+              )}
             </h3>
           </div>
 
@@ -616,6 +625,13 @@ const ChatInfoPanel = ({
         isOpen={showAddMemberDialog}
         conversation={chat}
         onClose={() => setShowAddMemberDialog(false)}
+      />
+
+      <RenameGroupDialog
+        isOpen={showRenameDialog}
+        onClose={() => setShowRenameDialog(false)}
+        currentName={chat.name}
+        conversationId={chat.id}
       />
 
       {/* Bottom Section with Pin Toggle and Logout Button */}

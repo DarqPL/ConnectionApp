@@ -212,6 +212,15 @@ export const chatService = {
   },
 
   /**
+   * PUT /api/conversations/{conversationId}
+   * Body: { name }
+   */
+  async renameConversation(conversationId: number, name: string): Promise<Conversation> {
+    const res = await api.put(`/conversations/${conversationId}`, { name });
+    return res.data;
+  },
+
+  /**
    * PUT /api/conversations/{conversationId}/members/{memberId}/role
    * Transfer ownership to another member
    */

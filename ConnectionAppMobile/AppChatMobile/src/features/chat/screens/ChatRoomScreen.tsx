@@ -110,6 +110,7 @@ const ChatRoomScreen = ({ route }: any) => {
     leaveGroup,
     updateMemberRole,
     removeMemberFromGroup,
+    renameGroup,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -993,6 +994,14 @@ const ChatRoomScreen = ({ route }: any) => {
               } catch (error) {
                 console.error("Lỗi xóa thành viên:", error);
                 throw error;
+              }
+            }}
+            onRenameGroup={async (newName) => {
+              try {
+                await renameGroup(conversationId, newName);
+              } catch (error) {
+                console.error("Lỗi đổi tên nhóm:", error);
+                Alert.alert("Lỗi", "Không thể đổi tên nhóm");
               }
             }}
           />
