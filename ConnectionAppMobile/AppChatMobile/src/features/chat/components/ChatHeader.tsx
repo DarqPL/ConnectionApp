@@ -78,7 +78,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     );
   };
 
+  const [imageError, setImageError] = React.useState(false);
+
   const renderAvatar = () => {
+    if (avatar && !imageError) {
+      return (
+        <Image
+          source={{ uri: avatar }}
+          style={styles.avatar}
+          onError={() => setImageError(true)}
+        />
+      );
+    }
     if (!isGroup || participants.length < 2) {
       return (
         <Image source={{ uri: avatar || FALLBACK }} style={styles.avatar} />

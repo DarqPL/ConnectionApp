@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../../../theme";
@@ -47,6 +48,8 @@ interface GroupSidebarProps {
   onRoleUpdate?: (memberId: number, newRole: string) => Promise<void>;
   onRemoveMember: (memberId: number) => Promise<void>;
   onRenameGroup?: (newName: string) => Promise<void>;
+  onUpdateAvatar?: (avatarUrl: string) => Promise<void>;
+  onUpdateAvatarFile?: (file: { uri: string; name: string; type: string }) => Promise<void>;
 }
 
 interface MediaItem {
@@ -87,6 +90,8 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   onRoleUpdate,
   onRemoveMember,
   onRenameGroup,
+  onUpdateAvatar,
+  onUpdateAvatarFile,
 }) => {
   const insets = useSafeAreaInsets();
   const [isPinned, setIsPinned] = useState(true);
@@ -95,6 +100,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -170,9 +176,61 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
     }
   };
 
+  const handleUpdateAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Lỗi", "Cần quyền truy cập thư viện ảnh để đổi ảnh nhóm");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsUpdatingAvatar(true);
+        const asset = result.assets[0];
+        const imageUri = asset.uri;
+        
+        const file = {
+          uri: imageUri,
+          name: asset.fileName || imageUri.split("/").pop() || "avatar.jpg",
+          type: asset.mimeType || "image/jpeg",
+        } as any;
+
+        if (onUpdateAvatarFile) {
+          await onUpdateAvatarFile(file);
+          Alert.alert("Thành công", "Đã cập nhật ảnh nhóm");
+        } else if (onUpdateAvatar) {
+          const { chatService } = await import("../services/chat.service");
+          const attachment = await chatService.uploadAttachment(file);
+          await onUpdateAvatar(attachment.fileUrl);
+          Alert.alert("Thành công", "Đã cập nhật ảnh nhóm");
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi cập nhật ảnh nhóm:", error);
+      Alert.alert("Lỗi", "Không thể cập nhật ảnh nhóm");
+    } finally {
+      setIsUpdatingAvatar(false);
+    }
+  };
+
+  const [imageError, setImageError] = useState(false);
+
   const renderGroupAvatar = () => {
-    if (groupAvatar) {
-      return <Image source={{ uri: groupAvatar }} style={styles.groupAvatar} />;
+    if (groupAvatar && !imageError) {
+      return (
+        <Image 
+          source={{ uri: groupAvatar }} 
+          style={styles.groupAvatar} 
+          onError={() => setImageError(true)}
+        />
+      );
     }
 
     const first = participants[0]?.avatarUrl || FALLBACK;
@@ -240,9 +298,15 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           <View style={styles.profileBlock}>
             <View style={styles.avatarWrap}>
               {renderGroupAvatar()}
-              <TouchableOpacity style={styles.cameraBtn}>
-                <Ionicons name="camera-outline" size={16} color="#222" />
-              </TouchableOpacity>
+              {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+                <TouchableOpacity 
+                  style={styles.cameraBtn} 
+                  onPress={handleUpdateAvatar}
+                  disabled={isUpdatingAvatar}
+                >
+                  <Ionicons name="camera-outline" size={16} color="#222" />
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.groupNameRow}>

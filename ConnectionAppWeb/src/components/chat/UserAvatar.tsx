@@ -6,9 +6,10 @@ interface IUserAvatarProps {
   name: string;
   avatarUrl?: string;
   className?: string;
+  onError?: () => void;
 }
 
-const UserAvatar = ({ type, name, avatarUrl, className }: IUserAvatarProps) => {
+const UserAvatar = ({ type, name, avatarUrl, className, onError }: IUserAvatarProps) => {
   const bgColor = !avatarUrl ? "bg-blue-500" : "";
 
   if (!name) {
@@ -27,6 +28,7 @@ const UserAvatar = ({ type, name, avatarUrl, className }: IUserAvatarProps) => {
       <AvatarImage
         src={avatarUrl}
         alt={name}
+        onError={onError}
       />
       <AvatarFallback className={`${bgColor} text-white font-semibold`}>
         {name.charAt(0)}

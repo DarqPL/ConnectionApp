@@ -244,7 +244,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             }
 
             if (update?.type === "CONVERSATION_UPDATED" && update?.updatedConversation) {
-              useChatStore.getState().updateConversation(update.updatedConversation);
+              const updated = update.updatedConversation;
+              if (updated.avatarUrl) {
+                updated.avatarUrl = `${updated.avatarUrl}?t=${Date.now()}`;
+              } else {
+                updated.avatarUrl = null;
+              }
+              useChatStore.getState().updateConversation(updated);
               return;
             }
 

@@ -313,7 +313,8 @@ export class ChatService {
 
   async updateConversation(
     conversationId: number,
-    name: string,
+    name?: string,
+    avatarUrl?: string,
   ): Promise<Conversation> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}`,
@@ -322,12 +323,38 @@ export class ChatService {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, avatarUrl }),
       },
     );
 
     if (!response.ok) {
       throw await this.parseError(response, "Không thể cập nhật thông tin nhóm");
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
+  async updateConversationAvatar(
+    conversationId: number,
+    file: { uri: string; name: string; type: string },
+  ): Promise<Conversation> {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/avatar`,
+      {
+        method: "PUT",
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể cập nhật ảnh đại diện nhóm");
     }
 
     return (await response.json()) as Conversation;
