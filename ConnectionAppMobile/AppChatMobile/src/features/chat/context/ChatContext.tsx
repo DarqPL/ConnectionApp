@@ -64,6 +64,10 @@ interface ChatContextType {
     role: string,
   ) => Promise<void>;
   renameGroup: (conversationId: number, newName: string) => Promise<void>;
+  updateGroupDescription: (
+    conversationId: number,
+    description: string,
+  ) => Promise<void>;
   clearError: () => void;
 }
 
@@ -516,8 +520,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       if (updatedConvo) {
         setConversations((prev) =>
           prev.map((c) =>
-            Number(c.id) === Number(conversationId) ? { ...c, ...updatedConvo } : c
-          )
+            Number(c.id) === Number(conversationId)
+              ? { ...c, ...updatedConvo }
+              : c,
+          ),
         );
       }
       return;
@@ -788,16 +794,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, newName: string) => {
       setError(null);
       try {
-        await chatService.updateConversation(conversationId, newName);
+        await chatService.updateConversation(conversationId, { name: newName });
         // Socket will handle update, but we can update local state immediately for better UX
         setConversations((prev) =>
           prev.map((c) =>
-            Number(c.id) === Number(conversationId) ? { ...c, name: newName } : c,
+            Number(c.id) === Number(conversationId)
+              ? { ...c, name: newName }
+              : c,
           ),
         );
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Đổi tên nhóm thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const updateGroupDescription = useCallback(
+    async (conversationId: number, description: string) => {
+      setError(null);
+      try {
+        await chatService.updateConversation(conversationId, {
+          description: description.trim() || null,
+        });
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId)
+              ? { ...c, description: description.trim() || null }
+              : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Cập nhật mô tả nhóm thất bại";
         setError(msg);
         throw err;
       }
@@ -1070,6 +1102,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     addMemberToGroup,
     updateMemberRole,
     renameGroup,
+    updateGroupDescription,
     clearError,
   };
 

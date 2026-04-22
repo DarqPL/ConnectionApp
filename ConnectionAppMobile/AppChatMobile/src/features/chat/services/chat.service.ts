@@ -313,7 +313,7 @@ export class ChatService {
 
   async updateConversation(
     conversationId: number,
-    name: string,
+    payload: { name?: string; description?: string | null },
   ): Promise<Conversation> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}`,
@@ -322,12 +322,15 @@ export class ChatService {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(payload),
       },
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Không thể cập nhật thông tin nhóm");
+      throw await this.parseError(
+        response,
+        "Không thể cập nhật thông tin nhóm",
+      );
     }
 
     return (await response.json()) as Conversation;

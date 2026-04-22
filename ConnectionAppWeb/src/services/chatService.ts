@@ -213,11 +213,21 @@ export const chatService = {
 
   /**
    * PUT /api/conversations/{conversationId}
-   * Body: { name }
+   * Body: { name?, description? }
    */
-  async renameConversation(conversationId: number, name: string): Promise<Conversation> {
-    const res = await api.put(`/conversations/${conversationId}`, { name });
+  async updateConversation(
+    conversationId: number,
+    payload: { name?: string; description?: string | null },
+  ): Promise<Conversation> {
+    const res = await api.put(`/conversations/${conversationId}`, payload);
     return res.data;
+  },
+
+  async renameConversation(
+    conversationId: number,
+    name: string,
+  ): Promise<Conversation> {
+    return this.updateConversation(conversationId, { name });
   },
 
   /**

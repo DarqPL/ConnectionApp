@@ -18,6 +18,7 @@ export interface Participant {
 export interface Conversation {
   id: number;
   name: string;
+  description?: string | null;
   avatarUrl?: string | null;
   type: string; // PRIVATE, GROUP
   lastMessageAt: string | null;

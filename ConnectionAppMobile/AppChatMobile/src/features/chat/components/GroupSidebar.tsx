@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   View,
@@ -10,6 +10,7 @@ import {
   Linking,
   Switch,
   Alert,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,7 +21,13 @@ import { MemberListModal } from "./MemberListModal";
 import { SuccessorPromotionModal } from "./SuccessorPromotionModal";
 import { RenameGroupModal } from "./RenameGroupModal";
 import AddMemberModal from "./AddMemberModal";
-import type { Message, Attachment, AttachmentType, Conversation, Participant } from "../types";
+import type {
+  Message,
+  Attachment,
+  AttachmentType,
+  Conversation,
+  Participant,
+} from "../types";
 
 interface GroupParticipant {
   userId: number;
@@ -36,6 +43,7 @@ interface GroupSidebarProps {
   groupAvatar?: string | null;
   participants: GroupParticipant[];
   messages: Message[];
+  pinnedMessages: Message[];
   conversation: Conversation | null;
   currentUserId: number;
   currentUserRole: string | null;
@@ -47,6 +55,7 @@ interface GroupSidebarProps {
   onRoleUpdate?: (memberId: number, newRole: string) => Promise<void>;
   onRemoveMember: (memberId: number) => Promise<void>;
   onRenameGroup?: (newName: string) => Promise<void>;
+  onUpdateDescription?: (newDescription: string) => Promise<void>;
 }
 
 interface MediaItem {
@@ -80,6 +89,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   groupAvatar,
   participants,
   messages,
+  pinnedMessages,
   conversation,
   currentUserId,
   currentUserRole,
@@ -87,6 +97,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   onRoleUpdate,
   onRemoveMember,
   onRenameGroup,
+  onUpdateDescription,
 }) => {
   const insets = useSafeAreaInsets();
   const [isPinned, setIsPinned] = useState(true);
@@ -95,6 +106,16 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState(
+    conversation?.description ?? "",
+  );
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
+
+  useEffect(() => {
+    setDescriptionDraft(conversation?.description ?? "");
+  }, [conversation?.id, conversation?.description]);
 
   const mediaItems = useMemo<MediaItem[]>(() => {
     const output: MediaItem[] = [];
@@ -156,11 +177,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
     if (!conversation) return;
     try {
       // Call onLeaveGroup with transfer recipient if needed
-      await onLeaveGroup(
-        conversation.id,
-        currentUserId,
-        transferToUserId,
-      );
+      await onLeaveGroup(conversation.id, currentUserId, transferToUserId);
       setShowLeaveModal(false);
       onClose();
     } catch (error) {
@@ -196,8 +213,13 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
     icon: keyof typeof Ionicons.glyphMap,
     label: string,
     subtitle?: string,
+    onPress?: () => void,
   ) => (
-    <TouchableOpacity style={styles.rowItem} activeOpacity={0.75}>
+    <TouchableOpacity
+      style={styles.rowItem}
+      activeOpacity={0.75}
+      onPress={onPress}
+    >
       <View style={styles.rowLeft}>
         <Ionicons name={icon} size={22} color="#8b939f" />
         <View style={styles.rowTextWrap}>
@@ -247,8 +269,9 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
             <View style={styles.groupNameRow}>
               <Text style={styles.groupName}>{groupName}</Text>
-              {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
-                <TouchableOpacity 
+              {(currentUserRole === "OWNER" ||
+                currentUserRole === "CO_OWNER") && (
+                <TouchableOpacity
                   style={styles.editBtn}
                   onPress={() => setShowRenameModal(true)}
                 >
@@ -259,13 +282,21 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
             <View style={styles.quickActionRow}>
               {[
-                { icon: "search-outline" as const, label: "Tìm\ntin nhắn", action: "search" },
+                {
+                  icon: "search-outline" as const,
+                  label: "Tìm\ntin nhắn",
+                  action: "search",
+                },
                 {
                   icon: "person-add-outline" as const,
                   label: "Thêm\nthành viên",
                   action: "add-member",
                 },
-                { icon: "color-wand-outline" as const, label: "Đổi\nhình nền", action: "wallpaper" },
+                {
+                  icon: "color-wand-outline" as const,
+                  label: "Đổi\nhình nền",
+                  action: "wallpaper",
+                },
                 {
                   icon: "notifications-outline" as const,
                   label: "Tắt\nthông báo",
@@ -292,7 +323,12 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
 
           <View style={styles.sectionGap} />
 
-          {sectionRow("information-circle-outline", "Thêm mô tả nhóm")}
+          {sectionRow(
+            "information-circle-outline",
+            "Thêm mô tả nhóm",
+            conversation?.description?.trim() || "Chưa có mô tả",
+            () => setShowDescriptionModal(true),
+          )}
 
           <View style={styles.sectionGap} />
 
@@ -337,20 +373,29 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           <View style={styles.sectionGap} />
 
           {sectionRow("calendar-outline", "Lịch nhóm")}
-          {sectionRow("attach-outline", "Tin nhắn đã ghim")}
+          {sectionRow(
+            "attach-outline",
+            "Tin nhắn đã ghim",
+            pinnedMessages.length > 0
+              ? `${pinnedMessages.length} tin nhắn`
+              : "Chưa có tin ghim",
+            () => setShowPinnedModal(true),
+          )}
           {sectionRow("stats-chart-outline", "Bình chọn")}
 
           <View style={styles.sectionGap} />
 
-          <TouchableOpacity 
-            style={styles.rowItem} 
+          <TouchableOpacity
+            style={styles.rowItem}
             activeOpacity={0.75}
             onPress={() => setShowMemberListModal(true)}
           >
             <View style={styles.rowLeft}>
               <Ionicons name="people-outline" size={22} color="#8b939f" />
               <View style={styles.rowTextWrap}>
-                <Text style={styles.rowLabel}>Xem thành viên ({participants.length})</Text>
+                <Text style={styles.rowLabel}>
+                  Xem thành viên ({participants.length})
+                </Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#a3a8b1" />
@@ -395,13 +440,17 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
               }
             }}
           >
-            <Ionicons name="exit-outline" size={22} color={COLORS.destructive} />
+            <Ionicons
+              name="exit-outline"
+              size={22}
+              color={COLORS.destructive}
+            />
             <Text style={styles.leaveGroupText}>
               {currentUserRole === "OWNER" && participants.length === 1
                 ? "Xóa nhóm"
                 : currentUserRole === "OWNER"
-                ? "Chuyển quyền & Rời"
-                : "Rời khỏi nhóm"}
+                  ? "Chuyển quyền & Rời"
+                  : "Rời khỏi nhóm"}
             </Text>
           </TouchableOpacity>
 
@@ -460,11 +509,110 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
             if (onRenameGroup) onRenameGroup(newName);
           }}
         />
+
+        <Modal
+          visible={showDescriptionModal}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowDescriptionModal(false)}
+        >
+          <View style={styles.overlay}>
+            <View style={styles.bottomSheet}>
+              <View style={styles.bottomSheetHeader}>
+                <Text style={styles.bottomSheetTitle}>Mô tả nhóm</Text>
+                <TouchableOpacity
+                  onPress={() => setShowDescriptionModal(false)}
+                >
+                  <Ionicons name="close" size={22} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                value={descriptionDraft}
+                onChangeText={setDescriptionDraft}
+                placeholder="Nhập mô tả nhóm..."
+                multiline
+                textAlignVertical="top"
+                style={styles.descriptionInput}
+                editable={!isSavingDescription && !!onUpdateDescription}
+              />
+              <TouchableOpacity
+                style={styles.saveButton}
+                disabled={isSavingDescription || !onUpdateDescription}
+                onPress={async () => {
+                  if (!onUpdateDescription) {
+                    return;
+                  }
+                  try {
+                    setIsSavingDescription(true);
+                    await onUpdateDescription(descriptionDraft);
+                    setShowDescriptionModal(false);
+                  } catch {
+                    // Error toast/alert is handled by parent callback.
+                  } finally {
+                    setIsSavingDescription(false);
+                  }
+                }}
+              >
+                <Text style={styles.saveButtonText}>
+                  {isSavingDescription ? "Đang lưu..." : "Lưu mô tả"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={showPinnedModal}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowPinnedModal(false)}
+        >
+          <View style={styles.overlay}>
+            <View style={styles.bottomSheetLarge}>
+              <View style={styles.bottomSheetHeader}>
+                <Text style={styles.bottomSheetTitle}>Tin nhắn đã ghim</Text>
+                <TouchableOpacity onPress={() => setShowPinnedModal(false)}>
+                  <Ionicons name="close" size={22} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {pinnedMessages.length === 0 ? (
+                  <Text style={styles.emptyText}>
+                    Chưa có tin nhắn đã ghim.
+                  </Text>
+                ) : (
+                  pinnedMessages.map((message) => {
+                    const preview =
+                      message.content?.trim() ||
+                      (message.attachments.length > 0
+                        ? `[${message.attachments.length} tệp đính kèm]`
+                        : "[Tin nhắn trống]");
+
+                    return (
+                      <View key={message.id} style={styles.pinnedCard}>
+                        <View style={styles.pinnedCardHeader}>
+                          <Text style={styles.pinnedSender} numberOfLines={1}>
+                            {message.senderInfo.displayName}
+                          </Text>
+                          <Text style={styles.pinnedTime}>
+                            {new Date(message.createdAt).toLocaleString(
+                              "vi-VN",
+                            )}
+                          </Text>
+                        </View>
+                        <Text style={styles.pinnedPreview}>{preview}</Text>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </View>
     </Modal>
   );
 };
-
 
 export default GroupSidebar;
 
@@ -698,5 +846,98 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: COLORS.destructive,
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
+  },
+  bottomSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 20,
+    minHeight: 300,
+  },
+  bottomSheetLarge: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 20,
+    minHeight: 380,
+    maxHeight: "70%",
+  },
+  bottomSheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  descriptionInput: {
+    minHeight: 130,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: COLORS.text,
+    fontSize: 14,
+  },
+  saveButton: {
+    marginTop: 12,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  emptyText: {
+    textAlign: "center",
+    paddingVertical: 28,
+    color: COLORS.textMuted,
+    fontStyle: "italic",
+  },
+  pinnedCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+    backgroundColor: "#f9fafb",
+  },
+  pinnedCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+    gap: 8,
+  },
+  pinnedSender: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  pinnedTime: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  pinnedPreview: {
+    fontSize: 13,
+    color: COLORS.textMuted,
   },
 });
