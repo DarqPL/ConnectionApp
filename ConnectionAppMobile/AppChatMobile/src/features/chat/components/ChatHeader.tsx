@@ -27,6 +27,8 @@ interface ChatHeaderProps {
   onBlockUser?: () => void;
   onUnblockUser?: () => void;
   onGroupInfoPress?: () => void;
+  onVoiceCallPress?: () => void;
+  onVideoCallPress?: () => void;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -39,6 +41,8 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   onBlockUser,
   onUnblockUser,
   onGroupInfoPress,
+  onVoiceCallPress,
+  onVideoCallPress,
 }) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -122,10 +126,10 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={onVoiceCallPress}>
           <Ionicons name="call-outline" size={22} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity style={styles.actionBtn} onPress={onVideoCallPress}>
           <Ionicons name="videocam-outline" size={22} color="#fff" />
         </TouchableOpacity>
         {(isGroup ? Boolean(onGroupInfoPress) : true) && (

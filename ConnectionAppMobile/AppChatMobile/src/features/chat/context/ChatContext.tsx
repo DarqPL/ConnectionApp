@@ -11,6 +11,7 @@ import type { Attachment, Message, Conversation } from "../types";
 import { chatService } from "../services/chat.service";
 import { chatSocketService } from "../services/socket.service";
 import type { TypingPayload } from "../services/socket.service";
+import { callService, type CallSession } from "../services/call.service";
 import { useAuth } from "../../auth/context/AuthContext";
 import { authService } from "../../auth/services/auth.service";
 
@@ -27,6 +28,8 @@ interface ChatContextType {
   isLoading: boolean;
   error: string | null;
   typingUsers: TypingPresence[];
+  incomingCall: CallSession | null;
+  activeCall: CallSession | null;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
   sendMessage: (
@@ -54,6 +57,9 @@ interface ChatContextType {
     memberId: number,
     role: string,
   ) => Promise<void>;
+  acceptIncomingCall: (callId: number) => Promise<void>;
+  rejectIncomingCall: (callId: number) => Promise<void>;
+  endActiveCall: (callId: number, reason?: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -78,6 +84,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<TypingPresence[]>([]);
+  const [incomingCall, setIncomingCall] = useState<CallSession | null>(null);
+  const [activeCall, setActiveCall] = useState<CallSession | null>(null);
   const [appState, setAppState] = useState<AppStateStatus>(
     AppState.currentState,
   );
@@ -87,7 +95,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const userIdRef = useRef<number | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const messageFetchVersionRef = useRef(0);
-  const typingTimeoutRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const typingTimeoutRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
 
   useEffect(() => {
     currentConversationRef.current = currentConversationId;
@@ -362,24 +372,108 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const onConversationUpdate = useCallback((payload: any) => {
-    console.log("[ChatContext] Conversation update:", payload.type, "for:", payload.conversationId);
-    
+    console.log(
+      "[ChatContext] Conversation update:",
+      payload.type,
+      "for:",
+      payload.conversationId,
+    );
+
     if (payload.type === "PIN_UPDATE") {
-      chatService.getConversation(payload.conversationId)
-        .then(updatedConvo => {
-          setConversations(prev => prev.map(c => c.id === updatedConvo.id ? updatedConvo : c));
+      chatService
+        .getConversation(payload.conversationId)
+        .then((updatedConvo) => {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === updatedConvo.id ? updatedConvo : c)),
+          );
         })
         .catch(console.error);
       return;
     }
 
     if (payload.conversationId && payload.participants) {
-      setConversations(prev => prev.map(c => {
-        if (c.id === payload.conversationId) {
-          return { ...c, participants: payload.participants };
-        }
-        return c;
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id === payload.conversationId) {
+            return { ...c, participants: payload.participants };
+          }
+          return c;
+        }),
+      );
+    }
+  }, []);
+
+  const onCallInvite = useCallback((payload: any) => {
+    if (!payload?.callId) {
+      return;
+    }
+
+    setIncomingCall(payload as CallSession);
+
+    if (payload?.conversationId === currentConversationRef.current) {
+      return;
+    }
+
+    const callerName = payload?.participants?.find(
+      (participant: any) => participant?.userId === payload?.initiatedBy,
+    )?.displayName;
+
+    Alert.alert(
+      "Cuoc goi den",
+      callerName
+        ? `${callerName} dang goi ${payload?.mediaType === "VIDEO" ? "video" : "thoai"}`
+        : "Ban co cuoc goi moi",
+    );
+  }, []);
+
+  const onCallStatusUpdate = useCallback((payload: any) => {
+    if (!payload?.status || !payload?.callId) {
+      return;
+    }
+
+    const session = payload as CallSession;
+
+    if (payload.status === "RINGING") {
+      const isIncoming = payload?.initiatedBy !== userIdRef.current;
+      if (isIncoming) {
+        setIncomingCall(session);
+      } else {
+        setActiveCall((prev) => ({
+          ...session,
+          token:
+            session.token ??
+            (prev?.callId === session.callId ? prev.token : null),
+        }));
+      }
+      return;
+    }
+
+    if (payload.status === "ONGOING") {
+      setActiveCall((prev) => ({
+        ...session,
+        token:
+          session.token ??
+          (prev?.callId === session.callId ? prev.token : null),
       }));
+      setIncomingCall((prev) =>
+        prev?.callId === session.callId ? null : prev,
+      );
+      return;
+    }
+
+    if (
+      payload.status === "ENDED" ||
+      payload.status === "MISSED" ||
+      payload.status === "CANCELLED"
+    ) {
+      setActiveCall((prev) => (prev?.callId === session.callId ? null : prev));
+      setIncomingCall((prev) =>
+        prev?.callId === session.callId ? null : prev,
+      );
+
+      if (payload?.conversationId === currentConversationRef.current) {
+        Alert.alert("Cuoc goi", "Cuoc goi da ket thuc");
+      }
     }
   }, []);
 
@@ -456,6 +550,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onIncomingMessage,
       onIncomingConversation,
       onRecallMessage,
+      onCallInvite,
+      onCallStatusUpdate,
       onUserTyping,
       onUserStoppedTyping,
       onSecurityNotification,
@@ -482,10 +578,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     appState,
     onSecurityNotification,
     onConversationUpdate,
+    onCallInvite,
+    onCallStatusUpdate,
   ]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
- 
+
   // ─── Update handlers ref when callbacks change (shouldn't happen with empty deps) ───
   useEffect(() => {
     if (chatSocketService.isConnected) {
@@ -493,6 +591,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onIncomingMessage,
         onIncomingConversation,
         onRecallMessage,
+        onCallInvite,
+        onCallStatusUpdate,
         onUserTyping,
         onUserStoppedTyping,
         onSecurityNotification,
@@ -508,6 +608,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     onIncomingMessage,
     onIncomingConversation,
     onRecallMessage,
+    onCallInvite,
+    onCallStatusUpdate,
     onUserTyping,
     onUserStoppedTyping,
     onSecurityNotification,
@@ -515,50 +617,55 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   ]);
 
   // ─── Regular methods ───────────────────────────────────────────────────────
- 
-  const fetchMessages = useCallback(async (conversationId: number) => {
-    const fetchVersion = ++messageFetchVersionRef.current;
-    currentConversationRef.current = conversationId;
-    setCurrentConversationId(conversationId);
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await chatService.getMessages(conversationId);
 
-      if (
-        fetchVersion !== messageFetchVersionRef.current ||
-        currentConversationRef.current !== conversationId
-      ) {
-        return;
-      }
-
-      setCurrentMessages(data);
+  const fetchMessages = useCallback(
+    async (conversationId: number) => {
+      const fetchVersion = ++messageFetchVersionRef.current;
+      currentConversationRef.current = conversationId;
       setCurrentConversationId(conversationId);
-      // Mark as read
-      chatService.markAsRead(conversationId).catch(() => {});
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conversationId ? { ...c, unreadCount: 0 } : c,
-        ),
-      );
-    } catch (err) {
-      if (
-        fetchVersion !== messageFetchVersionRef.current ||
-        currentConversationId !== conversationId
-      ) {
-        return;
-      }
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await chatService.getMessages(conversationId);
 
-      setError(err instanceof Error ? err.message : "Không tải được tin nhắn");
-    } finally {
-      if (
-        fetchVersion === messageFetchVersionRef.current &&
-        currentConversationRef.current === conversationId
-      ) {
-        setIsLoading(false);
+        if (
+          fetchVersion !== messageFetchVersionRef.current ||
+          currentConversationRef.current !== conversationId
+        ) {
+          return;
+        }
+
+        setCurrentMessages(data);
+        setCurrentConversationId(conversationId);
+        // Mark as read
+        chatService.markAsRead(conversationId).catch(() => {});
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conversationId ? { ...c, unreadCount: 0 } : c,
+          ),
+        );
+      } catch (err) {
+        if (
+          fetchVersion !== messageFetchVersionRef.current ||
+          currentConversationId !== conversationId
+        ) {
+          return;
+        }
+
+        setError(
+          err instanceof Error ? err.message : "Không tải được tin nhắn",
+        );
+      } finally {
+        if (
+          fetchVersion === messageFetchVersionRef.current &&
+          currentConversationRef.current === conversationId
+        ) {
+          setIsLoading(false);
+        }
       }
-    }
-  }, [currentConversationId]);
+    },
+    [currentConversationId],
+  );
 
   const updateMessage = useCallback((updatedMsg: Message) => {
     if (updatedMsg.conversationId === currentConversationRef.current) {
@@ -566,29 +673,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const pinMessage = useCallback(async (conversationId: number, messageId: string) => {
-    setError(null);
-    try {
-      await chatService.pinMessage(conversationId, messageId);
-      // Socket will handle update
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Ghim tin nhắn thất bại";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+  const pinMessage = useCallback(
+    async (conversationId: number, messageId: string) => {
+      setError(null);
+      try {
+        await chatService.pinMessage(conversationId, messageId);
+        // Socket will handle update
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Ghim tin nhắn thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
 
-  const unpinMessage = useCallback(async (conversationId: number, messageId: string) => {
-    setError(null);
-    try {
-      await chatService.unpinMessage(conversationId, messageId);
-      // Socket will handle update
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Bỏ ghim tin nhắn thất bại";
-      setError(msg);
-      throw err;
-    }
-  }, []);
+  const unpinMessage = useCallback(
+    async (conversationId: number, messageId: string) => {
+      setError(null);
+      try {
+        await chatService.unpinMessage(conversationId, messageId);
+        // Socket will handle update
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Bỏ ghim tin nhắn thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
 
   const sendMessage = useCallback(
     async (
@@ -727,9 +842,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         await chatService.leaveGroup(conversationId, userId);
         // Remove from conversations list
-        setConversations((prev) =>
-          prev.filter((c) => c.id !== conversationId)
-        );
+        setConversations((prev) => prev.filter((c) => c.id !== conversationId));
         // Clear current conversation if it's the one we're leaving
         if (currentConversationRef.current === conversationId) {
           setCurrentConversationId(null);
@@ -751,7 +864,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         await chatService.addMemberToGroup(conversationId, memberId);
         // Participant list will be updated via WebSocket, but we can also manually refresh if needed
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Không thể thêm thành viên";
+        const msg =
+          err instanceof Error ? err.message : "Không thể thêm thành viên";
         setError(msg);
         throw err;
       }
@@ -763,20 +877,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, memberId: number, role: string) => {
       try {
         await chatService.updateMemberRole(conversationId, memberId, role);
-        
+
         // Update local state with new role
-        setConversations(prevConversations =>
-          prevConversations.map(conv => {
+        setConversations((prevConversations) =>
+          prevConversations.map((conv) => {
             if (conv.id === conversationId) {
               return {
                 ...conv,
-                participants: conv.participants.map(p =>
-                  p.userId === memberId ? { ...p, role } : p
+                participants: conv.participants.map((p) =>
+                  p.userId === memberId ? { ...p, role } : p,
                 ),
               };
             }
             return conv;
-          })
+          }),
         );
       } catch (err) {
         const msg =
@@ -788,6 +902,40 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const acceptIncomingCall = useCallback(async (callId: number) => {
+    const session = await callService.acceptCall(callId);
+
+    let token = session.token ?? null;
+    if (!token) {
+      try {
+        token = await callService.issueToken(callId);
+      } catch (tokenError) {
+        console.warn("[ChatContext] Failed to issue call token", tokenError);
+      }
+    }
+
+    setActiveCall({
+      ...session,
+      token,
+    });
+    setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+  }, []);
+
+  const rejectIncomingCall = useCallback(async (callId: number) => {
+    await callService.rejectCall(callId);
+    setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+    setActiveCall((prev) => (prev?.callId === callId ? null : prev));
+  }, []);
+
+  const endActiveCall = useCallback(
+    async (callId: number, reason = "ENDED_BY_USER") => {
+      await callService.endCall(callId, reason);
+      setActiveCall((prev) => (prev?.callId === callId ? null : prev));
+      setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+    },
+    [],
+  );
+
   const value: ChatContextType = {
     conversations,
     currentMessages,
@@ -795,6 +943,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoading,
     error,
     typingUsers,
+    incomingCall,
+    activeCall,
     fetchConversations,
     fetchMessages,
     sendMessage,
@@ -809,6 +959,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     leaveGroup,
     addMemberToGroup,
     updateMemberRole,
+    acceptIncomingCall,
+    rejectIncomingCall,
+    endActiveCall,
     clearError,
   };
 

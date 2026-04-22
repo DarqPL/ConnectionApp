@@ -32,7 +32,10 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "maxUploadFileSizeBytes": 2097152
+      "maxUploadFileSizeBytes": 2097152,
+      "eas": {
+        "projectId": "d40970d7-0a01-4db3-9f81-c05ae8303e78"
+      }
     }
   }
 }

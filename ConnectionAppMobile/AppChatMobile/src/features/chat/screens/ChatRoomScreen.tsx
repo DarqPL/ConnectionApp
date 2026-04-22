@@ -15,6 +15,7 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MessageBubble from "../components/MessageBubble";
 import ForwardMessageModal from "../components/ForwardMessageModal";
@@ -28,6 +29,7 @@ import { useAuth } from "../../auth/context/AuthContext";
 import { COLORS } from "../../../theme";
 import type { Message, Poll, Participant } from "../types";
 import { chatService } from "../services/chat.service";
+import { callService, type CallMediaType } from "../services/call.service";
 import { friendService, type BlockStatus } from "../services/friend.service";
 
 const TypingDots = () => {
@@ -89,6 +91,29 @@ const TypingDots = () => {
   );
 };
 
+type ZegoCallModule = {
+  ZegoUIKitPrebuiltCall: React.ComponentType<any>;
+};
+
+const getExpoEnv = (key: string): string => {
+  const processValue = (globalThis as any)?.process?.env?.[key];
+  if (typeof processValue === "string" && processValue.trim().length > 0) {
+    return processValue.trim();
+  }
+
+  const extra = Constants.expoConfig?.extra as
+    | Record<string, unknown>
+    | undefined;
+  const extraValue = extra?.[key] ?? extra?.[key.replace(/^EXPO_PUBLIC_/, "")];
+  return typeof extraValue === "string" ? extraValue.trim() : "";
+};
+
+const isExpoGoRuntime = (): boolean => {
+  const executionEnvironment = (Constants as any).executionEnvironment;
+  const appOwnership = (Constants as any).appOwnership;
+  return executionEnvironment === "storeClient" || appOwnership === "expo";
+};
+
 const ChatRoomScreen = ({ route }: any) => {
   const insets = useSafeAreaInsets();
   const { conversationId, name, avatarUrl, type, participants } = route.params;
@@ -96,6 +121,8 @@ const ChatRoomScreen = ({ route }: any) => {
     currentMessages,
     typingUsers,
     isLoading,
+    incomingCall,
+    activeCall,
     fetchMessages,
     sendMessage,
     recallMessage,
@@ -106,6 +133,9 @@ const ChatRoomScreen = ({ route }: any) => {
     setCurrentConversation,
     leaveGroup,
     updateMemberRole,
+    acceptIncomingCall,
+    rejectIncomingCall,
+    endActiveCall,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -134,8 +164,87 @@ const ChatRoomScreen = ({ route }: any) => {
   const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
+  const [zegoCallModule, setZegoCallModule] =
+    React.useState<ZegoCallModule | null>(null);
+  const [zegoLoadError, setZegoLoadError] = React.useState<string | null>(null);
+  const callEndGuardRef = useRef<number | null>(null);
+  const zegoAppSign = getExpoEnv("EXPO_PUBLIC_ZEGO_APP_SIGN");
 
-  const currentConversation = conversations.find((c) => c.id === conversationId);
+  const currentConversation = conversations.find(
+    (c) => c.id === conversationId,
+  );
+  const incomingForConversation =
+    incomingCall?.conversationId === conversationId ? incomingCall : null;
+  const activeForConversation =
+    activeCall?.conversationId === conversationId ? activeCall : null;
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!activeForConversation || isExpoGoRuntime()) {
+      setZegoCallModule(null);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    import("@zegocloud/zego-uikit-prebuilt-call-rn")
+      .then((module) => {
+        if (!mounted) {
+          return;
+        }
+
+        const exportedModule = ((module as any).default ??
+          module) as ZegoCallModule;
+        if (!exportedModule?.ZegoUIKitPrebuiltCall) {
+          setZegoLoadError("SDK goi khong kha dung trong runtime hien tai");
+          return;
+        }
+
+        setZegoLoadError(null);
+        setZegoCallModule(exportedModule);
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+
+        console.warn("[ChatRoom] Failed to load ZEGO call module", error);
+        setZegoCallModule(null);
+        setZegoLoadError("Khong the khoi tao ZEGO SDK");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeForConversation]);
+
+  const getBackendEndReason = (reason?: string) => {
+    if (reason === "remoteHangUp") {
+      return "ENDED_BY_REMOTE";
+    }
+
+    if (reason === "kickOut") {
+      return "ENDED_BY_SYSTEM";
+    }
+
+    return "ENDED_BY_USER";
+  };
+
+  const finalizeCallEnd = async (callId: number, reason: string) => {
+    if (callEndGuardRef.current === callId) {
+      return;
+    }
+
+    callEndGuardRef.current = callId;
+    try {
+      await endActiveCall(callId, reason);
+    } finally {
+      if (callEndGuardRef.current === callId) {
+        callEndGuardRef.current = null;
+      }
+    }
+  };
 
   useEffect(() => {
     if (!currentConversation?.pinnedMessageIds) {
@@ -198,7 +307,10 @@ const ChatRoomScreen = ({ route }: any) => {
   };
 
   const handleClosePoll = async () => {
-    console.log("[ChatRoom] handleClosePoll called. activePollMessage ID:", activePollMessage?.id);
+    console.log(
+      "[ChatRoom] handleClosePoll called. activePollMessage ID:",
+      activePollMessage?.id,
+    );
     if (!activePollMessage) return;
 
     try {
@@ -498,6 +610,88 @@ const ChatRoomScreen = ({ route }: any) => {
     }
   };
 
+  const handleStartCall = async (mediaType: CallMediaType) => {
+    if (isBlockedChat) {
+      Alert.alert(
+        "Thong bao",
+        isBlockedByOther ? "Ban da bi chan" : "Ban da chan nguoi nay",
+      );
+      return;
+    }
+
+    try {
+      const session = await callService.startCallSession(
+        conversationId,
+        mediaType,
+      );
+      Alert.alert(
+        mediaType === "VIDEO" ? "Dang goi video" : "Dang goi thoai",
+        `Da tao cuoc goi #${session.callId}`,
+      );
+    } catch (error) {
+      Alert.alert(
+        "Loi",
+        error instanceof Error ? error.message : "Khong the bat dau cuoc goi",
+      );
+    }
+  };
+
+  const handleAcceptCall = async () => {
+    if (!incomingForConversation) {
+      return;
+    }
+
+    try {
+      await acceptIncomingCall(incomingForConversation.callId);
+    } catch (error) {
+      Alert.alert(
+        "Loi",
+        error instanceof Error ? error.message : "Khong the nhan cuoc goi",
+      );
+    }
+  };
+
+  const handleRejectCall = async () => {
+    if (!incomingForConversation) {
+      return;
+    }
+
+    try {
+      await rejectIncomingCall(incomingForConversation.callId);
+    } catch (error) {
+      Alert.alert(
+        "Loi",
+        error instanceof Error ? error.message : "Khong the tu choi cuoc goi",
+      );
+    }
+  };
+
+  const handleEndCall = async () => {
+    if (!activeForConversation) {
+      return;
+    }
+
+    try {
+      await finalizeCallEnd(activeForConversation.callId, "ENDED_BY_USER");
+    } catch (error) {
+      Alert.alert(
+        "Loi",
+        error instanceof Error ? error.message : "Khong the ket thuc cuoc goi",
+      );
+    }
+  };
+
+  const handleSdkCallEnd = async (
+    callId: number,
+    reason: string,
+  ): Promise<void> => {
+    try {
+      await finalizeCallEnd(callId, getBackendEndReason(reason));
+    } catch (error) {
+      console.error("[ChatRoom] Failed to sync ZEGO call end", error);
+    }
+  };
+
   const handleRecallMessage = (msgId: string) => {
     Alert.alert("Thu hồi hoặc xóa", "Bạn muốn làm gì với tin nhắn này?", [
       { text: "Hủy", style: "cancel" },
@@ -589,6 +783,8 @@ const ChatRoomScreen = ({ route }: any) => {
           isBlockedByOther={isBlockedByOther}
           onBlockUser={handleBlockUser}
           onUnblockUser={handleUnblockUser}
+          onVoiceCallPress={() => void handleStartCall("VOICE")}
+          onVideoCallPress={() => void handleStartCall("VIDEO")}
           onGroupInfoPress={
             isGroup ? () => setIsGroupSidebarOpen(true) : undefined
           }
@@ -619,6 +815,8 @@ const ChatRoomScreen = ({ route }: any) => {
           isBlockedByOther={isBlockedByOther}
           onBlockUser={handleBlockUser}
           onUnblockUser={handleUnblockUser}
+          onVoiceCallPress={() => void handleStartCall("VOICE")}
+          onVideoCallPress={() => void handleStartCall("VIDEO")}
           onGroupInfoPress={
             isGroup ? () => setIsGroupSidebarOpen(true) : undefined
           }
@@ -641,6 +839,104 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
+        {incomingForConversation && (
+          <View style={styles.callBannerIncoming}>
+            <Text style={styles.callBannerTitle}>
+              Cuoc goi{" "}
+              {incomingForConversation.mediaType === "VIDEO"
+                ? "video"
+                : "thoai"}{" "}
+              den
+            </Text>
+            <Text style={styles.callBannerSubtitle}>
+              Nhan hoac tu choi de tiep tuc
+            </Text>
+            <View style={styles.callBannerActions}>
+              <TouchableOpacity
+                style={[styles.callActionButton, styles.callAcceptButton]}
+                onPress={() => void handleAcceptCall()}
+              >
+                <Text style={styles.callActionText}>Nhan</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.callActionButton, styles.callRejectButton]}
+                onPress={() => void handleRejectCall()}
+              >
+                <Text style={styles.callActionText}>Tu choi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {activeForConversation && (
+          <View style={styles.callBannerActive}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.callBannerTitle}>
+                Cuoc goi{" "}
+                {activeForConversation.mediaType === "VIDEO"
+                  ? "video"
+                  : "thoai"}{" "}
+                dang dien ra
+              </Text>
+              <Text style={styles.callBannerSubtitle}>
+                Trang thai: {activeForConversation.status}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.callActionButton, styles.callEndButton]}
+              onPress={() => void handleEndCall()}
+            >
+              <Text style={styles.callActionText}>Ket thuc</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {activeForConversation && (
+          <View style={styles.callRoomOverlay}>
+            {isExpoGoRuntime() ? (
+              <View style={styles.callRoomLoading}>
+                <Text style={styles.callRoomLoadingText}>
+                  ZEGO native call room khong ho tro tren Expo Go. Vui long dung
+                  Development Build.
+                </Text>
+              </View>
+            ) : zegoLoadError ? (
+              <View style={styles.callRoomLoading}>
+                <Text style={styles.callRoomLoadingText}>{zegoLoadError}</Text>
+              </View>
+            ) : activeForConversation.token?.token &&
+              zegoAppSign &&
+              zegoCallModule?.ZegoUIKitPrebuiltCall ? (
+              <zegoCallModule.ZegoUIKitPrebuiltCall
+                appID={activeForConversation.token.appId}
+                appSign={zegoAppSign}
+                userID={activeForConversation.token.userId}
+                userName={
+                  user?.displayName ||
+                  user?.username ||
+                  `user_${user?.id ?? ""}`
+                }
+                callID={activeForConversation.roomId}
+                token={activeForConversation.token.token}
+                config={{
+                  turnOnCameraWhenJoining:
+                    activeForConversation.mediaType === "VIDEO",
+                  turnOnMicrophoneWhenJoining: true,
+                  useSpeakerWhenJoining: true,
+                  onCallEnd: handleSdkCallEnd,
+                }}
+              />
+            ) : (
+              <View style={styles.callRoomLoading}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.callRoomLoadingText}>
+                  Dang khoi tao phong goi...
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {pinnedMessages.length > 0 && (
           <TouchableOpacity
             style={styles.pinnedBanner}
@@ -653,7 +949,10 @@ const ChatRoomScreen = ({ route }: any) => {
             <View style={styles.pinnedContent}>
               <Text style={styles.pinnedLabel}>Tin nhắn đã ghim</Text>
               <Text style={styles.pinnedText} numberOfLines={1}>
-                {pinnedMessages[0].content || (pinnedMessages[0].attachments?.length ? "Tệp đính kèm" : "Tin nhắn bình chọn")}
+                {pinnedMessages[0].content ||
+                  (pinnedMessages[0].attachments?.length
+                    ? "Tệp đính kèm"
+                    : "Tin nhắn bình chọn")}
               </Text>
             </View>
             <TouchableOpacity
@@ -767,16 +1066,23 @@ const ChatRoomScreen = ({ route }: any) => {
             onClose={() => setIsGroupSidebarOpen(false)}
             groupName={name}
             groupAvatar={avatarUrl}
-            participants={currentConversation?.participants || participants || []}
+            participants={
+              currentConversation?.participants || participants || []
+            }
             messages={displayMessages}
-            conversation={{
-              id: conversationId,
-              type: type || "GROUP",
-              participants: currentConversation?.participants || participants || [],
-            } as any}
+            conversation={
+              {
+                id: conversationId,
+                type: type || "GROUP",
+                participants:
+                  currentConversation?.participants || participants || [],
+              } as any
+            }
             currentUserId={user?.id || 0}
             currentUserRole={
-              (currentConversation?.participants || participants)?.find((p: Participant) => p.userId === user?.id)?.role || null
+              (currentConversation?.participants || participants)?.find(
+                (p: Participant) => p.userId === user?.id,
+              )?.role || null
             }
             onLeaveGroup={async (convId, userId, transferToUserId) => {
               if (transferToUserId) {
@@ -810,11 +1116,14 @@ const ChatRoomScreen = ({ route }: any) => {
             onConfirm={handleVote}
             currentUserId={user?.id || 0}
             isCreator={(() => {
-              const check = !!user && Number(activePollMessage.senderInfo?.senderId) === Number(user?.id);
+              const check =
+                !!user &&
+                Number(activePollMessage.senderInfo?.senderId) ===
+                  Number(user?.id);
               console.log("[ChatRoom] Creator check:", {
                 senderId: activePollMessage.senderInfo?.senderId,
                 userId: user?.id,
-                isCreator: check
+                isCreator: check,
               });
               return check;
             })()}
@@ -890,6 +1199,87 @@ const styles = StyleSheet.create({
     color: "#a61e1e",
     fontSize: 13,
     fontWeight: "600",
+  },
+  callBannerIncoming: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#e9f6ff",
+    borderWidth: 1,
+    borderColor: "#b7ddff",
+  },
+  callBannerActive: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#eaf9ef",
+    borderWidth: 1,
+    borderColor: "#bfe8cc",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  callBannerTitle: {
+    color: "#12344d",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  callBannerSubtitle: {
+    color: "#486581",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  callBannerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  callActionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  callAcceptButton: {
+    backgroundColor: COLORS.primary,
+  },
+  callRejectButton: {
+    backgroundColor: "#d64545",
+  },
+  callEndButton: {
+    backgroundColor: "#d64545",
+  },
+  callRoomOverlay: {
+    flex: 1,
+    minHeight: 320,
+    position: "relative",
+    zIndex: 20,
+  },
+  callRoomLoading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    backgroundColor: "#0f172a",
+    borderRadius: 20,
+    marginHorizontal: 12,
+    marginTop: 12,
+  },
+  callRoomLoadingText: {
+    color: "#e2e8f0",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  callActionText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
   },
   typingContainer: {
     borderTopWidth: 1,

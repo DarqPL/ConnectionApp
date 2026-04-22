@@ -6,6 +6,10 @@ import React, {
   useEffect,
 } from "react";
 import { authService, User } from "../services/auth.service";
+import {
+  initZegoCallKit,
+  uninitZegoCallKit,
+} from "../../chat/services/zegoCallKit";
 
 interface AuthContextType {
   user: User | null;
@@ -90,6 +94,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!user || !accessToken) {
+      uninitZegoCallKit();
+      return;
+    }
+
+    initZegoCallKit(user).catch((error) => {
+      console.warn("[AuthContext] Failed to init ZEGO call kit", error);
+    });
+  }, [accessToken, user]);
+
   const signIn = useCallback(async (username: string, password: string) => {
     setIsLoading(true);
     setError(null);
@@ -108,20 +123,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const sendSignupOtp = useCallback(async (email: string, username?: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await authService.sendSignupOtp(username || "", email);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Gửi OTP thất bại";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const sendSignupOtp = useCallback(
+    async (email: string, username?: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.sendSignupOtp(username || "", email);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Gửi OTP thất bại";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
 
   const signUp = useCallback(
     async (
@@ -254,9 +272,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const deleteAccount = useCallback(async (otp: string) => {
-    await confirmDeleteAccount(otp);
-  }, [confirmDeleteAccount]);
+  const deleteAccount = useCallback(
+    async (otp: string) => {
+      await confirmDeleteAccount(otp);
+    },
+    [confirmDeleteAccount],
+  );
 
   const updateUserProfile = useCallback(async (data: Partial<User>) => {
     const { userService } = await import("../../chat/services/user.service");
@@ -269,7 +290,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const updatedUser = await userService.updateAvatar(formData);
       setUser(updatedUser);
-      
+
       // Force refetch to ensure avatar update is synced
       await authService.fetchMe().then((freshUser) => {
         setUser(freshUser);
