@@ -16,6 +16,7 @@ import { MemberListDialog } from "./MemberListDialog";
 import AddMemberDialog from "./AddMemberDialog";
 import { RenameGroupDialog } from "./RenameGroupDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
 import "yet-another-react-lightbox/styles.css";
@@ -55,10 +56,10 @@ const SectionHeader = ({
   </button>
 );
 
-const ChatInfoPanel = ({ 
-  chat, 
-  messages, 
-  isOpen, 
+const ChatInfoPanel = ({
+  chat,
+  messages,
+  isOpen,
   onClose,
   onLeaveGroup,
   onDeleteHistory
@@ -83,6 +84,7 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -121,10 +123,10 @@ const ChatInfoPanel = ({
     }
 
     // For members or owners of groups with 1 member, show confirmation and leave
-    const message = currentUserRole === "OWNER" 
+    const message = currentUserRole === "OWNER"
       ? "Bạn có chắc chắn muốn rời khỏi và xóa nhóm này không?"
       : "Bạn có chắc chắn muốn rời khỏi nhóm này không?";
-    
+
     const confirmed = window.confirm(message);
     if (confirmed) {
       setIsLeavingGroup(true);
@@ -181,6 +183,34 @@ const ChatInfoPanel = ({
       console.error("Lỗi xóa thành viên:", error);
       toast.error("Không thể xóa thành viên");
       throw error;
+    }
+  };
+
+  const handleAvatarUpdate = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUpdatingAvatar(true);
+    try {
+      // 1. Prepare FormData
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // 2. Update conversation avatar via dedicated endpoint (handles S3)
+      const updated = await chatService.updateConversationAvatar(chat.id, formData);
+ 
+      // 3. Update local store
+      useChatStore.getState().updateConversation({
+        ...updated,
+        avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null
+      });
+
+      toast.success("Cập nhật ảnh nhóm thành công");
+    } catch (error) {
+      console.error("Lỗi cập nhật ảnh nhóm:", error);
+      toast.error("Không thể cập nhật ảnh nhóm");
+    } finally {
+      setIsUpdatingAvatar(false);
     }
   };
 
@@ -251,20 +281,30 @@ const ChatInfoPanel = ({
               <GroupChatAvatar
                 participants={chat.participants}
                 type="sidebar"
+                avatarUrl={chat.avatarUrl}
               />
             )}
-            <button className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors">
-              <Pencil className="size-3" />
-            </button>
+            {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+              <label className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors cursor-pointer">
+                <Pencil className="size-3" />
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleAvatarUpdate}
+                  disabled={isUpdatingAvatar}
+                />
+              </label>
+            )}
           </div>
 
           <div className="space-y-1">
             <h3 className="font-bold text-xl flex items-center justify-center gap-2 group/title">
               {chat.name}
               {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="size-6 rounded-full opacity-0 group-hover/title:opacity-100 transition-opacity"
                   onClick={() => setShowRenameDialog(true)}
                 >
@@ -310,7 +350,7 @@ const ChatInfoPanel = ({
         />
         {openSections.members && (
           <div className="px-4 pb-4 space-y-3">
-            <div 
+            <div
               className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
               onClick={() => setShowMemberListDialog(true)}
             >
@@ -320,8 +360,8 @@ const ChatInfoPanel = ({
               <span className="text-sm font-medium">{chat.participants.length} thành viên</span>
             </div>
             {chat.participants.slice(0, 3).map((p) => (
-              <div 
-                key={p.id} 
+              <div
+                key={p.id}
                 className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
                 onClick={() => {
                   if (currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") {
@@ -337,8 +377,8 @@ const ChatInfoPanel = ({
               </div>
             ))}
             {chat.participants.length > 3 && (
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="w-full text-xs text-muted-foreground hover:bg-accent/50"
                 onClick={() => setShowMemberListDialog(true)}
               >
@@ -574,13 +614,13 @@ const ChatInfoPanel = ({
             disabled={isLeavingGroup}
           >
             <LogOut className="size-4 mr-2" />
-            {isLeavingGroup 
-              ? "Đang xử lý..." 
+            {isLeavingGroup
+              ? "Đang xử lý..."
               : currentUserRole === "OWNER" && chat.participants.length > 1
-              ? "Chuyển quyền & Rời" 
-              : currentUserRole === "OWNER" 
-              ? "Xóa nhóm"
-              : "Rời khỏi nhóm"}
+                ? "Chuyển quyền & Rời"
+                : currentUserRole === "OWNER"
+                  ? "Xóa nhóm"
+                  : "Rời khỏi nhóm"}
           </Button>
         </div>
       </div>
@@ -635,7 +675,7 @@ const ChatInfoPanel = ({
       />
 
       {/* Bottom Section with Pin Toggle and Logout Button */}
-     
+
     </div>
   );
 };

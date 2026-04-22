@@ -10,5 +10,6 @@ import lombok.NoArgsConstructor;
 public class ConversationRequest {
     private String name;
     private String type;
+    private String avatarUrl;
     private Long[] participantIds;
 }

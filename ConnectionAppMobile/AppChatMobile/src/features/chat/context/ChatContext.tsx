@@ -64,6 +64,11 @@ interface ChatContextType {
     role: string,
   ) => Promise<void>;
   renameGroup: (conversationId: number, newName: string) => Promise<void>;
+  updateGroupAvatar: (conversationId: number, avatarUrl: string) => Promise<void>;
+  uploadGroupAvatarFile: (
+    conversationId: number,
+    file: { uri: string; name: string; type: string },
+  ) => Promise<void>;
   clearError: () => void;
 }
 
@@ -410,18 +415,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const onConversationUpdate = useCallback((data: any) => {
     // data is MessageUpdateResponse: { type: string, payload: any }
+    // or sometimes fields are at the root (e.g. for CONVERSATION_UPDATED)
     const type = data.type;
-    const payload = data.payload;
+    const payload = data.payload || data; // fallback to root if payload is missing
 
-    if (!payload || !payload.conversationId) {
+    if (!payload || (!payload.conversationId && !payload.id)) {
       console.log("[ChatContext] Invalid conversation update:", data);
       return;
     }
-
-    const conversationId = payload.conversationId;
-    console.log(
-      `[ChatContext] Update event: ${type} for conv: ${conversationId}`,
-    );
+    
+    const conversationId = payload.conversationId || payload.id;
+    console.log(`[ChatContext] Update event: ${type} for conv: ${conversationId}`);
 
     if (type === "PIN_UPDATE") {
       chatService
@@ -512,11 +516,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     if (type === "CONVERSATION_UPDATED") {
-      const updatedConvo = payload.updatedConversation;
+      const updatedConvo = payload; // The payload IS the conversation object
       if (updatedConvo) {
         setConversations((prev) =>
           prev.map((c) =>
-            Number(c.id) === Number(conversationId) ? { ...c, ...updatedConvo } : c
+            Number(c.id) === Number(conversationId) 
+              ? { ...c, ...updatedConvo, avatarUrl: updatedConvo.avatarUrl ? `${updatedConvo.avatarUrl}?t=${Date.now()}` : null } 
+              : c
           )
         );
       }
@@ -805,6 +811,48 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const updateGroupAvatar = useCallback(
+    async (conversationId: number, avatarUrl: string) => {
+      setError(null);
+      try {
+        const updated = await chatService.updateConversation(conversationId, undefined, avatarUrl);
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId) ? { ...updated, avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null } : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Cập nhật ảnh nhóm thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const uploadGroupAvatarFile = useCallback(
+    async (conversationId: number, file: { uri: string; name: string; type: string }) => {
+      setError(null);
+      try {
+        const updated = await chatService.updateConversationAvatar(conversationId, file);
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId) 
+              ? { ...updated, avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null } 
+              : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Tải ảnh nhóm thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     async (
       conversationId: number,
@@ -1070,6 +1118,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     addMemberToGroup,
     updateMemberRole,
     renameGroup,
+    updateGroupAvatar,
+    uploadGroupAvatarFile,
     clearError,
   };
 

@@ -1,13 +1,30 @@
+import { useState, useMemo } from "react";
+import { cn } from "@/lib/utils";
+import { Ellipsis } from "lucide-react";
 import type { Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
-import { Ellipsis } from "lucide-react";
 
 interface GroupChatAvatarProps {
   participants: Participant[];
   type: "chat" | "sidebar";
+  avatarUrl?: string | null;
 }
 
-const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
+const GroupChatAvatar = ({ participants, type, avatarUrl }: GroupChatAvatarProps) => {
+  const [imageError, setImageError] = useState(false);
+
+  if (avatarUrl && !imageError) {
+    return (
+      <UserAvatar
+        type={type}
+        name={participants.map(p => p.displayName).join(", ")}
+        avatarUrl={avatarUrl}
+        className={type === "sidebar" ? "size-20" : "size-10"}
+        onError={() => setImageError(true)}
+      />
+    );
+  }
+
   const avatars = [];
   const limit = Math.min(participants.length, 4);
 

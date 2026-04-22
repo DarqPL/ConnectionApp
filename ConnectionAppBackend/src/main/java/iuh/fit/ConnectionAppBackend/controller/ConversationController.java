@@ -193,4 +193,21 @@ public class ConversationController {
         conversationService.markAsRead(conversationId, userId);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Update conversation avatar
+     */
+    @PutMapping(value = "/{conversationId}/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ConversationResponse> updateConversationAvatar(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile avatarFile) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        ConversationResponse response = conversationService.upsertConversationAvatar(conversationId, userId, avatarFile);
+        return ResponseEntity.ok(response);
+    }
 }
