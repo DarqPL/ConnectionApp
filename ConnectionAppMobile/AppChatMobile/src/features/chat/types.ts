@@ -12,6 +12,7 @@ export interface Participant {
 export interface Conversation {
   id: number;
   name: string;
+  description?: string | null;
   avatarUrl?: string | null;
   type: string;
   lastMessageAt: string | null;

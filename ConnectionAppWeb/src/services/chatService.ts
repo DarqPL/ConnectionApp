@@ -213,17 +213,21 @@ export const chatService = {
 
   /**
    * PUT /api/conversations/{conversationId}
-   * Body: { name, avatarUrl }
+   * Body: { name?, description?, avatarUrl? }
    */
   async updateConversation(
     conversationId: number,
-    name?: string,
-    avatarUrl?: string,
+    payload?: { name?: string; description?: string | null; avatarUrl?: string },
+    legacyName?: string,
+    legacyAvatarUrl?: string
   ): Promise<Conversation> {
-    const res = await api.put(`/conversations/${conversationId}`, {
-      name,
-      avatarUrl,
-    });
+    
+    // Fallback cho trường hợp vẫn đang gọi theo cách cũ: updateConversation(id, name, avatarUrl)
+    const bodyPayload = payload || {};
+    if (legacyName !== undefined) bodyPayload.name = legacyName;
+    if (legacyAvatarUrl !== undefined) bodyPayload.avatarUrl = legacyAvatarUrl;
+
+    const res = await api.put(`/conversations/${conversationId}`, bodyPayload);
     return res.data;
   },
 
@@ -237,6 +241,13 @@ export const chatService = {
   ): Promise<Conversation> {
     const res = await api.put(`/conversations/${conversationId}/avatar`, formData);
     return res.data;
+  },
+
+  async renameConversation(
+    conversationId: number,
+    name: string,
+  ): Promise<Conversation> {
+    return this.updateConversation(conversationId, { name });
   },
 
   /**

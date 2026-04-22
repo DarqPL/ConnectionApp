@@ -64,7 +64,14 @@ interface ChatContextType {
     role: string,
   ) => Promise<void>;
   renameGroup: (conversationId: number, newName: string) => Promise<void>;
-  updateGroupAvatar: (conversationId: number, avatarUrl: string) => Promise<void>;
+  updateGroupDescription: (
+    conversationId: number,
+    description: string,
+  ) => Promise<void>;
+  updateGroupAvatar: (
+    conversationId: number,
+    avatarUrl: string,
+  ) => Promise<void>;
   uploadGroupAvatarFile: (
     conversationId: number,
     file: { uri: string; name: string; type: string },
@@ -179,10 +186,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const total = attachments?.length ?? 0;
     if (total === 1) {
-      return "Da gui 1 tep dinh kem";
+      return "Đã gửi 1 tệp đính kèm";
     }
     if (total > 1) {
-      return `Da gui ${total} tep dinh kem`;
+      return `Đã gửi ${total} tệp đính kèm`;
     }
     return "";
   };
@@ -351,7 +358,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     console.log("[ChatContext] User typing:", data.userId);
 
     const displayName =
-      (data.displayName ?? "Nguoi dung").trim() || "Nguoi dung";
+      (data.displayName ?? "Người dùng").trim() || "Người dùng";
 
     setTypingUsers((prev) => {
       const index = prev.findIndex((item) => item.userId === data.userId);
@@ -794,16 +801,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, newName: string) => {
       setError(null);
       try {
-        await chatService.updateConversation(conversationId, newName);
+        await chatService.updateConversation(conversationId, { name: newName });
         // Socket will handle update, but we can update local state immediately for better UX
         setConversations((prev) =>
           prev.map((c) =>
-            Number(c.id) === Number(conversationId) ? { ...c, name: newName } : c,
+            Number(c.id) === Number(conversationId)
+              ? { ...c, name: newName }
+              : c,
           ),
         );
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Đổi tên nhóm thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const updateGroupDescription = useCallback(
+    async (conversationId: number, description: string) => {
+      setError(null);
+      try {
+        await chatService.updateConversation(conversationId, {
+          description: description.trim() || null,
+        });
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId)
+              ? { ...c, description: description.trim() || null }
+              : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Cập nhật mô tả nhóm thất bại";
         setError(msg);
         throw err;
       }
@@ -818,7 +851,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         const updated = await chatService.updateConversation(conversationId, undefined, avatarUrl);
         setConversations((prev) =>
           prev.map((c) =>
-            Number(c.id) === Number(conversationId) ? { ...updated, avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null } : c,
+            Number(c.id) === Number(conversationId) 
+              ? { ...updated, avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null } 
+              : c,
           ),
         );
       } catch (err) {
@@ -844,8 +879,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           ),
         );
       } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : "Tải ảnh nhóm thất bại";
+        const msg = err instanceof Error ? err.message : "Tải ảnh nhóm thất bại";
         setError(msg);
         throw err;
       }
@@ -992,7 +1026,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       reactionCode: string | null,
     ) => {
       if (!user) {
-        throw new Error("Vui long dang nhap lai");
+        throw new Error("Vui lòng đăng nhập lại");
       }
 
       const previousMessage =
@@ -1016,7 +1050,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         setCurrentMessages((prev) => upsertMessage(prev, serverMessage));
       } catch (err) {
         setCurrentMessages((prev) => upsertMessage(prev, previousMessage));
-        const msg = err instanceof Error ? err.message : "Tha cam xuc that bai";
+        const msg = err instanceof Error ? err.message : "Thả cảm xúc thất bại";
         setError(msg);
         throw err;
       }
@@ -1118,6 +1152,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     addMemberToGroup,
     updateMemberRole,
     renameGroup,
+    updateGroupDescription,
     updateGroupAvatar,
     uploadGroupAvatarFile,
     clearError,

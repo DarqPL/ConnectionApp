@@ -111,6 +111,7 @@ const ChatRoomScreen = ({ route }: any) => {
     updateMemberRole,
     removeMemberFromGroup,
     renameGroup,
+    updateGroupDescription,
     updateGroupAvatar,
     uploadGroupAvatarFile,
   } = useChat();
@@ -962,12 +963,14 @@ const ChatRoomScreen = ({ route }: any) => {
             groupAvatar={currentConversation?.avatarUrl || avatarUrl}
             participants={currentParticipants}
             messages={displayMessages}
+            pinnedMessages={pinnedMessages}
             conversation={
-              {
+              currentConversation ??
+              ({
                 id: conversationId,
                 type: type || "GROUP",
                 participants: currentParticipants,
-              } as any
+              } as any)
             }
             currentUserId={user?.id || 0}
             currentUserRole={
@@ -1004,6 +1007,14 @@ const ChatRoomScreen = ({ route }: any) => {
               } catch (error) {
                 console.error("Lỗi đổi tên nhóm:", error);
                 Alert.alert("Lỗi", "Không thể đổi tên nhóm");
+              }
+            }}
+            onUpdateDescription={async (newDescription) => {
+              try {
+                await updateGroupDescription(conversationId, newDescription);
+              } catch (error) {
+                console.error("Lỗi cập nhật mô tả nhóm:", error);
+                Alert.alert("Lỗi", "Không thể cập nhật mô tả nhóm");
               }
             }}
             onUpdateAvatarFile={async (file) => {

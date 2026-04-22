@@ -1,10 +1,25 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  X, Download, File, UserPlus, Settings, BellOff, Pin,
-  ChevronDown, ChevronRight, Users, Pencil,
-  Calendar, StickyNote, Image as ImageIcon, LogOut, Trash2,
-  MessageCircle, Link as LinkIcon, BarChart3
+  X,
+  Download,
+  File,
+  UserPlus,
+  BellOff,
+  Pin,
+  ChevronDown,
+  ChevronRight,
+  Users,
+  Pencil,
+  Calendar,
+  StickyNote,
+  Image as ImageIcon,
+  LogOut,
+  Trash2,
+  MessageCircle,
+  Link as LinkIcon,
+  BarChart3,
 } from "lucide-react";
 import type { Message, Conversation } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -36,7 +51,7 @@ const SectionHeader = ({
   title,
   isOpen,
   onToggle,
-  count
+  count,
 }: {
   title: string;
   isOpen: boolean;
@@ -49,10 +64,17 @@ const SectionHeader = ({
   >
     <div className="flex items-center gap-2">
       <span className="font-semibold text-sm">
-        {title} {count !== undefined && <span className="text-muted-foreground font-normal">({count})</span>}
+        {title}{" "}
+        {count !== undefined && (
+          <span className="text-muted-foreground font-normal">({count})</span>
+        )}
       </span>
     </div>
-    {isOpen ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+    {isOpen ? (
+      <ChevronDown className="size-4 text-muted-foreground" />
+    ) : (
+      <ChevronRight className="size-4 text-muted-foreground" />
+    )}
   </button>
 );
 
@@ -62,9 +84,12 @@ const ChatInfoPanel = ({
   isOpen,
   onClose,
   onLeaveGroup,
-  onDeleteHistory
+  onDeleteHistory,
 }: ChatInfoPanelProps) => {
   const { user } = useAuthStore();
+  const fetchConversationById = useChatStore(
+    (state) => state.fetchConversationById,
+  );
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     members: true,
     board: true,
@@ -84,26 +109,43 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  
+  // Đã gộp state của cả nhánh feature và main
+  const [descriptionDraft, setDescriptionDraft] = useState(
+    chat.description ?? "",
+  );
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
     if (!user) return null;
-    const participant = chat.participants.find(p => p.userId === user.id);
+    const participant = chat.participants.find((p) => p.userId === user.id);
     return participant?.role || null;
   }, [chat.participants, user]);
 
   // Find CO_OWNER if exists
   const coOwner = useMemo(() => {
-    return chat.participants.find(p => p.role === "CO_OWNER") || null;
+    return chat.participants.find((p) => p.role === "CO_OWNER") || null;
   }, [chat.participants]);
 
+  const canEditDescription =
+    currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+
+  const pinnedMessages = chat.pinnedMessages ?? [];
+
+  useEffect(() => {
+    setDescriptionDraft(chat.description ?? "");
+  }, [chat.id, chat.description]);
+
   const toggleSection = (section: string) => {
-    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const handleDeleteHistory = () => {
-    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện này không?\n\nLưu ý: Hành động này không thể hoàn tác.");
+    const confirmed = window.confirm(
+      "Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện này không?\n\nLưu ý: Hành động này không thể hoàn tác.",
+    );
     if (confirmed) {
       onDeleteHistory?.();
     }
@@ -123,9 +165,10 @@ const ChatInfoPanel = ({
     }
 
     // For members or owners of groups with 1 member, show confirmation and leave
-    const message = currentUserRole === "OWNER"
-      ? "Bạn có chắc chắn muốn rời khỏi và xóa nhóm này không?"
-      : "Bạn có chắc chắn muốn rời khỏi nhóm này không?";
+    const message =
+      currentUserRole === "OWNER"
+        ? "Bạn có chắc chắn muốn rời khỏi và xóa nhóm này không?"
+        : "Bạn có chắc chắn muốn rời khỏi nhóm này không?";
 
     const confirmed = window.confirm(message);
     if (confirmed) {
@@ -133,7 +176,9 @@ const ChatInfoPanel = ({
       try {
         if (user) {
           await chatService.leaveGroup(chat.id, user.id);
-          toast.success(currentUserRole === "OWNER" ? "Đã xóa nhóm" : "Đã rời khỏi nhóm");
+          toast.success(
+            currentUserRole === "OWNER" ? "Đã xóa nhóm" : "Đã rời khỏi nhóm",
+          );
           onLeaveGroup?.();
           onClose();
         }
@@ -186,6 +231,27 @@ const ChatInfoPanel = ({
     }
   };
 
+  // Đã giữ lại cả 2 hàm handleSaveDescription và handleAvatarUpdate
+  const handleSaveDescription = async () => {
+    if (!canEditDescription) {
+      return;
+    }
+
+    setIsSavingDescription(true);
+    try {
+      await chatService.updateConversation(chat.id, {
+        description: descriptionDraft.trim() || null,
+      });
+      await fetchConversationById(chat.id);
+      toast.success("Đã cập nhật mô tả nhóm");
+    } catch (error) {
+      console.error("Lỗi cập nhật mô tả nhóm:", error);
+      toast.error("Không thể cập nhật mô tả nhóm");
+    } finally {
+      setIsSavingDescription(false);
+    }
+  };
+
   const handleAvatarUpdate = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -197,7 +263,7 @@ const ChatInfoPanel = ({
       formData.append("file", file);
 
       // 2. Update conversation avatar via dedicated endpoint (handles S3)
-      const updated = await chatService.updateConversationAvatar(chat.id, formData);
+      const updated = await chatService.updateConversationAvatar(chat.id, formData as any);
  
       // 3. Update local store
       useChatStore.getState().updateConversation({
@@ -214,16 +280,30 @@ const ChatInfoPanel = ({
     }
   };
 
-
   const allMedia = useMemo(() => {
-    const media: { src: string; width: number; height: number; type: "image" }[] = [];
-    messages.forEach(msg => {
-      msg.attachments.forEach(att => {
+    const media: {
+      src: string;
+      width: number;
+      height: number;
+      type: "image";
+    }[] = [];
+    messages.forEach((msg) => {
+      msg.attachments.forEach((att) => {
         if (att.type === "IMAGE") {
-          media.push({ src: att.fileUrl, width: 800, height: 600, type: "image" });
+          media.push({
+            src: att.fileUrl,
+            width: 800,
+            height: 600,
+            type: "image",
+          });
         } else if (att.type === "VIDEO") {
           // PhotoAlbum handles images better, videos might just show a placeholder or we use a custom renderer
-          media.push({ src: att.fileUrl, width: 800, height: 600, type: "image" });
+          media.push({
+            src: att.fileUrl,
+            width: 800,
+            height: 600,
+            type: "image",
+          });
         }
       });
     });
@@ -231,15 +311,20 @@ const ChatInfoPanel = ({
   }, [messages]);
 
   const allFiles = useMemo(() => {
-    const files: Array<typeof messages[0]["attachments"][0] & { createdAt: string }> = [];
-    messages.forEach(msg => {
-      msg.attachments.forEach(att => {
+    const files: Array<
+      (typeof messages)[0]["attachments"][0] & { createdAt: string }
+    > = [];
+    messages.forEach((msg) => {
+      msg.attachments.forEach((att) => {
         if (att.type !== "IMAGE" && att.type !== "VIDEO") {
           files.push({ ...att, createdAt: msg.createdAt });
         }
       });
     });
-    return files.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return files.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   }, [messages]);
 
   const handleDownload = (fileUrl: string, fileName?: string) => {
@@ -255,13 +340,20 @@ const ChatInfoPanel = ({
     <div
       className={cn(
         "h-full bg-background border-l border-border transition-all duration-300 flex flex-col overflow-hidden",
-        isOpen ? "w-80 opacity-100" : "w-0 opacity-0 pointer-events-none border-none"
+        isOpen
+          ? "w-80 opacity-100"
+          : "w-0 opacity-0 pointer-events-none border-none",
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border bg-background z-10">
         <h2 className="font-bold text-lg">Thông tin hội thoại</h2>
-        <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 rounded-full"
+          onClick={onClose}
+        >
           <X className="size-4" />
         </Button>
       </div>
@@ -301,7 +393,8 @@ const ChatInfoPanel = ({
           <div className="space-y-1">
             <h3 className="font-bold text-xl flex items-center justify-center gap-2 group/title">
               {chat.name}
-              {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+              {(currentUserRole === "OWNER" ||
+                currentUserRole === "CO_OWNER") && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -314,12 +407,15 @@ const ChatInfoPanel = ({
             </h3>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 w-full pt-2">
+          <div className="grid grid-cols-3 gap-4 w-full pt-2">
             {[
               { icon: BellOff, label: "Tắt thông báo", action: "mute" },
               { icon: Pin, label: "Ghim hội thoại", action: "pin" },
-              { icon: UserPlus, label: "Thêm thành viên", action: "add-member" },
-              { icon: Settings, label: "Quản lý", action: "settings" },
+              {
+                icon: UserPlus,
+                label: "Thêm thành viên",
+                action: "add-member",
+              },
             ].map((action, i) => (
               <button
                 key={i}
@@ -357,22 +453,36 @@ const ChatInfoPanel = ({
               <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Users className="size-4" />
               </div>
-              <span className="text-sm font-medium">{chat.participants.length} thành viên</span>
+              <span className="text-sm font-medium">
+                {chat.participants.length} thành viên
+              </span>
             </div>
             {chat.participants.slice(0, 3).map((p) => (
               <div
                 key={p.id}
                 className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
                 onClick={() => {
-                  if (currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") {
+                  if (
+                    currentUserRole === "OWNER" ||
+                    currentUserRole === "CO_OWNER"
+                  ) {
                     setShowMemberListDialog(true);
                   }
                 }}
               >
-                <UserAvatar type="chat" name={p.displayName} avatarUrl={p.avatarUrl || undefined} className="size-8" />
+                <UserAvatar
+                  type="chat"
+                  name={p.displayName}
+                  avatarUrl={p.avatarUrl || undefined}
+                  className="size-8"
+                />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{p.displayName}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase">{p.role}</p>
+                  <p className="text-sm font-medium truncate">
+                    {p.displayName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground uppercase">
+                    {p.role}
+                  </p>
                 </div>
               </div>
             ))}
@@ -390,15 +500,32 @@ const ChatInfoPanel = ({
 
         {/* Group Description Section */}
         <SectionHeader
-          title="Thêm mô tả nhóm"
+          title="Mô tả nhóm"
           isOpen={openSections.description}
           onToggle={() => toggleSection("description")}
         />
         {openSections.description && (
-          <div className="px-4 pb-4">
-            <div className="p-3 rounded-lg bg-secondary/30 text-sm text-muted-foreground italic">
-              Chưa có mô tả nhóm. Nhấn để thêm mô tả cho nhóm của bạn.
-            </div>
+          <div className="px-4 pb-4 space-y-3">
+            <Textarea
+              value={descriptionDraft}
+              onChange={(e) => setDescriptionDraft(e.target.value)}
+              placeholder="Nhập mô tả nhóm..."
+              disabled={!canEditDescription || isSavingDescription}
+              className="min-h-24"
+            />
+            {canEditDescription ? (
+              <Button
+                size="sm"
+                onClick={handleSaveDescription}
+                disabled={isSavingDescription}
+              >
+                {isSavingDescription ? "Đang lưu..." : "Lưu mô tả"}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                Chỉ trưởng nhóm hoặc phó nhóm mới có thể chỉnh sửa mô tả.
+              </p>
+            )}
           </div>
         )}
 
@@ -409,11 +536,40 @@ const ChatInfoPanel = ({
           onToggle={() => toggleSection("pinnedMessages")}
         />
         {openSections.pinnedMessages && (
-          <div className="px-4 pb-4">
-            <div className="text-center py-4 text-muted-foreground">
-              <MessageCircle className="size-6 mx-auto mb-2 opacity-50" />
-              <p className="text-xs italic">Chưa có tin nhắn đã ghim</p>
-            </div>
+          <div className="px-4 pb-4 space-y-2">
+            {pinnedMessages.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <MessageCircle className="size-6 mx-auto mb-2 opacity-50" />
+                <p className="text-xs italic">Chưa có tin nhắn đã ghim</p>
+              </div>
+            ) : (
+              pinnedMessages.map((message) => {
+                const preview =
+                  message.content?.trim() ||
+                  (message.attachments.length > 0
+                    ? `[${message.attachments.length} tệp đính kèm]`
+                    : "[Tin nhắn trống]");
+
+                return (
+                  <div
+                    key={message.id}
+                    className="rounded-lg border border-border/40 bg-secondary/20 p-3"
+                  >
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold truncate">
+                        {message.senderInfo.displayName}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground whitespace-nowrap">
+                        {new Date(message.createdAt).toLocaleString("vi-VN")}
+                      </p>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {preview}
+                    </p>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 
@@ -457,7 +613,11 @@ const ChatInfoPanel = ({
           <div className="px-4 pb-4 space-y-2">
             <div className="p-3 rounded-lg bg-secondary/30 border border-border/40 text-xs space-y-2">
               <p className="font-semibold">https://zalo.me/g/mvdfnx533</p>
-              <Button size="sm" variant="outline" className="w-full h-7 text-xs">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs"
+              >
                 <LinkIcon className="size-3 mr-1" />
                 Sao chép link
               </Button>
@@ -477,7 +637,10 @@ const ChatInfoPanel = ({
               { icon: Calendar, label: "Danh sách nhắc hẹn" },
               { icon: StickyNote, label: "Ghi chú, ghim, bình chọn" },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group">
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
+              >
                 <item.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="text-sm font-medium">{item.label}</span>
               </div>
@@ -499,22 +662,24 @@ const ChatInfoPanel = ({
                 {/* Image Grid */}
                 <div className="rounded-xl overflow-hidden border border-border/40 bg-secondary/20">
                   <div className="grid grid-cols-4 gap-1 p-1">
-                    {allMedia.slice(0, showAllImages ? allMedia.length : 8).map((photo, idx) => (
-                      <div
-                        key={idx}
-                        className="relative aspect-square rounded-lg overflow-hidden cursor-pointer group"
-                        onClick={() => setLightboxIndex(idx)}
-                      >
-                        <img
-                          src={photo.src}
-                          alt={`media-${idx}`}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <ImageIcon className="size-5 text-white" />
+                    {allMedia
+                      .slice(0, showAllImages ? allMedia.length : 8)
+                      .map((photo, idx) => (
+                        <div
+                          key={idx}
+                          className="relative aspect-square rounded-lg overflow-hidden cursor-pointer group"
+                          onClick={() => setLightboxIndex(idx)}
+                        >
+                          <img
+                            src={photo.src}
+                            alt={`media-${idx}`}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <ImageIcon className="size-5 text-white" />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
 
@@ -525,7 +690,9 @@ const ChatInfoPanel = ({
                     className="w-full h-9 text-xs font-semibold"
                     onClick={() => setShowAllImages(!showAllImages)}
                   >
-                    {showAllImages ? "Thu gọn" : `Xem tất cả (${allMedia.length})`}
+                    {showAllImages
+                      ? "Thu gọn"
+                      : `Xem tất cả (${allMedia.length})`}
                   </Button>
                 )}
 
@@ -558,25 +725,44 @@ const ChatInfoPanel = ({
             {allFiles.length > 0 ? (
               <>
                 {allFiles.slice(0, 3).map((file, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-all group cursor-pointer" onClick={() => handleDownload(file.fileUrl, file.originalFileName || undefined)}>
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-all group cursor-pointer"
+                    onClick={() =>
+                      handleDownload(
+                        file.fileUrl,
+                        file.originalFileName || undefined,
+                      )
+                    }
+                  >
                     <div className="size-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                       <File className="size-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" title={file.originalFileName || undefined}>
+                      <p
+                        className="text-sm font-medium truncate"
+                        title={file.originalFileName || undefined}
+                      >
                         {file.originalFileName}
                       </p>
                       <p className="text-[10px] text-muted-foreground uppercase">
                         {new Date(file.createdAt).toLocaleDateString("vi-VN")}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon" className="size-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
                       <Download className="size-4" />
                     </Button>
                   </div>
                 ))}
                 {allFiles.length > 3 && (
-                  <Button variant="ghost" className="w-full text-xs text-muted-foreground hover:bg-accent/50 underline-offset-4 hover:underline">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs text-muted-foreground hover:bg-accent/50 underline-offset-4 hover:underline"
+                  >
                     Xem tất cả
                   </Button>
                 )}
@@ -603,7 +789,9 @@ const ChatInfoPanel = ({
           {currentUserRole === "OWNER" && chat.participants.length > 1 && (
             <div className="px-2 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-700 dark:text-yellow-400">
               <p className="font-medium">Bạn là quản lý nhóm</p>
-              <p className="text-[11px] mt-1">Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm</p>
+              <p className="text-[11px] mt-1">
+                Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm
+              </p>
             </div>
           )}
           <Button
@@ -673,9 +861,6 @@ const ChatInfoPanel = ({
         currentName={chat.name}
         conversationId={chat.id}
       />
-
-      {/* Bottom Section with Pin Toggle and Logout Button */}
-
     </div>
   );
 };
