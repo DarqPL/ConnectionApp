@@ -63,6 +63,7 @@ interface ChatContextType {
     memberId: number,
     role: string,
   ) => Promise<void>;
+  renameGroup: (conversationId: number, newName: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -509,6 +510,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       return;
     }
+
+    if (type === "CONVERSATION_UPDATED") {
+      const updatedConvo = payload.updatedConversation;
+      if (updatedConvo) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId) ? { ...c, ...updatedConvo } : c
+          )
+        );
+      }
+      return;
+    }
   }, []);
 
   const onSecurityNotification = useCallback(
@@ -764,6 +777,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("[ChatContext] removeMemberFromGroup Error:", err);
         const msg =
           err instanceof Error ? err.message : "Xóa thành viên thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const renameGroup = useCallback(
+    async (conversationId: number, newName: string) => {
+      setError(null);
+      try {
+        await chatService.updateConversation(conversationId, newName);
+        // Socket will handle update, but we can update local state immediately for better UX
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId) ? { ...c, name: newName } : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Đổi tên nhóm thất bại";
         setError(msg);
         throw err;
       }
@@ -1035,6 +1069,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     leaveGroup,
     addMemberToGroup,
     updateMemberRole,
+    renameGroup,
     clearError,
   };
 

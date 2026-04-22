@@ -311,6 +311,28 @@ export class ChatService {
     }
   }
 
+  async updateConversation(
+    conversationId: number,
+    name: string,
+  ): Promise<Conversation> {
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể cập nhật thông tin nhóm");
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
   async removeMemberFromGroup(
     conversationId: number,
     userId: number,

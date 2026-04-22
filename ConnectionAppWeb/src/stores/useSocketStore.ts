@@ -243,6 +243,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               return;
             }
 
+            if (update?.type === "CONVERSATION_UPDATED" && update?.updatedConversation) {
+              useChatStore.getState().updateConversation(update.updatedConversation);
+              return;
+            }
+
             // update: { conversationId, participants }
             if (update?.conversationId && update?.participants) {
               useChatStore
