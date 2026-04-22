@@ -44,7 +44,7 @@ export const RenameGroupDialog = ({
 
     setIsLoading(true);
     try {
-      const updated = await chatService.renameConversation(conversationId, name.trim());
+      const updated = await chatService.updateConversation(conversationId, name.trim());
       useChatStore.getState().updateConversation(updated);
       toast.success("Đã đổi tên nhóm thành công");
       onClose();

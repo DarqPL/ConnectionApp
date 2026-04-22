@@ -109,10 +109,13 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  
+  // Đã gộp state của cả nhánh feature và main
   const [descriptionDraft, setDescriptionDraft] = useState(
     chat.description ?? "",
   );
   const [isSavingDescription, setIsSavingDescription] = useState(false);
+  const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -228,6 +231,7 @@ const ChatInfoPanel = ({
     }
   };
 
+  // Đã giữ lại cả 2 hàm handleSaveDescription và handleAvatarUpdate
   const handleSaveDescription = async () => {
     if (!canEditDescription) {
       return;
@@ -245,6 +249,34 @@ const ChatInfoPanel = ({
       toast.error("Không thể cập nhật mô tả nhóm");
     } finally {
       setIsSavingDescription(false);
+    }
+  };
+
+  const handleAvatarUpdate = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUpdatingAvatar(true);
+    try {
+      // 1. Prepare FormData
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // 2. Update conversation avatar via dedicated endpoint (handles S3)
+      const updated = await chatService.updateConversationAvatar(chat.id, formData as any);
+ 
+      // 3. Update local store
+      useChatStore.getState().updateConversation({
+        ...updated,
+        avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null
+      });
+
+      toast.success("Cập nhật ảnh nhóm thành công");
+    } catch (error) {
+      console.error("Lỗi cập nhật ảnh nhóm:", error);
+      toast.error("Không thể cập nhật ảnh nhóm");
+    } finally {
+      setIsUpdatingAvatar(false);
     }
   };
 
@@ -341,11 +373,21 @@ const ChatInfoPanel = ({
               <GroupChatAvatar
                 participants={chat.participants}
                 type="sidebar"
+                avatarUrl={chat.avatarUrl}
               />
             )}
-            <button className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors">
-              <Pencil className="size-3" />
-            </button>
+            {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+              <label className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors cursor-pointer">
+                <Pencil className="size-3" />
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleAvatarUpdate}
+                  disabled={isUpdatingAvatar}
+                />
+              </label>
+            )}
           </div>
 
           <div className="space-y-1">
@@ -819,8 +861,6 @@ const ChatInfoPanel = ({
         currentName={chat.name}
         conversationId={chat.id}
       />
-
-      {/* Bottom Section with Pin Toggle and Logout Button */}
     </div>
   );
 };

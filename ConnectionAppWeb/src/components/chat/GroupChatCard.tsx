@@ -40,6 +40,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           <GroupChatAvatar
             participants={convo.participants}
             type="chat"
+            avatarUrl={convo.avatarUrl}
           />
         </>
       }

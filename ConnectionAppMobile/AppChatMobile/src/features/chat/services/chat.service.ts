@@ -311,10 +311,20 @@ export class ChatService {
     }
   }
 
+  // Đã gộp cả name, avatarUrl và description vào payload
   async updateConversation(
     conversationId: number,
-    payload: { name?: string; description?: string | null },
+    payload?: { name?: string; description?: string | null; avatarUrl?: string },
+    // Để tương thích ngược nếu ở đâu đó đang gọi: updateConversation(id, name, avatarUrl)
+    legacyName?: string,
+    legacyAvatarUrl?: string
   ): Promise<Conversation> {
+    
+    // Nếu truyền param cũ, thì map sang body
+    const bodyPayload = payload || {};
+    if (legacyName !== undefined) bodyPayload.name = legacyName;
+    if (legacyAvatarUrl !== undefined) bodyPayload.avatarUrl = legacyAvatarUrl;
+
     const response = await authService.authFetch(
       `/conversations/${conversationId}`,
       {
@@ -322,7 +332,7 @@ export class ChatService {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(bodyPayload),
       },
     );
 
@@ -331,6 +341,32 @@ export class ChatService {
         response,
         "Không thể cập nhật thông tin nhóm",
       );
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
+  async updateConversationAvatar(
+    conversationId: number,
+    file: { uri: string; name: string; type: string },
+  ): Promise<Conversation> {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/avatar`,
+      {
+        method: "PUT",
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể cập nhật ảnh đại diện nhóm");
     }
 
     return (await response.json()) as Conversation;

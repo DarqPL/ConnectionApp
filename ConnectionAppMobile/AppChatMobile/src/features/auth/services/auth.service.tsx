@@ -494,6 +494,7 @@ export class AuthService {
           ...(this.accessToken
             ? { Authorization: `Bearer ${this.accessToken}` }
             : {}),
+          Accept: "application/json",
         },
       };
       console.log(`[AuthService] Using FormData headers with auth token`);
@@ -502,6 +503,7 @@ export class AuthService {
       if (this.accessToken) {
         headers.set("Authorization", `Bearer ${this.accessToken}`);
       }
+      headers.set("Accept", "application/json");
       requestInit = { ...init, headers };
       console.log(`[AuthService] Using regular headers`);
     }

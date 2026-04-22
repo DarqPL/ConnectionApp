@@ -112,6 +112,8 @@ const ChatRoomScreen = ({ route }: any) => {
     removeMemberFromGroup,
     renameGroup,
     updateGroupDescription,
+    updateGroupAvatar,
+    uploadGroupAvatarFile,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -653,8 +655,8 @@ const ChatRoomScreen = ({ route }: any) => {
       <View style={[styles.container, styles.center]}>
         <StatusBar barStyle="light-content" />
         <ChatHeader
-          name={name}
-          avatar={avatarUrl}
+          name={currentConversation?.name || name}
+          avatar={currentConversation?.avatarUrl || avatarUrl}
           type={type}
           participants={participants}
           isBlockedByMe={isBlockedByMe}
@@ -683,10 +685,10 @@ const ChatRoomScreen = ({ route }: any) => {
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         <StatusBar barStyle="light-content" />
         <ChatHeader
-          name={name}
-          avatar={avatarUrl}
+          name={currentConversation?.name || name}
+          avatar={currentConversation?.avatarUrl || avatarUrl}
           type={type}
-          participants={participants}
+          participants={currentParticipants}
           isBlockedByMe={isBlockedByMe}
           isBlockedByOther={isBlockedByOther}
           onBlockUser={handleBlockUser}
@@ -957,8 +959,8 @@ const ChatRoomScreen = ({ route }: any) => {
           <GroupSidebar
             visible={isGroupSidebarOpen}
             onClose={() => setIsGroupSidebarOpen(false)}
-            groupName={name}
-            groupAvatar={avatarUrl}
+            groupName={currentConversation?.name || name || "Tùy chọn"}
+            groupAvatar={currentConversation?.avatarUrl || avatarUrl}
             participants={currentParticipants}
             messages={displayMessages}
             pinnedMessages={pinnedMessages}
@@ -1015,6 +1017,14 @@ const ChatRoomScreen = ({ route }: any) => {
                 Alert.alert("Lỗi", "Không thể cập nhật mô tả nhóm");
               }
             }}
+            onUpdateAvatarFile={async (file) => {
+              try {
+                await uploadGroupAvatarFile(conversationId, file);
+              } catch (error) {
+                console.error("Lỗi cập nhật ảnh nhóm:", error);
+                Alert.alert("Lỗi", "Không thể cập nhật ảnh nhóm");
+              }
+            }}
           />
         )}
 
@@ -1035,7 +1045,7 @@ const ChatRoomScreen = ({ route }: any) => {
               const check =
                 !!user &&
                 Number(activePollMessage.senderInfo?.senderId) ===
-                  Number(user?.id);
+                Number(user?.id);
               console.log("[ChatRoom] Creator check:", {
                 senderId: activePollMessage.senderInfo?.senderId,
                 userId: user?.id,

@@ -162,6 +162,7 @@ const ChatWindowHeader = ({
               <GroupChatAvatar
                 participants={chat.participants}
                 type="sidebar"
+                avatarUrl={chat.avatarUrl}
               />
             )}
           </div>

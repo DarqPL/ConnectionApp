@@ -25,6 +25,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -58,6 +60,9 @@ public class ConversationService {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired
+    private S3StorageService s3StorageService;
 
     /**
      * Get all conversations for a user with pagination
@@ -190,6 +195,10 @@ public class ConversationService {
 
         if (request.getName() != null && !request.getName().isEmpty()) {
             conversation.setName(request.getName());
+        }
+
+        if (request.getAvatarUrl() != null) {
+            conversation.setAvatarUrl(request.getAvatarUrl());
         }
 
         conversation.setUpdateAt(LocalDateTime.now());
@@ -501,5 +510,61 @@ public class ConversationService {
                 .joinedAt(conversationUser.getJoinedAt())
                 .unreadCounts(conversationUser.getUnreadCounts())
                 .build();
+    }
+
+    /**
+     * Upsert conversation avatar using S3
+     */
+    @Transactional
+    public ConversationResponse upsertConversationAvatar(Long conversationId, Long userId, MultipartFile avatarFile) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        // Check if user is owner or co-owner
+        ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!conversationUser.getRole().equals(ConversationRole.OWNER) && 
+            !conversationUser.getRole().equals(ConversationRole.CO_OWNER)) {
+            throw new UnauthorizedException("Only owner or co-owner can update conversation avatar");
+        }
+
+        String existingKey = StringUtils.hasText(conversation.getAvatarUrl())
+                ? s3StorageService.extractObjectKeyFromUrl(conversation.getAvatarUrl())
+                : null;
+
+        ImageObjectResponse upload;
+        try {
+            if (StringUtils.hasText(existingKey)) {
+                // Replace the existing object in S3
+                upload = s3StorageService.replaceImage(existingKey, avatarFile);
+            } else {
+                // No avatar yet — upload as new
+                upload = s3StorageService.uploadImage(avatarFile, "conversations/" + conversationId);
+            }
+        } catch (iuh.fit.ConnectionAppBackend.exception.ImageNotFoundException ex) {
+            // Fallback if existing image not found in S3
+            upload = s3StorageService.uploadImage(avatarFile, "conversations/" + conversationId);
+        }
+
+        conversation.setAvatarUrl(upload.getImageUrl());
+        conversation.setUpdateAt(LocalDateTime.now());
+        Conversation updatedConversation = conversationRepository.save(conversation);
+
+        // Send real-time notification to all members
+        ConversationResponse response = mapToConversationResponse(updatedConversation);
+        
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "CONVERSATION_UPDATED");
+        update.put("name", updatedConversation.getName());
+        update.put("updatedConversation", response);
+
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : allMembers) {
+            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/conversation-updates", update);
+        }
+
+        return response;
     }
 }

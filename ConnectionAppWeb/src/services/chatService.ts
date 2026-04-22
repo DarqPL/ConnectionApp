@@ -213,13 +213,33 @@ export const chatService = {
 
   /**
    * PUT /api/conversations/{conversationId}
-   * Body: { name?, description? }
+   * Body: { name?, description?, avatarUrl? }
    */
   async updateConversation(
     conversationId: number,
-    payload: { name?: string; description?: string | null },
+    payload?: { name?: string; description?: string | null; avatarUrl?: string },
+    legacyName?: string,
+    legacyAvatarUrl?: string
   ): Promise<Conversation> {
-    const res = await api.put(`/conversations/${conversationId}`, payload);
+    
+    // Fallback cho trường hợp vẫn đang gọi theo cách cũ: updateConversation(id, name, avatarUrl)
+    const bodyPayload = payload || {};
+    if (legacyName !== undefined) bodyPayload.name = legacyName;
+    if (legacyAvatarUrl !== undefined) bodyPayload.avatarUrl = legacyAvatarUrl;
+
+    const res = await api.put(`/conversations/${conversationId}`, bodyPayload);
+    return res.data;
+  },
+
+  /**
+   * PUT /api/conversations/{conversationId}/avatar
+   * Body: FormData (multipart/form-data)
+   */
+  async updateConversationAvatar(
+    conversationId: number,
+    formData: FormData,
+  ): Promise<Conversation> {
+    const res = await api.put(`/conversations/${conversationId}/avatar`, formData);
     return res.data;
   },
 
