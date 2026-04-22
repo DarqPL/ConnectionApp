@@ -1,10 +1,28 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  X, Download, File, UserPlus, Settings, BellOff, Pin,
-  ChevronDown, ChevronRight, Users, Pencil,
-  Calendar, StickyNote, Image as ImageIcon, LogOut, Trash2,
-  MessageCircle, Link as LinkIcon, BarChart3
+  X,
+  Download,
+  File,
+  UserPlus,
+  Settings,
+  BellOff,
+  Pin,
+  ChevronDown,
+  ChevronRight,
+  Users,
+  Pencil,
+  Calendar,
+  StickyNote,
+  Image as ImageIcon,
+  LogOut,
+  Trash2,
+  MessageCircle,
+  Link as LinkIcon,
+  BarChart3,
+  Phone,
+  PhoneMissed,
+  Video,
 } from "lucide-react";
 import type { Message, Conversation } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -15,6 +33,7 @@ import { SuccessorPromotionDialog } from "./SuccessorPromotionDialog";
 import { MemberListDialog } from "./MemberListDialog";
 import AddMemberDialog from "./AddMemberDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
 import "yet-another-react-lightbox/styles.css";
@@ -34,7 +53,7 @@ const SectionHeader = ({
   title,
   isOpen,
   onToggle,
-  count
+  count,
 }: {
   title: string;
   isOpen: boolean;
@@ -47,24 +66,37 @@ const SectionHeader = ({
   >
     <div className="flex items-center gap-2">
       <span className="font-semibold text-sm">
-        {title} {count !== undefined && <span className="text-muted-foreground font-normal">({count})</span>}
+        {title}{" "}
+        {count !== undefined && (
+          <span className="text-muted-foreground font-normal">({count})</span>
+        )}
       </span>
     </div>
-    {isOpen ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+    {isOpen ? (
+      <ChevronDown className="size-4 text-muted-foreground" />
+    ) : (
+      <ChevronRight className="size-4 text-muted-foreground" />
+    )}
   </button>
 );
 
-const ChatInfoPanel = ({ 
-  chat, 
-  messages, 
-  isOpen, 
+const ChatInfoPanel = ({
+  chat,
+  messages,
+  isOpen,
   onClose,
   onLeaveGroup,
-  onDeleteHistory
+  onDeleteHistory,
 }: ChatInfoPanelProps) => {
   const { user } = useAuthStore();
+  const {
+    history: callHistory,
+    loading: isCallHistoryLoading,
+    fetchHistory,
+  } = useCallStore();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     members: true,
+    calls: false,
     board: true,
     media: true,
     files: true,
@@ -82,24 +114,34 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    void fetchHistory(0, 50);
+  }, [fetchHistory, isOpen]);
+
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
     if (!user) return null;
-    const participant = chat.participants.find(p => p.userId === user.id);
+    const participant = chat.participants.find((p) => p.userId === user.id);
     return participant?.role || null;
   }, [chat.participants, user]);
 
   // Find CO_OWNER if exists
   const coOwner = useMemo(() => {
-    return chat.participants.find(p => p.role === "CO_OWNER") || null;
+    return chat.participants.find((p) => p.role === "CO_OWNER") || null;
   }, [chat.participants]);
 
   const toggleSection = (section: string) => {
-    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const handleDeleteHistory = () => {
-    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện này không?\n\nLưu ý: Hành động này không thể hoàn tác.");
+    const confirmed = window.confirm(
+      "Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện này không?\n\nLưu ý: Hành động này không thể hoàn tác.",
+    );
     if (confirmed) {
       onDeleteHistory?.();
     }
@@ -119,17 +161,20 @@ const ChatInfoPanel = ({
     }
 
     // For members or owners of groups with 1 member, show confirmation and leave
-    const message = currentUserRole === "OWNER" 
-      ? "Bạn có chắc chắn muốn rời khỏi và xóa nhóm này không?"
-      : "Bạn có chắc chắn muốn rời khỏi nhóm này không?";
-    
+    const message =
+      currentUserRole === "OWNER"
+        ? "Bạn có chắc chắn muốn rời khỏi và xóa nhóm này không?"
+        : "Bạn có chắc chắn muốn rời khỏi nhóm này không?";
+
     const confirmed = window.confirm(message);
     if (confirmed) {
       setIsLeavingGroup(true);
       try {
         if (user) {
           await chatService.leaveGroup(chat.id, user.id);
-          toast.success(currentUserRole === "OWNER" ? "Đã xóa nhóm" : "Đã rời khỏi nhóm");
+          toast.success(
+            currentUserRole === "OWNER" ? "Đã xóa nhóm" : "Đã rời khỏi nhóm",
+          );
           onLeaveGroup?.();
           onClose();
         }
@@ -171,16 +216,30 @@ const ChatInfoPanel = ({
     }
   };
 
-
   const allMedia = useMemo(() => {
-    const media: { src: string; width: number; height: number; type: "image" }[] = [];
-    messages.forEach(msg => {
-      msg.attachments.forEach(att => {
+    const media: {
+      src: string;
+      width: number;
+      height: number;
+      type: "image";
+    }[] = [];
+    messages.forEach((msg) => {
+      msg.attachments.forEach((att) => {
         if (att.type === "IMAGE") {
-          media.push({ src: att.fileUrl, width: 800, height: 600, type: "image" });
+          media.push({
+            src: att.fileUrl,
+            width: 800,
+            height: 600,
+            type: "image",
+          });
         } else if (att.type === "VIDEO") {
           // PhotoAlbum handles images better, videos might just show a placeholder or we use a custom renderer
-          media.push({ src: att.fileUrl, width: 800, height: 600, type: "image" });
+          media.push({
+            src: att.fileUrl,
+            width: 800,
+            height: 600,
+            type: "image",
+          });
         }
       });
     });
@@ -188,16 +247,39 @@ const ChatInfoPanel = ({
   }, [messages]);
 
   const allFiles = useMemo(() => {
-    const files: Array<typeof messages[0]["attachments"][0] & { createdAt: string }> = [];
-    messages.forEach(msg => {
-      msg.attachments.forEach(att => {
+    const files: Array<
+      (typeof messages)[0]["attachments"][0] & { createdAt: string }
+    > = [];
+    messages.forEach((msg) => {
+      msg.attachments.forEach((att) => {
         if (att.type !== "IMAGE" && att.type !== "VIDEO") {
           files.push({ ...att, createdAt: msg.createdAt });
         }
       });
     });
-    return files.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return files.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   }, [messages]);
+
+  const conversationCallHistory = useMemo(
+    () => callHistory.filter((item) => item.conversationId === chat.id),
+    [callHistory, chat.id],
+  );
+
+  const formatDuration = (seconds?: number | null): string => {
+    if (!seconds || seconds <= 0) {
+      return "0s";
+    }
+
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) {
+      return `${secs}s`;
+    }
+    return `${mins}m ${secs}s`;
+  };
 
   const handleDownload = (fileUrl: string, fileName?: string) => {
     const link = document.createElement("a");
@@ -212,13 +294,20 @@ const ChatInfoPanel = ({
     <div
       className={cn(
         "h-full bg-background border-l border-border transition-all duration-300 flex flex-col overflow-hidden",
-        isOpen ? "w-80 opacity-100" : "w-0 opacity-0 pointer-events-none border-none"
+        isOpen
+          ? "w-80 opacity-100"
+          : "w-0 opacity-0 pointer-events-none border-none",
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border bg-background z-10">
         <h2 className="font-bold text-lg">Thông tin hội thoại</h2>
-        <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 rounded-full"
+          onClick={onClose}
+        >
           <X className="size-4" />
         </Button>
       </div>
@@ -248,7 +337,11 @@ const ChatInfoPanel = ({
           <div className="space-y-1">
             <h3 className="font-bold text-xl flex items-center justify-center gap-2">
               {chat.name}
-              <Button variant="ghost" size="icon" className="size-5 rounded-full">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-5 rounded-full"
+              >
                 <Pencil className="size-3 text-muted-foreground" />
               </Button>
             </h3>
@@ -258,7 +351,11 @@ const ChatInfoPanel = ({
             {[
               { icon: BellOff, label: "Tắt thông báo", action: "mute" },
               { icon: Pin, label: "Ghim hội thoại", action: "pin" },
-              { icon: UserPlus, label: "Thêm thành viên", action: "add-member" },
+              {
+                icon: UserPlus,
+                label: "Thêm thành viên",
+                action: "add-member",
+              },
               { icon: Settings, label: "Quản lý", action: "settings" },
             ].map((action, i) => (
               <button
@@ -290,35 +387,49 @@ const ChatInfoPanel = ({
         />
         {openSections.members && (
           <div className="px-4 pb-4 space-y-3">
-            <div 
+            <div
               className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
               onClick={() => setShowMemberListDialog(true)}
             >
               <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Users className="size-4" />
               </div>
-              <span className="text-sm font-medium">{chat.participants.length} thành viên</span>
+              <span className="text-sm font-medium">
+                {chat.participants.length} thành viên
+              </span>
             </div>
             {chat.participants.slice(0, 3).map((p) => (
-              <div 
-                key={p.id} 
+              <div
+                key={p.id}
                 className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
                 onClick={() => {
-                  if (currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") {
+                  if (
+                    currentUserRole === "OWNER" ||
+                    currentUserRole === "CO_OWNER"
+                  ) {
                     setShowMemberListDialog(true);
                   }
                 }}
               >
-                <UserAvatar type="chat" name={p.displayName} avatarUrl={p.avatarUrl || undefined} className="size-8" />
+                <UserAvatar
+                  type="chat"
+                  name={p.displayName}
+                  avatarUrl={p.avatarUrl || undefined}
+                  className="size-8"
+                />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{p.displayName}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase">{p.role}</p>
+                  <p className="text-sm font-medium truncate">
+                    {p.displayName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground uppercase">
+                    {p.role}
+                  </p>
                 </div>
               </div>
             ))}
             {chat.participants.length > 3 && (
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="w-full text-xs text-muted-foreground hover:bg-accent/50"
                 onClick={() => setShowMemberListDialog(true)}
               >
@@ -397,11 +508,64 @@ const ChatInfoPanel = ({
           <div className="px-4 pb-4 space-y-2">
             <div className="p-3 rounded-lg bg-secondary/30 border border-border/40 text-xs space-y-2">
               <p className="font-semibold">https://zalo.me/g/mvdfnx533</p>
-              <Button size="sm" variant="outline" className="w-full h-7 text-xs">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs"
+              >
                 <LinkIcon className="size-3 mr-1" />
                 Sao chép link
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Call History Section */}
+        <SectionHeader
+          title="Lich su cuoc goi"
+          count={conversationCallHistory.length}
+          isOpen={openSections.calls}
+          onToggle={() => toggleSection("calls")}
+        />
+        {openSections.calls && (
+          <div className="px-4 pb-4 space-y-2">
+            {isCallHistoryLoading ? (
+              <p className="text-xs text-muted-foreground">
+                Dang tai lich su cuoc goi...
+              </p>
+            ) : conversationCallHistory.length > 0 ? (
+              conversationCallHistory.slice(0, 8).map((item) => (
+                <div
+                  key={item.callId}
+                  className="flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/20 p-2"
+                >
+                  <div className="size-8 rounded-full bg-background flex items-center justify-center">
+                    {item.status === "MISSED" ? (
+                      <PhoneMissed className="size-4 text-red-500" />
+                    ) : item.mediaType === "VIDEO" ? (
+                      <Video className="size-4 text-primary" />
+                    ) : (
+                      <Phone className="size-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {item.mediaType === "VIDEO"
+                        ? "Cuoc goi video"
+                        : "Cuoc goi thoai"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {item.status} • {formatDuration(item.durationSeconds)} •{" "}
+                      {new Date(item.createdAt).toLocaleString("vi-VN")}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="py-4 text-center text-muted-foreground">
+                <p className="text-xs italic">Chua co lich su cuoc goi</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -417,7 +581,10 @@ const ChatInfoPanel = ({
               { icon: Calendar, label: "Danh sách nhắc hẹn" },
               { icon: StickyNote, label: "Ghi chú, ghim, bình chọn" },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group">
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
+              >
                 <item.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="text-sm font-medium">{item.label}</span>
               </div>
@@ -439,22 +606,24 @@ const ChatInfoPanel = ({
                 {/* Image Grid */}
                 <div className="rounded-xl overflow-hidden border border-border/40 bg-secondary/20">
                   <div className="grid grid-cols-4 gap-1 p-1">
-                    {allMedia.slice(0, showAllImages ? allMedia.length : 8).map((photo, idx) => (
-                      <div
-                        key={idx}
-                        className="relative aspect-square rounded-lg overflow-hidden cursor-pointer group"
-                        onClick={() => setLightboxIndex(idx)}
-                      >
-                        <img
-                          src={photo.src}
-                          alt={`media-${idx}`}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <ImageIcon className="size-5 text-white" />
+                    {allMedia
+                      .slice(0, showAllImages ? allMedia.length : 8)
+                      .map((photo, idx) => (
+                        <div
+                          key={idx}
+                          className="relative aspect-square rounded-lg overflow-hidden cursor-pointer group"
+                          onClick={() => setLightboxIndex(idx)}
+                        >
+                          <img
+                            src={photo.src}
+                            alt={`media-${idx}`}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <ImageIcon className="size-5 text-white" />
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
 
@@ -465,7 +634,9 @@ const ChatInfoPanel = ({
                     className="w-full h-9 text-xs font-semibold"
                     onClick={() => setShowAllImages(!showAllImages)}
                   >
-                    {showAllImages ? "Thu gọn" : `Xem tất cả (${allMedia.length})`}
+                    {showAllImages
+                      ? "Thu gọn"
+                      : `Xem tất cả (${allMedia.length})`}
                   </Button>
                 )}
 
@@ -498,25 +669,44 @@ const ChatInfoPanel = ({
             {allFiles.length > 0 ? (
               <>
                 {allFiles.slice(0, 3).map((file, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-all group cursor-pointer" onClick={() => handleDownload(file.fileUrl, file.originalFileName || undefined)}>
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-all group cursor-pointer"
+                    onClick={() =>
+                      handleDownload(
+                        file.fileUrl,
+                        file.originalFileName || undefined,
+                      )
+                    }
+                  >
                     <div className="size-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                       <File className="size-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" title={file.originalFileName || undefined}>
+                      <p
+                        className="text-sm font-medium truncate"
+                        title={file.originalFileName || undefined}
+                      >
                         {file.originalFileName}
                       </p>
                       <p className="text-[10px] text-muted-foreground uppercase">
                         {new Date(file.createdAt).toLocaleDateString("vi-VN")}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon" className="size-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
                       <Download className="size-4" />
                     </Button>
                   </div>
                 ))}
                 {allFiles.length > 3 && (
-                  <Button variant="ghost" className="w-full text-xs text-muted-foreground hover:bg-accent/50 underline-offset-4 hover:underline">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs text-muted-foreground hover:bg-accent/50 underline-offset-4 hover:underline"
+                  >
                     Xem tất cả
                   </Button>
                 )}
@@ -543,7 +733,9 @@ const ChatInfoPanel = ({
           {currentUserRole === "OWNER" && chat.participants.length > 1 && (
             <div className="px-2 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-700 dark:text-yellow-400">
               <p className="font-medium">Bạn là quản lý nhóm</p>
-              <p className="text-[11px] mt-1">Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm</p>
+              <p className="text-[11px] mt-1">
+                Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm
+              </p>
             </div>
           )}
           <Button
@@ -554,13 +746,13 @@ const ChatInfoPanel = ({
             disabled={isLeavingGroup}
           >
             <LogOut className="size-4 mr-2" />
-            {isLeavingGroup 
-              ? "Đang xử lý..." 
+            {isLeavingGroup
+              ? "Đang xử lý..."
               : currentUserRole === "OWNER" && chat.participants.length > 1
-              ? "Chuyển quyền & Rời" 
-              : currentUserRole === "OWNER" 
-              ? "Xóa nhóm"
-              : "Rời khỏi nhóm"}
+                ? "Chuyển quyền & Rời"
+                : currentUserRole === "OWNER"
+                  ? "Xóa nhóm"
+                  : "Rời khỏi nhóm"}
           </Button>
         </div>
       </div>
@@ -607,7 +799,6 @@ const ChatInfoPanel = ({
       />
 
       {/* Bottom Section with Pin Toggle and Logout Button */}
-     
     </div>
   );
 };

@@ -24,6 +24,7 @@ interface CallState {
     callId: number,
     payload: CallParticipantStateRequest,
   ) => Promise<CallSession>;
+  ensureActiveCallToken: (callId: number) => Promise<CallSession | null>;
   fetchHistory: (page?: number, size?: number) => Promise<void>;
   setIncomingCall: (call: CallSession) => void;
   handleCallStatus: (call: CallSession) => void;
@@ -85,6 +86,39 @@ export const useCallStore = create<CallState>((set, get) => ({
     return call;
   },
 
+  ensureActiveCallToken: async (callId) => {
+    const current = get().activeCall;
+    if (!current || current.callId !== callId) {
+      return null;
+    }
+
+    if (current.token?.token) {
+      return current;
+    }
+
+    const issuedToken = await callService.issueToken(callId);
+    let mergedCall: CallSession | null = null;
+
+    set((state) => {
+      if (!state.activeCall || state.activeCall.callId !== callId) {
+        mergedCall = null;
+        return state;
+      }
+
+      mergedCall = {
+        ...state.activeCall,
+        token: issuedToken,
+      };
+
+      return {
+        ...state,
+        activeCall: mergedCall,
+      };
+    });
+
+    return mergedCall;
+  },
+
   fetchHistory: async (page = 0, size = 20) => {
     set({ loading: true });
     try {
@@ -120,6 +154,7 @@ export const useCallStore = create<CallState>((set, get) => ({
             ? null
             : state.incomingCall,
       }));
+      void get().fetchHistory(0, 20);
       return;
     }
 
@@ -128,7 +163,20 @@ export const useCallStore = create<CallState>((set, get) => ({
       return;
     }
 
-    set({ activeCall: call, incomingCall: null });
+    set((state) => {
+      const previousToken =
+        state.activeCall?.callId === call.callId
+          ? state.activeCall.token
+          : null;
+
+      return {
+        activeCall: {
+          ...call,
+          token: call.token ?? previousToken ?? null,
+        },
+        incomingCall: null,
+      };
+    });
   },
 
   clearIncomingCall: () => set({ incomingCall: null }),

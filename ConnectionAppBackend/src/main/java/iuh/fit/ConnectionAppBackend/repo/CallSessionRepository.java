@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,4 +35,12 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             "LEFT JOIN FETCH cs.initiatedBy i " +
             "WHERE cs.id = :callId")
     Optional<CallSession> findByIdWithContext(@Param("callId") Long callId);
+
+    @Query("SELECT cs FROM CallSession cs " +
+            "LEFT JOIN FETCH cs.conversation c " +
+            "LEFT JOIN FETCH cs.initiatedBy i " +
+            "WHERE cs.status = :status " +
+            "AND cs.createdAt <= :deadline")
+    List<CallSession> findByStatusTimedOut(@Param("status") CallStatus status,
+                                           @Param("deadline") LocalDateTime deadline);
 }
