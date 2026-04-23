@@ -165,13 +165,15 @@ export const LeaveGroupModal: React.FC<LeaveGroupModalProps> = ({
                 styles.button,
                 styles.confirmButton,
                 (isLoading ||
-                  (isOwnerWithMultipleMembers && !selectedMemberId)) &&
+                  Boolean(
+                    isOwnerWithMultipleMembers && !selectedMemberId,
+                  )) &&
                   styles.buttonDisabled,
               ]}
               onPress={handleLeave}
               disabled={
                 isLoading ||
-                (isOwnerWithMultipleMembers && !selectedMemberId)
+                Boolean(isOwnerWithMultipleMembers && !selectedMemberId)
               }
             >
               {isLoading ? (

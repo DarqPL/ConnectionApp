@@ -1,5 +1,6 @@
 package iuh.fit.ConnectionAppBackend.security;
 
+import org.springframework.http.HttpMethod;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -74,6 +75,7 @@ public class SecurityConfig {
                                 "/ws/**",
                                 "/ws/info/**",
                                 "/ws").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/conversations/invite/*").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

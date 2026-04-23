@@ -8,6 +8,7 @@ import ProfileScreen from "./features/chat/screens/ProfileScreen";
 import AddFriendScreen from "./features/chat/screens/AddFriendScreen";
 import ContactScreen from "./features/chat/screens/ContactScreen";
 import CreateGroupScreen from "./features/chat/screens/CreateGroupScreen";
+import QrScannerScreen from "./features/chat/screens/QrScannerScreen";
 import SignInScreen from "./features/auth/screens/SignInScreen";
 import SignUpScreen from "./features/auth/screens/SignUpScreen";
 import ForgotPasswordScreen from "./features/auth/screens/ForgotPasswordScreen";
@@ -22,6 +23,7 @@ export type RootStackParamList = {
   ChatRoom: { conversationId: number; name: string; avatarUrl?: string | null };
   Profile: undefined;
   AddFriend: undefined;
+  QrScanner: undefined;
   Contacts: undefined;
   CreateGroup: undefined;
 };
@@ -93,6 +95,14 @@ function AppNavigator() {
             <Stack.Screen
               name="AddFriend"
               component={AddFriendScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="QrScanner"
+              component={QrScannerScreen}
               options={{
                 headerShown: false,
               }}

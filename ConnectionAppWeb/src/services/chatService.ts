@@ -90,6 +90,16 @@ export const chatService = {
     return res.data;
   },
 
+  async resolveGroupInvite(inviteToken: string): Promise<Conversation> {
+    const res = await api.get(`/conversations/invite/${inviteToken}`);
+    return res.data;
+  },
+
+  async joinGroupByInviteToken(inviteToken: string): Promise<Conversation> {
+    const res = await api.post(`/conversations/invite/${inviteToken}/join`);
+    return res.data;
+  },
+
   /**
    * GET /api/messages/conversation/{conversationId}?page=0&size=50&sortBy=createdAt&sortDirection=DESC
    * Returns: PageResponse<MessageResponse>

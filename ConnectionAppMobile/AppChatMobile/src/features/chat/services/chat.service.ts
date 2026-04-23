@@ -137,6 +137,39 @@ export class ChatService {
     return (await response.json()) as Conversation;
   }
 
+  async resolveGroupInvite(inviteToken: string): Promise<Conversation> {
+    const response = await authService.authFetch(
+      `/conversations/invite/${inviteToken}`,
+      {
+        method: "GET",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(
+        response,
+        "Khong the kiem tra link moi vao nhom",
+      );
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
+  async joinGroupByInviteToken(inviteToken: string): Promise<Conversation> {
+    const response = await authService.authFetch(
+      `/conversations/invite/${inviteToken}/join`,
+      {
+        method: "POST",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Khong the tham gia nhom");
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
   async getMessage(id: string): Promise<Message> {
     const response = await authService.authFetch(`/messages/${id}`, {
       method: "GET",

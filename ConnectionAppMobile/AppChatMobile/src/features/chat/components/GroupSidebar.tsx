@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../../../theme";
@@ -22,6 +23,7 @@ import { MemberListModal } from "./MemberListModal";
 import { SuccessorPromotionModal } from "./SuccessorPromotionModal";
 import { RenameGroupModal } from "./RenameGroupModal";
 import AddMemberModal from "./AddMemberModal";
+import GroupQrModal from "./GroupQrModal";
 import type {
   Message,
   Attachment,
@@ -29,6 +31,8 @@ import type {
   Conversation,
   Participant,
 } from "../types";
+import { buildMobileGroupInviteUrl } from "../utils/groupInvite";
+import { authService } from "../../auth/services/auth.service";
 
 interface GroupParticipant {
   userId: number;
@@ -113,6 +117,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [showSuccessorDialog, setShowSuccessorDialog] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showGroupQrModal, setShowGroupQrModal] = useState(false);
   
   // Đã gộp state của cả 2 nhánh ở đây
   const [showPinnedModal, setShowPinnedModal] = useState(false);
@@ -169,12 +174,38 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
     );
   }, [messages]);
 
+  const groupInviteUrl = useMemo(
+    () =>
+      conversation?.type === "GROUP"
+        ? buildMobileGroupInviteUrl(
+            conversation.inviteToken,
+            authService.getApiBaseUrl(),
+          )
+        : null,
+    [conversation?.inviteToken, conversation?.type],
+  );
+
   const openUrl = async (url: string) => {
     const canOpen = await Linking.canOpenURL(url);
     if (!canOpen) {
       return;
     }
     await Linking.openURL(url);
+  };
+
+  const handleCopyGroupLink = async () => {
+    if (!groupInviteUrl) {
+      Alert.alert("Loi", "Khong tao duoc link nhom");
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(groupInviteUrl);
+      Alert.alert("Thanh cong", "Da sao chep link nhom");
+    } catch (error) {
+      console.error("Copy group link failed:", error);
+      Alert.alert("Loi", "Khong the sao chep link nhom");
+    }
   };
 
   // Find CO_OWNER if exists
@@ -471,8 +502,30 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           {sectionRow(
             "link-outline",
             "Link nhóm",
-            "https://zalo.me/g/nhomchat",
+            groupInviteUrl || "Chua tao duoc link nhom",
           )}
+          <View style={styles.linkActionRow}>
+            <TouchableOpacity
+              style={styles.linkActionBtn}
+              onPress={() => void handleCopyGroupLink()}
+              disabled={!groupInviteUrl}
+            >
+              <Ionicons name="copy-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.linkActionText}>Sao chep link</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.linkActionBtn}
+              onPress={() => setShowGroupQrModal(true)}
+              disabled={!groupInviteUrl}
+            >
+              <Ionicons
+                name="qr-code-outline"
+                size={18}
+                color={COLORS.primary}
+              />
+              <Text style={styles.linkActionText}>Hien thi QR</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.sectionGap} />
 
@@ -576,6 +629,13 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
           onConfirm={(newName) => {
             if (onRenameGroup) onRenameGroup(newName);
           }}
+        />
+
+        <GroupQrModal
+          visible={showGroupQrModal}
+          onClose={() => setShowGroupQrModal(false)}
+          groupName={groupName}
+          qrValue={groupInviteUrl}
         />
 
         <Modal
@@ -816,6 +876,31 @@ const styles = StyleSheet.create({
   sectionGap: {
     height: 8,
     backgroundColor: "#eef1f6",
+  },
+  linkActionRow: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  linkActionBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#d8dbe2",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#f8fafc",
+  },
+  linkActionText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: "700",
   },
   rowItem: {
     paddingHorizontal: 14,

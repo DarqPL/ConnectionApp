@@ -32,6 +32,12 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
             "WHERE c.id = :conversationId")
     Optional<Conversation> findByIdWithUsers(@Param("conversationId") Long conversationId);
 
+    @Query("SELECT c FROM Conversation c " +
+            "LEFT JOIN FETCH c.conversationUsers cu " +
+            "LEFT JOIN FETCH cu.user " +
+            "WHERE c.inviteToken = :inviteToken")
+    Optional<Conversation> findByInviteTokenWithUsers(@Param("inviteToken") String inviteToken);
+
     /**
      * Get private conversation between two users
      */

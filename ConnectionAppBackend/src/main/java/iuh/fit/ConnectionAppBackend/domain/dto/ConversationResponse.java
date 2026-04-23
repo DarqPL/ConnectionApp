@@ -16,6 +16,7 @@ public class ConversationResponse {
     private Long id;
     private String name;
     private String avatarUrl;
+    private String inviteToken;
     private String type;
     private LocalDateTime lastMessageAt;
     private String lastMessageContent;

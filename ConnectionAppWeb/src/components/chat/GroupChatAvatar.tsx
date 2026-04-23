@@ -1,5 +1,4 @@
-import { useState, useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
 import { Ellipsis } from "lucide-react";
 import type { Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";

@@ -194,7 +194,6 @@ const ChatRoomScreen = ({ route }: any) => {
     removeMemberFromGroup,
     renameGroup,
     updateGroupDescription,
-    updateGroupAvatar,
     uploadGroupAvatarFile,
   } = useChat();
   const { user, signOut } = useAuth();

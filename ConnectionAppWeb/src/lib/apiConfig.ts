@@ -24,6 +24,32 @@ export const resolvePublicAppUrl = (): string | null => {
   return configuredPublicUrl ? normalizeUrl(configuredPublicUrl) : null;
 };
 
+export const resolveShareAppUrl = (): string | null => {
+  const configuredPublicUrl = resolvePublicAppUrl();
+  if (configuredPublicUrl) {
+    return configuredPublicUrl;
+  }
+
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return normalizeUrl(window.location.origin);
+};
+
+export const buildGroupInviteUrl = (
+  inviteToken?: string | null,
+): string | null => {
+  const appUrl = resolveShareAppUrl();
+  const trimmedToken = inviteToken?.trim();
+
+  if (!appUrl || !trimmedToken) {
+    return null;
+  }
+
+  return `${appUrl}/groups/join/${encodeURIComponent(trimmedToken)}`;
+};
+
 export const resolveApiBaseUrl = (): string => {
   const configuredBaseUrl = trimEnv(import.meta.env.VITE_API_BASE_URL);
   if (configuredBaseUrl) {

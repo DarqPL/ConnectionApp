@@ -41,6 +41,8 @@ import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
 import "yet-another-react-lightbox/styles.css";
 import Lightbox from "yet-another-react-lightbox";
+import { buildGroupInviteUrl } from "@/lib/apiConfig";
+import GroupQrDialog from "./GroupQrDialog";
 
 interface ChatInfoPanelProps {
   chat: Conversation;
@@ -121,6 +123,7 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showGroupQrDialog, setShowGroupQrDialog] = useState(false);
 
   // State update properties
   const [descriptionDraft, setDescriptionDraft] = useState(
@@ -150,6 +153,8 @@ const ChatInfoPanel = ({
 
   const canEditDescription =
     currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+  const groupInviteUrl =
+    chat.type === "GROUP" ? buildGroupInviteUrl(chat.inviteToken) : null;
 
   const pinnedMessages = chat.pinnedMessages ?? [];
 
@@ -375,6 +380,21 @@ const ChatInfoPanel = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleCopyGroupInviteLink = async () => {
+    if (!groupInviteUrl) {
+      toast.error("Khong the tao link nhom");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(groupInviteUrl);
+      toast.success("Da sao chep link nhom");
+    } catch (error) {
+      console.error("Loi sao chep link nhom:", error);
+      toast.error("Khong the sao chep link nhom");
+    }
   };
 
   return (
@@ -631,6 +651,8 @@ const ChatInfoPanel = ({
           </div>
         )}
 
+        {chat.type === "GROUP" && (
+          <>
         {/* Group Link Section */}
         <SectionHeader
           title="Link nhóm"
@@ -640,17 +662,33 @@ const ChatInfoPanel = ({
         {openSections.groupLink && (
           <div className="px-4 pb-4 space-y-2">
             <div className="p-3 rounded-lg bg-secondary/30 border border-border/40 text-xs space-y-2">
-              <p className="font-semibold">https://zalo.me/g/mvdfnx533</p>
+              <p className="font-semibold break-all">
+                {groupInviteUrl || "Chua tao duoc link nhom"}
+              </p>
               <Button
                 size="sm"
                 variant="outline"
                 className="w-full h-7 text-xs"
+                onClick={() => void handleCopyGroupInviteLink()}
+                disabled={!groupInviteUrl}
               >
                 <LinkIcon className="size-3 mr-1" />
                 Sao chép link
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs"
+                onClick={() => setShowGroupQrDialog(true)}
+                disabled={!groupInviteUrl}
+              >
+                <ImageIcon className="size-3 mr-1" />
+                Hien thi QR
+              </Button>
             </div>
           </div>
+        )}
+          </>
         )}
 
         {/* Call History Section */}
@@ -938,6 +976,13 @@ const ChatInfoPanel = ({
         onClose={() => setShowRenameDialog(false)}
         currentName={chat.name}
         conversationId={chat.id}
+      />
+
+      <GroupQrDialog
+        open={showGroupQrDialog}
+        onOpenChange={setShowGroupQrDialog}
+        groupName={chat.name}
+        qrValue={groupInviteUrl}
       />
     </div>
   );

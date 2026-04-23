@@ -34,10 +34,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class ConversationService {
+    private static final int INVITE_TOKEN_LENGTH = 24;
 
     @Autowired
     private ConversationRepository conversationRepository;
@@ -96,6 +98,47 @@ public class ConversationService {
         return mapToConversationResponse(conversation);
     }
 
+    public ConversationResponse resolveGroupInvite(String inviteToken) {
+        Conversation conversation = conversationRepository.findByInviteTokenWithUsers(inviteToken)
+                .orElseThrow(() -> new ResourceNotFoundException("Group invite link not found"));
+
+        validateGroupInviteConversation(conversation);
+        return mapToConversationResponse(conversation);
+    }
+
+    @Transactional
+    public ConversationResponse joinConversationByInviteToken(String inviteToken, Long userId) {
+        Conversation conversation = conversationRepository.findByInviteTokenWithUsers(inviteToken)
+                .orElseThrow(() -> new ResourceNotFoundException("Group invite link not found"));
+
+        validateGroupInviteConversation(conversation);
+
+        if (conversationUserRepository.findByConversationIdAndUserId(conversation.getId(), userId).isPresent()) {
+            return mapToConversationResponse(conversation);
+        }
+
+        User joiningUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        ConversationUser joiningMember = ConversationUser.builder()
+                .conversation(conversation)
+                .user(joiningUser)
+                .role(ConversationRole.MEMBER)
+                .joinedAt(LocalDateTime.now())
+                .unreadCounts(0L)
+                .build();
+        conversationUserRepository.save(joiningMember);
+        entityManager.flush();
+        entityManager.clear();
+
+        Conversation refreshedConversation = conversationRepository.findByIdWithUsers(conversation.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversation.getId()));
+
+        publishMemberJoinedUpdate(refreshedConversation, userId);
+
+        return mapToConversationResponse(refreshedConversation);
+    }
+
     /**
      * Create a new conversation
      */
@@ -120,6 +163,7 @@ public class ConversationService {
 
         Conversation conversation = Conversation.builder()
                 .name(request.getName())
+                .inviteToken(type == ConversationType.GROUP ? generateUniqueInviteToken() : null)
                 .type(type)
                 .createdBy(creator)
                 .activate(true)
@@ -483,6 +527,7 @@ public class ConversationService {
                 .id(conversation.getId())
                 .name(conversation.getName())
                 .avatarUrl(conversation.getAvatarUrl())
+                .inviteToken(conversation.getInviteToken())
                 .type(conversation.getType() != null ? conversation.getType().name() : "PRIVATE")
                 .lastMessageAt(conversation.getLastMessageAt())
                 .lastMessageContent(conversation.getLastMessageContent())
@@ -494,6 +539,25 @@ public class ConversationService {
                 .participants(participants)
                 .pinnedMessages(pinnedMessages)
                 .build();
+    }
+
+    private void validateGroupInviteConversation(Conversation conversation) {
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("Invite link is only available for group conversations");
+        }
+
+        if (!conversation.isActivate()) {
+            throw new BadRequestException("This group invite link is no longer active");
+        }
+    }
+
+    private String generateUniqueInviteToken() {
+        String token;
+        do {
+            token = UUID.randomUUID().toString().replace("-", "").substring(0, INVITE_TOKEN_LENGTH);
+        } while (conversationRepository.findByInviteTokenWithUsers(token).isPresent());
+
+        return token;
     }
 
     /**
@@ -510,6 +574,37 @@ public class ConversationService {
                 .joinedAt(conversationUser.getJoinedAt())
                 .unreadCounts(conversationUser.getUnreadCounts())
                 .build();
+    }
+
+    private void publishMemberJoinedUpdate(Conversation conversation, Long joinedUserId) {
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversation.getId());
+        if (allMembers.isEmpty()) {
+            return;
+        }
+
+        List<ConversationUserResponse> updatedParticipants = allMembers.stream()
+                .map(this::mapToConversationUserResponse)
+                .collect(Collectors.toList());
+
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversation.getId());
+        update.put("type", "MEMBER_JOINED");
+        update.put("participants", updatedParticipants);
+        update.put("joinedUserId", joinedUserId);
+
+        ConversationResponse fullConvo = mapToConversationResponse(conversation);
+        for (ConversationUser member : allMembers) {
+            Long memberUserId = member.getUser().getId();
+
+            if (memberUserId.equals(joinedUserId)) {
+                messagingTemplate.convertAndSend("/topic/user." + memberUserId + "/conversations", fullConvo);
+            }
+
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + memberUserId + "/conversation-updates",
+                    update
+            );
+        }
     }
 
     /**

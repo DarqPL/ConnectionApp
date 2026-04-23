@@ -41,6 +41,9 @@ public class Conversation {
 
     private String avatarUrl;
 
+    @Column(unique = true, length = 64)
+    private String inviteToken;
+
     @Enumerated(EnumType.STRING)
     private ConversationType type;
 
