@@ -12,6 +12,7 @@ import {
   Sparkles,
   Wand2,
   X,
+  Bell,
 } from "lucide-react";
 import { Input } from "../ui/input";
 import EmojiPicker from "./EmojiPicker";
@@ -36,7 +37,8 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import PollCreator from "./PollCreator";
-import type { PollRequest } from "@/types/chat";
+import ReminderCreator from "./ReminderCreator";
+import type { PollRequest, ReminderRequest } from "@/types/chat";
 
 const LOCK_NOTICE_KEY = "auth_lock_notice";
 
@@ -101,6 +103,7 @@ const MessageInput = ({
   const [deliveryState, setDeliveryState] = useState<DeliveryState>(null);
   const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = useState(false);
+  const [isReminderCreatorOpen, setIsReminderCreatorOpen] = useState(false);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -247,10 +250,10 @@ const MessageInput = ({
         pendingFiles.length === 0
           ? []
           : await Promise.all(
-              pendingFiles.map((item) =>
-                chatService.uploadAttachment(item.file),
-              ),
-            );
+            pendingFiles.map((item) =>
+              chatService.uploadAttachment(item.file),
+            ),
+          );
 
       await sendMessage(
         selectedConvo.id,
@@ -320,12 +323,30 @@ const MessageInput = ({
         "", // content empty for poll-only message
         null, // parentId
         [], // attachments
-        poll
+        poll,
       );
       toast.success("Đã tạo cuộc bầu chọn!");
     } catch (error) {
       console.error(error);
       toast.error("Lỗi khi tạo cuộc bầu chọn.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleCreateReminder = async (
+    reminder: Omit<ReminderRequest, "conversationId">,
+  ) => {
+    setIsUploading(true);
+    try {
+      await chatService.createReminder({
+        ...reminder,
+        conversationId: selectedConvo.id,
+      });
+      toast.success("Đã tạo nhắc hẹn!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi tạo nhắc hẹn.");
     } finally {
       setIsUploading(false);
     }
@@ -571,6 +592,17 @@ const MessageInput = ({
           <ListTodo className="size-4" />
         </Button>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hover:bg-primary/10 transition-smooth"
+          type="button"
+          onClick={() => setIsReminderCreatorOpen(true)}
+          disabled={isUploading}
+        >
+          <Bell className="size-4" />
+        </Button>
+
         <div className="flex-1 relative">
           <Input
             onKeyPress={handleKeyPress}
@@ -708,6 +740,12 @@ const MessageInput = ({
         isOpen={isPollCreatorOpen}
         onClose={() => setIsPollCreatorOpen(false)}
         onSave={handleCreatePoll}
+      />
+
+      <ReminderCreator
+        isOpen={isReminderCreatorOpen}
+        onClose={() => setIsReminderCreatorOpen(false)}
+        onSave={handleCreateReminder}
       />
     </div>
   );

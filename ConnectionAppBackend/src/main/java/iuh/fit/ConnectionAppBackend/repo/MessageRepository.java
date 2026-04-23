@@ -69,4 +69,20 @@ public interface MessageRepository extends MongoRepository<Message, String> {
      * Delete all messages from a specific sender
      */
     void deleteBySenderInfo_SenderId(Long senderId);
+
+    /**
+     * Find messages with active reminders that are due
+     */
+    List<Message> findByReminderNotNullAndReminderNotifiedFalseAndReminderReminderTimeBefore(LocalDateTime time);
+
+    /**
+     * Find messages with reminders in a conversation
+     */
+    List<Message> findByConversationIdAndReminderNotNull(Long conversationId);
+
+    /**
+     * Find all messages (original + notification re-displays) sharing the same reminder title in a conversation
+     */
+    @Query("{ 'conversationId': ?0, 'reminder.title': ?1 }")
+    List<Message> findByConversationIdAndReminderTitle(Long conversationId, String title);
 }

@@ -17,7 +17,8 @@ import { ResizeMode, Video } from "expo-av";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import PollMessage from "./PollMessage";
-import type { Attachment, ReplyInfo, Poll, MessageReaction } from "../types";
+import ReminderMessage from "./ReminderMessage";
+import type { Attachment, ReplyInfo, Poll, MessageReaction, Reminder } from "../types";
 import {
   detectEmailInMessage,
   isValidEmailFormat,
@@ -34,6 +35,8 @@ interface Props {
   message: string;
   attachments?: Attachment[];
   poll?: Poll | null;
+  reminder?: Reminder | null;
+  messageId?: string;
   isMe?: boolean;
   senderName?: string;
   avatarUrl?: string | null;
@@ -48,6 +51,7 @@ interface Props {
   reactions?: MessageReaction[];
   currentUserId?: number;
   onReact?: (reactionCode: string | null) => void;
+  onReminderEdit?: () => void;
 }
 
 const formatTime = (dateStr: string) => {
@@ -128,9 +132,12 @@ const MessageBubble: React.FC<Props> = ({
   replyInfo,
   isHighlighted = false,
   poll,
+  reminder,
+  messageId,
   reactions = [],
   currentUserId,
   onReact,
+  onReminderEdit,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
@@ -533,7 +540,7 @@ const MessageBubble: React.FC<Props> = ({
     <View
       style={[
         styles.row,
-        poll ? styles.rowCenter : isMe ? styles.rowRight : styles.rowLeft,
+        poll || reminder ? styles.rowCenter : isMe ? styles.rowRight : styles.rowLeft,
       ]}
     >
       {/* Avatar for received messages in groups */}
@@ -716,6 +723,16 @@ const MessageBubble: React.FC<Props> = ({
                     poll={poll}
                     onVote={onPollVote || (() => {})}
                     isMe={isMe}
+                  />
+                )}
+
+                {reminder && messageId && (
+                  <ReminderMessage
+                    messageId={messageId}
+                    conversationId={reminder.conversationId}
+                    reminder={reminder}
+                    currentUserId={currentUserId ?? 0}
+                    onEdit={onReminderEdit}
                   />
                 )}
 

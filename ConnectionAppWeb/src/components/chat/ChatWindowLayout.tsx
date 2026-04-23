@@ -7,6 +7,7 @@ import CallOverlay from "./CallOverlay";
 import MessageInput from "./MessageInput";
 import ChatInfoPanel from "./ChatInfoPanel";
 import PinnedMessagesBar from "./PinnedMessagesBar";
+import ReminderBanner from "./ReminderBanner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -238,7 +239,10 @@ const ChatWindowLayout = () => {
         <CallOverlay conversationId={selectedConvo.id} />
 
         {activeConversationId && (
-          <PinnedMessagesBar conversationId={activeConversationId} />
+          <>
+            <PinnedMessagesBar conversationId={activeConversationId} />
+            <ReminderBanner conversationId={activeConversationId} />
+          </>
         )}
 
         {/* Body */}

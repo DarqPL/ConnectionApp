@@ -26,6 +26,7 @@ import ChatHeader from "../components/ChatHeader";
 import GroupSidebar from "../components/GroupSidebar";
 import PollCreatorModal from "../components/PollCreatorModal";
 import VotePollModal from "../components/VotePollModal";
+import ReminderCreatorModal from "../components/ReminderCreatorModal";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
 import { authService } from "../../auth/services/auth.service";
@@ -223,6 +224,7 @@ const ChatRoomScreen = ({ route }: any) => {
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
+  const [reminderToEdit, setReminderToEdit] = React.useState<Message | null>(null);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
 
   // Call setup state
@@ -1245,6 +1247,8 @@ const ChatRoomScreen = ({ route }: any) => {
                 message={item.content || ""}
                 attachments={item.attachments || []}
                 poll={item.poll}
+                reminder={item.reminder}
+                messageId={item.id}
                 reactions={item.reactions || []}
                 currentUserId={user?.id}
                 onReact={(reactionCode) => {
@@ -1273,6 +1277,7 @@ const ChatRoomScreen = ({ route }: any) => {
                     : undefined
                 }
                 onPollVote={() => setPollToVote(item)}
+                onReminderEdit={() => setReminderToEdit(item)}
                 isHighlighted={item.id === highlightedMsgId}
               />
             )}
@@ -1519,6 +1524,22 @@ const ChatRoomScreen = ({ route }: any) => {
           visible={isPollCreatorOpen}
           onClose={() => setIsPollCreatorOpen(false)}
           onCreate={handleCreatePoll}
+        />
+
+        <ReminderCreatorModal
+          visible={!!reminderToEdit}
+          onClose={() => setReminderToEdit(null)}
+          conversationId={conversationId}
+          initialData={
+            reminderToEdit?.reminder
+              ? {
+                  messageId: reminderToEdit.id,
+                  title: reminderToEdit.reminder.title,
+                  content: reminderToEdit.reminder.content || "",
+                  reminderTime: reminderToEdit.reminder.reminderTime,
+                }
+              : undefined
+          }
         />
 
         {activePollMessage && activePollMessage.poll && (

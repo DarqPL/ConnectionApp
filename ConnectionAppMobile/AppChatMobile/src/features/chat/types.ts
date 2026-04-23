@@ -71,6 +71,28 @@ export interface MessageReaction {
   reactedAt?: string | null;
 }
 
+export interface Reminder {
+  id: string;
+  title: string;
+  content?: string;
+  reminderTime: string;
+  isNotified?: boolean;
+  notified?: boolean;
+  conversationId: number;
+  creatorId: number;
+  creatorName: string;
+  createdAt?: string;
+  participantIds?: number[];
+  declinedIds?: number[];
+}
+
+export interface ReminderRequest {
+  title: string;
+  content?: string;
+  reminderTime: string;
+  conversationId: number;
+}
+
 export interface Message {
   id: string;
   conversationId: number;
@@ -84,6 +106,7 @@ export interface Message {
   recalledAt: string | null;
   replyInfo?: ReplyInfo | null;
   poll?: Poll | null;
+  reminder?: Reminder | null;
   reactions?: MessageReaction[];
 }
 

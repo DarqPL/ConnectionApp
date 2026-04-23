@@ -41,6 +41,7 @@ import BusinessCard from "../profile/BusinessCard";
 import { getOrFetchEmailUser } from "@/lib/userCache";
 import { useAuthStore } from "@/stores/useAuthStore";
 import PollMessage from "./PollMessage";
+import ReminderMessage from "./ReminderMessage";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😆", "😮", "😢", "😡"] as const;
 
@@ -545,7 +546,22 @@ const MessageItem = ({
         </span>
       )}
 
-      {message.poll ? (
+      {(message.reminder || (message.content && message.content.startsWith("[Nhắc hẹn] "))) ? (
+        <div className="flex justify-center w-full my-4 px-4">
+          <ReminderMessage
+            messageId={message.id}
+            conversationId={message.conversationId}
+            reminder={message.reminder || {
+              title: message.content?.replace("[Nhắc hẹn] ", "") || "Nhắc hẹn",
+              content: "Nhắc hẹn từ tin nhắn cũ",
+              reminderTime: message.createdAt,
+              isNotified: true,
+              creatorId: message.senderInfo.senderId,
+              creatorName: message.senderInfo.displayName
+            }}
+          />
+        </div>
+      ) : message.poll ? (
         <div className="flex justify-center w-full my-4 px-4">
           <PollMessage
             messageId={message.id}
