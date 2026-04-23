@@ -14,6 +14,7 @@ export interface Conversation {
   name: string;
   description?: string | null;
   avatarUrl?: string | null;
+  inviteToken?: string | null;
   type: string;
   lastMessageAt: string | null;
   lastMessageContent: string | null;

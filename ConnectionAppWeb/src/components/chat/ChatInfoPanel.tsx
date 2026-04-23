@@ -45,6 +45,8 @@ import ReminderCreator from "./ReminderCreator";
 import { toast } from "sonner";
 import "yet-another-react-lightbox/styles.css";
 import Lightbox from "yet-another-react-lightbox";
+import { buildGroupInviteUrl } from "@/lib/apiConfig";
+import GroupQrDialog from "./GroupQrDialog";
 
 interface ChatInfoPanelProps {
   chat: Conversation;
@@ -126,6 +128,7 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showGroupQrDialog, setShowGroupQrDialog] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoadingReminders, setIsLoadingReminders] = useState(false);
 
@@ -173,11 +176,11 @@ const ChatInfoPanel = ({
     setIsEditReminderOpen(true);
   };
 
-  const handleUpdateReminder = async (updatedData: Omit<ReminderRequest, "conversationId">) => {
+  const handleUpdateReminder = async (updatedData: any) => {
     if (!editingReminder) return;
     try {
       await chatService.deleteReminder(editingReminder.id);
-      const newReminder = await chatService.createReminder({
+      await chatService.createReminder({
         ...updatedData,
         conversationId: chat.id
       });
@@ -203,6 +206,8 @@ const ChatInfoPanel = ({
 
   const canEditDescription =
     currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+  const groupInviteUrl =
+    chat.type === "GROUP" ? buildGroupInviteUrl(chat.inviteToken) : null;
 
   const pinnedMessages = chat.pinnedMessages ?? [];
 
@@ -428,6 +433,21 @@ const ChatInfoPanel = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleCopyGroupInviteLink = async () => {
+    if (!groupInviteUrl) {
+      toast.error("Khong the tao link nhom");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(groupInviteUrl);
+      toast.success("Da sao chep link nhom");
+    } catch (error) {
+      console.error("Loi sao chep link nhom:", error);
+      toast.error("Khong the sao chep link nhom");
+    }
   };
 
   return (
@@ -782,26 +802,44 @@ const ChatInfoPanel = ({
           </div>
         )}
 
-        {/* Group Link Section */}
-        <SectionHeader
-          title="Link nhóm"
-          isOpen={openSections.groupLink}
-          onToggle={() => toggleSection("groupLink")}
-        />
-        {openSections.groupLink && (
-          <div className="px-4 pb-4 space-y-2">
-            <div className="p-3 rounded-lg bg-secondary/30 border border-border/40 text-xs space-y-2">
-              <p className="font-semibold">https://zalo.me/g/mvdfnx533</p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full h-7 text-xs"
-              >
-                <LinkIcon className="size-3 mr-1" />
-                Sao chép link
-              </Button>
-            </div>
-          </div>
+        {chat.type === "GROUP" && (
+          <>
+            {/* Group Link Section */}
+            <SectionHeader
+              title="Link nhóm"
+              isOpen={openSections.groupLink}
+              onToggle={() => toggleSection("groupLink")}
+            />
+            {openSections.groupLink && (
+              <div className="px-4 pb-4 space-y-2">
+                <div className="p-3 rounded-lg bg-secondary/30 border border-border/40 text-xs space-y-2">
+                  <p className="font-semibold break-all">
+                    {groupInviteUrl || "Chua tao duoc link nhom"}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-7 text-xs"
+                    onClick={() => void handleCopyGroupInviteLink()}
+                    disabled={!groupInviteUrl}
+                  >
+                    <LinkIcon className="size-3 mr-1" />
+                    Sao chép link
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full h-7 text-xs"
+                    onClick={() => setShowGroupQrDialog(true)}
+                    disabled={!groupInviteUrl}
+                  >
+                    <ImageIcon className="size-3 mr-1" />
+                    Hien thi QR
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Call History Section */}
@@ -853,7 +891,28 @@ const ChatInfoPanel = ({
           </div>
         )}
 
-
+        {/* Board Section */}
+        <SectionHeader
+          title="Bảng tin nhóm"
+          isOpen={openSections.board}
+          onToggle={() => toggleSection("board")}
+        />
+        {openSections.board && (
+          <div className="px-4 pb-4 space-y-1">
+            {[
+              { icon: Calendar, label: "Danh sách nhắc hẹn" },
+              { icon: StickyNote, label: "Ghi chú, ghim, bình chọn" },
+            ].map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
+              >
+                <item.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span className="text-sm font-medium">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Media Section */}
         <SectionHeader
@@ -1068,6 +1127,13 @@ const ChatInfoPanel = ({
         onClose={() => setShowRenameDialog(false)}
         currentName={chat.name}
         conversationId={chat.id}
+      />
+
+      <GroupQrDialog
+        open={showGroupQrDialog}
+        onOpenChange={setShowGroupQrDialog}
+        groupName={chat.name}
+        qrValue={groupInviteUrl}
       />
 
       <ReminderCreator

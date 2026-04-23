@@ -108,6 +108,12 @@ const ChatListScreen = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerBtn}
+              onPress={() => navigation.navigate("QrScanner")}
+            >
+              <Ionicons name="qr-code-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerBtn}
               onPress={() => navigation.navigate("CreateGroup")}
             >
               <Ionicons name="people-outline" size={22} color="#fff" />

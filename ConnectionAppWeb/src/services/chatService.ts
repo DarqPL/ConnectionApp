@@ -66,14 +66,7 @@ const resolveAttachmentType = (
     return "DOCUMENT";
   }
   return "FILE";
-
 };
-
-async function declineReminder(reminderId: string): Promise<Reminder> {
-  const res = await api.post(`/reminders/${reminderId}/decline`);
-  return res.data;
-}
-
 
 export const chatService = {
   /**
@@ -96,6 +89,16 @@ export const chatService = {
    */
   async fetchConversationById(conversationId: number): Promise<Conversation> {
     const res = await api.get(`/conversations/${conversationId}`);
+    return res.data;
+  },
+
+  async resolveGroupInvite(inviteToken: string): Promise<Conversation> {
+    const res = await api.get(`/conversations/invite/${inviteToken}`);
+    return res.data;
+  },
+
+  async joinGroupByInviteToken(inviteToken: string): Promise<Conversation> {
+    const res = await api.post(`/conversations/invite/${inviteToken}/join`);
     return res.data;
   },
 

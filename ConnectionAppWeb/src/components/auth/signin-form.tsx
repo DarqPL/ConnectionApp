@@ -9,6 +9,7 @@ import { Label } from "../ui/label";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
 import { useEffect } from "react";
+import { consumePostLoginRedirect } from "@/lib/authRedirect";
 
 const LOCK_NOTICE_KEY = "auth_lock_notice";
 
@@ -50,7 +51,7 @@ export function SigninForm({
     const { username, password } = data;
     try {
       await signIn(username, password);
-      navigate("/");
+      navigate(consumePostLoginRedirect() || "/");
     } catch (error: any) {
       console.error("Login failed:", error);
       const code = error.response?.data?.code;

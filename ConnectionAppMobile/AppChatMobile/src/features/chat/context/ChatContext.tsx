@@ -61,6 +61,7 @@ interface ChatContextType {
   ) => Promise<void>;
   leaveGroup: (conversationId: number, userId: number) => Promise<void>;
   addMemberToGroup: (conversationId: number, memberId: number) => Promise<void>;
+  joinGroupByInviteToken: (inviteToken: string) => Promise<Conversation>;
   updateMemberRole: (
     conversationId: number,
     memberId: number,
@@ -77,6 +78,10 @@ interface ChatContextType {
   updateGroupDescription: (
     conversationId: number,
     description: string,
+  ) => Promise<void>;
+  uploadGroupAvatarFile: (
+    conversationId: number,
+    file: { uri: string; name: string; type: string },
   ) => Promise<void>;
   clearError: () => void;
 }
@@ -197,6 +202,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     return "";
   };
+
+  const upsertConversation = useCallback((conversation: Conversation) => {
+    setConversations((prev) =>
+      sortConversations([
+        conversation,
+        ...prev.filter((item) => item.id !== conversation.id),
+      ]),
+    );
+  }, []);
 
   const fetchConversations = useCallback(async () => {
     setIsLoading(true);
@@ -1145,6 +1159,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const joinGroupByInviteToken = useCallback(
+    async (inviteToken: string) => {
+      try {
+        const conversation = await chatService.joinGroupByInviteToken(inviteToken);
+        upsertConversation(conversation);
+        return conversation;
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Khong the tham gia nhom";
+        setError(msg);
+        throw err;
+      }
+    },
+    [upsertConversation],
+  );
+
   const updateMemberRole = useCallback(
     async (conversationId: number, memberId: number, role: string) => {
       try {
@@ -1172,6 +1202,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     },
     [],
+  );
+
+  const uploadGroupAvatarFile = useCallback(
+    async (
+      conversationId: number,
+      file: { uri: string; name: string; type: string },
+    ) => {
+      try {
+        const updatedConversation = await chatService.updateConversationAvatar(
+          conversationId,
+          file,
+        );
+        upsertConversation({
+          ...updatedConversation,
+          avatarUrl: updatedConversation.avatarUrl
+            ? `${updatedConversation.avatarUrl}?t=${Date.now()}`
+            : null,
+        });
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Khong the cap nhat anh nhom";
+        setError(msg);
+        throw err;
+      }
+    },
+    [upsertConversation],
   );
 
   const acceptIncomingCall = useCallback(async (callId: number) => {
@@ -1260,6 +1318,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     reactMessage,
     leaveGroup,
     addMemberToGroup,
+    joinGroupByInviteToken,
     updateMemberRole,
     startOutgoingCall,
     acceptIncomingCall,
@@ -1267,6 +1326,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     endActiveCall,
     renameGroup,
     updateGroupDescription,
+    uploadGroupAvatarFile,
     clearError,
   };
 

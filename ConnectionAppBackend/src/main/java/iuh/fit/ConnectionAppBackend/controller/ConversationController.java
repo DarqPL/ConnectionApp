@@ -76,6 +76,27 @@ public class ConversationController {
         return ResponseEntity.ok(conversation);
     }
 
+    @GetMapping("/invite/{inviteToken}")
+    public ResponseEntity<ConversationResponse> resolveInvite(
+            @PathVariable String inviteToken) {
+
+        ConversationResponse conversation = conversationService.resolveGroupInvite(inviteToken);
+        return ResponseEntity.ok(conversation);
+    }
+
+    @PostMapping("/invite/{inviteToken}/join")
+    public ResponseEntity<ConversationResponse> joinByInvite(
+            Authentication authentication,
+            @PathVariable String inviteToken) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        ConversationResponse conversation = conversationService.joinConversationByInviteToken(inviteToken, userId);
+        return ResponseEntity.ok(conversation);
+    }
+
     /**
      * Create new conversation
      */
