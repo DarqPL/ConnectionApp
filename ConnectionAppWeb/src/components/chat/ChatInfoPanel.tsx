@@ -109,7 +109,7 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
-  
+
   // Đã gộp state của cả nhánh feature và main
   const [descriptionDraft, setDescriptionDraft] = useState(
     chat.description ?? "",
@@ -263,12 +263,17 @@ const ChatInfoPanel = ({
       formData.append("file", file);
 
       // 2. Update conversation avatar via dedicated endpoint (handles S3)
-      const updated = await chatService.updateConversationAvatar(chat.id, formData as any);
- 
+      const updated = await chatService.updateConversationAvatar(
+        chat.id,
+        formData as any,
+      );
+
       // 3. Update local store
       useChatStore.getState().updateConversation({
         ...updated,
-        avatarUrl: updated.avatarUrl ? `${updated.avatarUrl}?t=${Date.now()}` : null
+        avatarUrl: updated.avatarUrl
+          ? `${updated.avatarUrl}?t=${Date.now()}`
+          : null,
       });
 
       toast.success("Cập nhật ảnh nhóm thành công");
@@ -376,7 +381,8 @@ const ChatInfoPanel = ({
                 avatarUrl={chat.avatarUrl}
               />
             )}
-            {(currentUserRole === "OWNER" || currentUserRole === "CO_OWNER") && (
+            {(currentUserRole === "OWNER" ||
+              currentUserRole === "CO_OWNER") && (
               <label className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors cursor-pointer">
                 <Pencil className="size-3" />
                 <input
@@ -570,21 +576,6 @@ const ChatInfoPanel = ({
                 );
               })
             )}
-          </div>
-        )}
-
-        {/* Group Schedule Section */}
-        <SectionHeader
-          title="Lịch nhóm"
-          isOpen={openSections.schedule}
-          onToggle={() => toggleSection("schedule")}
-        />
-        {openSections.schedule && (
-          <div className="px-4 pb-4">
-            <div className="text-center py-4 text-muted-foreground">
-              <Calendar className="size-6 mx-auto mb-2 opacity-50" />
-              <p className="text-xs italic">Chưa có sự kiện nào</p>
-            </div>
           </div>
         )}
 

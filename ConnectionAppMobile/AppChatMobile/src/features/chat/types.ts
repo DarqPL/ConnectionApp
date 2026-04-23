@@ -24,7 +24,7 @@ export interface Conversation {
   updatedAt: string | null;
   participants: Participant[];
   unreadCount: number;
-  pinnedMessageIds?: string | null;
+  pinnedMessages?: Message[];
 }
 
 export interface SenderInfo {
