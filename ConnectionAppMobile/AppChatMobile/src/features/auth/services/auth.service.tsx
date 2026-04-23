@@ -6,6 +6,8 @@ const ACCESS_TOKEN_KEY = "accessToken";
 const API_BASE_URL_KEY = "apiBaseUrl";
 const DEV_SERVER_HOST_ENV_KEY = "EXPO_PUBLIC_DEV_SERVER_HOST";
 const API_BASE_URL_ENV_KEY = "EXPO_PUBLIC_API_BASE_URL";
+const USE_FORWARDED_API_ENV_KEY = "EXPO_PUBLIC_USE_FORWARDED_API";
+const FORWARDED_API_BASE_URL_ENV_KEY = "EXPO_PUBLIC_FORWARDED_API_BASE_URL";
 
 const getExpoEnv = (key: string): string | null => {
   const processValue = (globalThis as any)?.process?.env?.[key];
@@ -53,6 +55,44 @@ const normalizeApiBaseUrl = (url: string): string => {
   return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
 };
 
+const parseBooleanEnv = (value: string | null): boolean => {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+};
+
+const shouldUseForwardedApi = (): boolean =>
+  parseBooleanEnv(getExpoEnv(USE_FORWARDED_API_ENV_KEY));
+
+const getConfiguredForwardedApiBaseUrl = (): string | null => {
+  const value = getExpoEnv(FORWARDED_API_BASE_URL_ENV_KEY);
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizeApiBaseUrl(value);
+  } catch {
+    return null;
+  }
+};
+
+const getConfiguredLanApiBaseUrl = (): string | null => {
+  const value = getExpoEnv(API_BASE_URL_ENV_KEY);
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizeApiBaseUrl(value);
+  } catch {
+    return null;
+  }
+};
+
 const migrateLegacyPort = (url: string): string => url.replace(":8082", ":8080");
 
 const isLocalhostHost = (host: string): boolean => {
@@ -95,7 +135,8 @@ const isTunnelHost = (host: string): boolean => {
   return (
     lower.includes("exp.direct") ||
     lower.includes("ngrok") ||
-    lower.includes("trycloudflare")
+    lower.includes("trycloudflare") ||
+    lower.includes("devtunnels.ms")
   );
 };
 
@@ -140,6 +181,10 @@ const isLikelyAndroidEmulatorBaseUrl = (baseUrl: string): boolean => {
 export const getDevRuntimeConnectionWarning = (
   baseUrl: string,
 ): string | null => {
+  if (shouldUseForwardedApi() && !getConfiguredForwardedApiBaseUrl()) {
+    return "Dang bat EXPO_PUBLIC_USE_FORWARDED_API=true nhung chua dat EXPO_PUBLIC_FORWARDED_API_BASE_URL hop le.";
+  }
+
   if (!__DEV__) {
     return null;
   }
@@ -158,19 +203,24 @@ export const getDevRuntimeConnectionWarning = (
   if (Platform.OS === "android") {
     const suggestedLanBaseUrl = getSuggestedLanApiBaseUrl();
     if (suggestedLanBaseUrl) {
-      return `Android development build khong the dung localhost. Hay chay Metro bang LAN/tunnel va dat backend ve ${suggestedLanBaseUrl}.`;
+      return `Android development build khong the dung localhost. Hay chay Metro bang LAN va dat backend ve ${suggestedLanBaseUrl}, hoac bat forwarded backend URL trong VS Code.`;
     }
 
-    return "Android development build khong the dung localhost. Hay dat EXPO_PUBLIC_DEV_SERVER_HOST hoac EXPO_PUBLIC_API_BASE_URL theo IP LAN cua may dev.";
+    return "Android development build khong the dung localhost. Hay dat EXPO_PUBLIC_DEV_SERVER_HOST hoac EXPO_PUBLIC_API_BASE_URL theo IP LAN cua may dev, hoac dung EXPO_PUBLIC_FORWARDED_API_BASE_URL.";
   }
 
   return null;
 };
 
 const getDefaultApiBaseUrl = (): string => {
-  const envBaseUrl = getExpoEnv(API_BASE_URL_ENV_KEY);
+  const forwardedBaseUrl = getConfiguredForwardedApiBaseUrl();
+  if (shouldUseForwardedApi() && forwardedBaseUrl) {
+    return forwardedBaseUrl;
+  }
+
+  const envBaseUrl = getConfiguredLanApiBaseUrl();
   if (envBaseUrl) {
-    return normalizeApiBaseUrl(envBaseUrl);
+    return envBaseUrl;
   }
 
   const preferredLanHost = getPreferredLanHost();
@@ -186,6 +236,13 @@ const getDefaultApiBaseUrl = (): string => {
 };
 
 const syncApiBaseUrlWithCurrentLanHost = (baseUrl: string): string => {
+  if (shouldUseForwardedApi()) {
+    const forwardedBaseUrl = getConfiguredForwardedApiBaseUrl();
+    if (forwardedBaseUrl) {
+      return forwardedBaseUrl;
+    }
+  }
+
   const suggestedLanBaseUrl = getSuggestedLanApiBaseUrl();
   if (!suggestedLanBaseUrl) {
     return baseUrl;
@@ -316,6 +373,7 @@ export class AuthService {
   }
 
   async initializeSession(): Promise<string | null> {
+    const preferredEnvBaseUrl = getDefaultApiBaseUrl();
     const storedBaseUrl = await AsyncStorage.getItem(API_BASE_URL_KEY);
     if (storedBaseUrl) {
       try {
@@ -323,11 +381,16 @@ export class AuthService {
         const normalized = normalizeApiBaseUrl(migrated);
         this.apiBaseUrl = syncApiBaseUrlWithCurrentLanHost(normalized);
 
+        if (this.apiBaseUrl !== preferredEnvBaseUrl) {
+          this.apiBaseUrl = preferredEnvBaseUrl;
+        }
+
         const warning = getDevRuntimeConnectionWarning(this.apiBaseUrl);
         if (
           warning &&
           Platform.OS === "android" &&
-          !isLikelyAndroidEmulatorBaseUrl(this.apiBaseUrl)
+          !isLikelyAndroidEmulatorBaseUrl(this.apiBaseUrl) &&
+          !shouldUseForwardedApi()
         ) {
           const suggestedLanBaseUrl = getSuggestedLanApiBaseUrl();
           if (suggestedLanBaseUrl) {
@@ -343,10 +406,11 @@ export class AuthService {
           await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
         }
       } catch {
-        this.apiBaseUrl = getDefaultApiBaseUrl();
+        this.apiBaseUrl = preferredEnvBaseUrl;
         await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
       }
     } else {
+      this.apiBaseUrl = preferredEnvBaseUrl;
       await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
     }
 

@@ -6,10 +6,6 @@ import React, {
   useEffect,
 } from "react";
 import { authService, User } from "../services/auth.service";
-import {
-  initZegoCallKit,
-  uninitZegoCallKit,
-} from "../../chat/services/zegoCallKit";
 
 interface AuthContextType {
   user: User | null;
@@ -93,17 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       authService.setUnauthorizedHandler(null);
     };
   }, []);
-
-  useEffect(() => {
-    if (!user || !accessToken) {
-      uninitZegoCallKit();
-      return;
-    }
-
-    initZegoCallKit(user).catch((error) => {
-      console.warn("[AuthContext] Failed to init ZEGO call kit", error);
-    });
-  }, [accessToken, user]);
 
   const signIn = useCallback(async (username: string, password: string) => {
     setIsLoading(true);

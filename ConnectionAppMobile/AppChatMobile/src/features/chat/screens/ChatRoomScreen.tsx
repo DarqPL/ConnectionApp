@@ -33,6 +33,49 @@ import type { Message, Poll, Participant } from "../types";
 import { chatService } from "../services/chat.service";
 import { callService, type CallMediaType } from "../services/call.service";
 import { friendService, type BlockStatus } from "../services/friend.service";
+import { loadZegoRoomModule } from "../services/zegoCallKit";
+
+const getReadableErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error.trim();
+  }
+
+  return "Unknown SDK error";
+};
+
+const getCallRoomPendingReason = ({
+  hasToken,
+  hasAppSign,
+  hasModule,
+  isPreparing,
+}: {
+  hasToken: boolean;
+  hasAppSign: boolean;
+  hasModule: boolean;
+  isPreparing: boolean;
+}): string => {
+  if (isPreparing) {
+    return "Dang chuan bi quyen va khoi tao phong goi...";
+  }
+
+  if (!hasToken) {
+    return "Dang cho call token tu backend...";
+  }
+
+  if (!hasAppSign) {
+    return "Thieu cau hinh ZEGO_APP_SIGN tren mobile.";
+  }
+
+  if (!hasModule) {
+    return "Dang tai ZEGO room module...";
+  }
+
+  return "Dang khoi tao phong goi...";
+};
 
 const TypingDots = () => {
   const dotOpacities = React.useRef([
@@ -95,6 +138,10 @@ const TypingDots = () => {
 
 type ZegoCallModule = {
   ZegoUIKitPrebuiltCall: React.ComponentType<any>;
+  ONE_ON_ONE_VIDEO_CALL_CONFIG?: Record<string, unknown>;
+  ONE_ON_ONE_VOICE_CALL_CONFIG?: Record<string, unknown>;
+  GROUP_VIDEO_CALL_CONFIG?: Record<string, unknown>;
+  GROUP_VOICE_CALL_CONFIG?: Record<string, unknown>;
 };
 
 const getExpoEnv = (key: string): string => {
@@ -116,6 +163,8 @@ const isExpoGoRuntime = (): boolean => {
   return executionEnvironment === "storeClient" || appOwnership === "expo";
 };
 
+const isWebRuntime = (): boolean => Platform.OS === "web";
+
 const ChatRoomScreen = ({ route }: any) => {
   const insets = useSafeAreaInsets();
   const { conversationId, name, avatarUrl, type, participants } = route.params;
@@ -135,6 +184,7 @@ const ChatRoomScreen = ({ route }: any) => {
     setCurrentConversation,
     leaveGroup,
     updateMemberRole,
+    startOutgoingCall,
     acceptIncomingCall,
     rejectIncomingCall,
     endActiveCall,
@@ -176,6 +226,7 @@ const ChatRoomScreen = ({ route }: any) => {
   const zegoAppId = Number.parseInt(getExpoEnv("EXPO_PUBLIC_ZEGO_APP_ID"), 10);
   const zegoAppSign = getExpoEnv("EXPO_PUBLIC_ZEGO_APP_SIGN");
   const devRuntimeConnectionWarning = authService.getDevRuntimeConnectionWarning();
+  const isGroupCall = type === "GROUP";
 
   const currentConversation = conversations.find(
     (c) => c.id === conversationId,
@@ -228,7 +279,7 @@ const ChatRoomScreen = ({ route }: any) => {
   useEffect(() => {
     let mounted = true;
 
-    if (!activeForConversation || isExpoGoRuntime()) {
+    if (!activeForConversation || isExpoGoRuntime() || isWebRuntime()) {
       setZegoCallModule(null);
       setCallSetupError(null);
       setIsPreparingCallRoom(false);
@@ -282,14 +333,12 @@ const ChatRoomScreen = ({ route }: any) => {
         return;
       }
 
-      import("@zegocloud/zego-uikit-prebuilt-call-rn")
-        .then((module) => {
+      loadZegoRoomModule()
+        .then((exportedModule) => {
           if (!mounted) {
             return;
           }
 
-          const exportedModule = ((module as any).default ??
-            module) as ZegoCallModule;
           if (!exportedModule?.ZegoUIKitPrebuiltCall) {
             setCallSetupError("SDK goi khong kha dung trong runtime hien tai");
             setIsPreparingCallRoom(false);
@@ -307,7 +356,9 @@ const ChatRoomScreen = ({ route }: any) => {
 
           console.warn("[ChatRoom] Failed to load ZEGO call module", error);
           setZegoCallModule(null);
-          setCallSetupError("Khong the khoi tao ZEGO SDK");
+          setCallSetupError(
+            `Khong the khoi tao ZEGO SDK. ${getReadableErrorMessage(error)}`,
+          );
           setIsPreparingCallRoom(false);
         });
     };
@@ -427,7 +478,7 @@ const ChatRoomScreen = ({ route }: any) => {
   const showScrollThreshold = 120;
   const nearBottomThreshold = 24;
   const displayMessages = currentMessages;
-  const isGroup = type === "GROUP";
+  const isGroup = isGroupCall;
   const isPrivateChat = !isGroup;
   const messageIndexMap = React.useMemo(
     () => new Map(displayMessages.map((message, index) => [message.id, index])),
@@ -719,6 +770,15 @@ const ChatRoomScreen = ({ route }: any) => {
       return;
     }
 
+    if (
+      activeForConversation &&
+      (activeForConversation.status === "RINGING" ||
+        activeForConversation.status === "ONGOING")
+    ) {
+      Alert.alert("Thong bao", "Cuoc goi cua doan chat nay dang dien ra.");
+      return;
+    }
+
     try {
       const permissionResult = await ensureCallPermissions(mediaType);
       if (!permissionResult.ok) {
@@ -726,13 +786,10 @@ const ChatRoomScreen = ({ route }: any) => {
         return;
       }
 
-      const session = await callService.startCallSession(
-        conversationId,
-        mediaType,
-      );
+      await startOutgoingCall(conversationId, mediaType);
       Alert.alert(
         mediaType === "VIDEO" ? "Dang goi video" : "Dang goi thoai",
-        `Da tao cuoc goi #${session.callId}`,
+        "Da tao cuoc goi va dang khoi tao phong goi",
       );
     } catch (error) {
       Alert.alert(
@@ -805,6 +862,29 @@ const ChatRoomScreen = ({ route }: any) => {
       console.error("[ChatRoom] Failed to sync ZEGO call end", error);
     }
   };
+
+  const zegoCallConfig = React.useMemo(() => {
+    if (!zegoCallModule) {
+      return null;
+    }
+
+    const baseConfig =
+      activeForConversation?.mediaType === "VIDEO"
+        ? isGroupCall
+          ? zegoCallModule.GROUP_VIDEO_CALL_CONFIG
+          : zegoCallModule.ONE_ON_ONE_VIDEO_CALL_CONFIG
+        : isGroupCall
+          ? zegoCallModule.GROUP_VOICE_CALL_CONFIG
+          : zegoCallModule.ONE_ON_ONE_VOICE_CALL_CONFIG;
+
+    return {
+      ...(baseConfig ?? {}),
+      turnOnCameraWhenJoining: activeForConversation?.mediaType === "VIDEO",
+      turnOnMicrophoneWhenJoining: true,
+      useSpeakerWhenJoining: true,
+      onCallEnd: handleSdkCallEnd,
+    };
+  }, [activeForConversation?.mediaType, handleSdkCallEnd, isGroupCall, zegoCallModule]);
 
   const handleRecallMessage = (msgId: string) => {
     Alert.alert("Thu hồi hoặc xóa", "Bạn muốn làm gì với tin nhắn này?", [
@@ -1014,6 +1094,13 @@ const ChatRoomScreen = ({ route }: any) => {
                   Development Build.
                 </Text>
               </View>
+            ) : isWebRuntime() ? (
+              <View style={styles.callRoomLoading}>
+                <Text style={styles.callRoomLoadingText}>
+                  ZEGO native call room khong ho tro tren mobile-web. Vui long
+                  mo ban Android Development Build de dung tinh nang goi.
+                </Text>
+              </View>
             ) : callSetupError ? (
               <View style={styles.callRoomLoading}>
                 <Text style={styles.callRoomLoadingText}>{callSetupError}</Text>
@@ -1027,7 +1114,8 @@ const ChatRoomScreen = ({ route }: any) => {
               </View>
             ) : activeForConversation.token?.token &&
               zegoAppSign &&
-              zegoCallModule?.ZegoUIKitPrebuiltCall ? (
+              zegoCallModule?.ZegoUIKitPrebuiltCall &&
+              zegoCallConfig ? (
               <zegoCallModule.ZegoUIKitPrebuiltCall
                 appID={activeForConversation.token.appId}
                 appSign={zegoAppSign}
@@ -1039,21 +1127,18 @@ const ChatRoomScreen = ({ route }: any) => {
                 }
                 callID={activeForConversation.roomId}
                 token={activeForConversation.token.token}
-                config={{
-                  turnOnCameraWhenJoining:
-                    activeForConversation.mediaType === "VIDEO",
-                  turnOnMicrophoneWhenJoining: true,
-                  useSpeakerWhenJoining: true,
-                  onCallEnd: handleSdkCallEnd,
-                }}
+                config={zegoCallConfig}
               />
             ) : (
               <View style={styles.callRoomLoading}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
                 <Text style={styles.callRoomLoadingText}>
-                  {isPreparingCallRoom
-                    ? "Dang chuan bi quyen va khoi tao phong goi..."
-                    : "Dang khoi tao phong goi..."}
+                  {getCallRoomPendingReason({
+                    hasToken: Boolean(activeForConversation.token?.token),
+                    hasAppSign: Boolean(zegoAppSign),
+                    hasModule: Boolean(zegoCallModule?.ZegoUIKitPrebuiltCall),
+                    isPreparing: isPreparingCallRoom,
+                  })}
                 </Text>
               </View>
             )}

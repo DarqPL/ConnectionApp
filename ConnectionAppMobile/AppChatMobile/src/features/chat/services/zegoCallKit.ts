@@ -1,4 +1,6 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
+import type { ComponentType } from "react";
 import type { User } from "../../auth/services/auth.service";
 
 type ZegoCallServiceModule = {
@@ -12,6 +14,19 @@ type ZegoCallServiceModule = {
   ) => Promise<void>;
   uninit: () => void;
   useSystemCallingUI: (plugins: unknown[]) => void;
+};
+
+export type ZegoRoomModule = {
+  ZegoUIKitPrebuiltCall: ComponentType<any>;
+  ONE_ON_ONE_VIDEO_CALL_CONFIG?: Record<string, unknown>;
+  ONE_ON_ONE_VOICE_CALL_CONFIG?: Record<string, unknown>;
+  GROUP_VIDEO_CALL_CONFIG?: Record<string, unknown>;
+  GROUP_VOICE_CALL_CONFIG?: Record<string, unknown>;
+};
+
+type ZegoDependencyLoadResult = {
+  service: ZegoCallServiceModule;
+  plugins: unknown[];
 };
 
 const getExpoEnv = (key: string): string | null => {
@@ -51,6 +66,38 @@ let currentInitPromise: Promise<void> | null = null;
 let systemUiConfigured = false;
 let loadedService: ZegoCallServiceModule | null = null;
 let loadedPlugins: unknown[] | null = null;
+let loadedRoomModule: ZegoRoomModule | null = null;
+
+const normalizeErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error.trim();
+  }
+
+  return "Unknown SDK error";
+};
+
+const buildZegoDependencyLoadError = (error: unknown): Error => {
+  const reason = normalizeErrorMessage(error);
+  const lowerReason = reason.toLowerCase();
+
+  if (
+    lowerReason.includes("native module") ||
+    lowerReason.includes("cannot find native module") ||
+    lowerReason.includes("was not found in the ui manager") ||
+    lowerReason.includes("could not be found") ||
+    lowerReason.includes("requirenativecomponent")
+  ) {
+    return new Error(
+      `ZEGO native modules are unavailable in this development build. Rebuild and reinstall the Android development build after adding ZEGO dependencies. Original error: ${reason}`,
+    );
+  }
+
+  return new Error(reason);
+};
 
 const buildDisplayName = (user: User): string => {
   const preferredName = user.displayName?.trim() || user.username?.trim();
@@ -68,12 +115,12 @@ const isExpoGoRuntime = (): boolean => {
   return executionEnvironment === "storeClient" || appOwnership === "expo";
 };
 
-export const isZegoRuntimeAvailable = (): boolean => !isExpoGoRuntime();
+const isWebRuntime = (): boolean => Platform.OS === "web";
 
-const loadZegoDependencies = async (): Promise<{
-  service: ZegoCallServiceModule;
-  plugins: unknown[];
-}> => {
+export const isZegoRuntimeAvailable = (): boolean =>
+  !isExpoGoRuntime() && !isWebRuntime();
+
+export const loadZegoDependencies = async (): Promise<ZegoDependencyLoadResult> => {
   if (loadedService && loadedPlugins) {
     return {
       service: loadedService,
@@ -81,22 +128,58 @@ const loadZegoDependencies = async (): Promise<{
     };
   }
 
-  const serviceModule = await import("@zegocloud/zego-uikit-prebuilt-call-rn");
-  const zimModule = await import("zego-zim-react-native");
-  const zpnsModule = await import("zego-zpns-react-native");
+  try {
+    const serviceModule = await import("@zegocloud/zego-uikit-prebuilt-call-rn");
+    const zimModule = await import("zego-zim-react-native");
+    const zpnsModule = await import("zego-zpns-react-native");
 
-  const service = ((serviceModule as any).default ??
-    serviceModule) as ZegoCallServiceModule;
-  const zim = ((zimModule as any).default ?? zimModule) as unknown;
-  const zpns = ((zpnsModule as any).default ?? zpnsModule) as unknown;
+    const service = ((serviceModule as any).default ??
+      serviceModule) as ZegoCallServiceModule;
+    const zim = ((zimModule as any).default ?? zimModule) as unknown;
+    const zpns = ((zpnsModule as any).default ?? zpnsModule) as unknown;
 
-  loadedService = service;
-  loadedPlugins = [zim, zpns];
+    loadedService = service;
+    loadedPlugins = [zim, zpns];
 
-  return {
-    service,
-    plugins: loadedPlugins,
-  };
+    return {
+      service,
+      plugins: loadedPlugins,
+    };
+  } catch (error) {
+    throw buildZegoDependencyLoadError(error);
+  }
+};
+
+export const loadZegoRoomModule = async (): Promise<ZegoRoomModule> => {
+  if (loadedRoomModule) {
+    return loadedRoomModule;
+  }
+
+  try {
+    const serviceModule = await import("@zegocloud/zego-uikit-prebuilt-call-rn");
+    const roomComponent = (serviceModule as any).ZegoUIKitPrebuiltCall;
+
+    if (!roomComponent) {
+      throw new Error(
+        "ZegoUIKitPrebuiltCall named export is unavailable in the current runtime",
+      );
+    }
+
+    const exportedModule = {
+      ZegoUIKitPrebuiltCall: roomComponent,
+      ONE_ON_ONE_VIDEO_CALL_CONFIG: (serviceModule as any)
+        .ONE_ON_ONE_VIDEO_CALL_CONFIG,
+      ONE_ON_ONE_VOICE_CALL_CONFIG: (serviceModule as any)
+        .ONE_ON_ONE_VOICE_CALL_CONFIG,
+      GROUP_VIDEO_CALL_CONFIG: (serviceModule as any).GROUP_VIDEO_CALL_CONFIG,
+      GROUP_VOICE_CALL_CONFIG: (serviceModule as any).GROUP_VOICE_CALL_CONFIG,
+    } as ZegoRoomModule;
+
+    loadedRoomModule = exportedModule;
+    return exportedModule;
+  } catch (error) {
+    throw buildZegoDependencyLoadError(error);
+  }
 };
 
 export const initZegoCallKit = (user: User): Promise<void> => {

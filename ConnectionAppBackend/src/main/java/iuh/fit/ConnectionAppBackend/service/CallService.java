@@ -119,7 +119,14 @@ public class CallService {
         );
 
         if (!existingActiveCalls.isEmpty()) {
-            throw new BadRequestException("This conversation already has an active call");
+            CallSession existingCall = existingActiveCalls.get(0);
+            List<CallParticipant> existingParticipants = callParticipantRepository.findByCallIdWithUser(existingCall.getId());
+
+            reconcileExistingActiveCall(existingCall, existingParticipants);
+
+            if (ACTIVE_CALL_STATUSES.contains(existingCall.getStatus())) {
+                return toCallSessionResponse(existingCall, existingParticipants, caller.getId(), true);
+            }
         }
 
         validatePrivateConversationBlock(conversation, caller.getId());
@@ -366,28 +373,7 @@ public class CallService {
                 continue;
             }
 
-            LocalDateTime now = LocalDateTime.now();
-            callSession.setStatus(CallStatus.MISSED);
-            callSession.setEndedAt(now);
-            callSession.setEndedReason("RING_TIMEOUT");
-            callSession.setDurationSeconds(0L);
-            callSessionRepository.save(callSession);
-
-            for (CallParticipant participant : participants) {
-                if (participant.getStatus() == CallParticipantStatus.RINGING) {
-                    participant.setStatus(CallParticipantStatus.MISSED);
-                } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
-                    participant.setStatus(CallParticipantStatus.LEFT);
-                }
-
-                if (participant.getLeftAt() == null) {
-                    participant.setLeftAt(now);
-                }
-            }
-            callParticipantRepository.saveAll(participants);
-
-            publishStatusEvents(callSession, participants);
-            publishConversationParticipantState(callSession, participants);
+            markCallAsMissed(callSession, participants, "RING_TIMEOUT");
             processedCount++;
         }
 
@@ -417,6 +403,95 @@ public class CallService {
             callSession.setDurationSeconds(0L);
             callSessionRepository.save(callSession);
         }
+    }
+
+    private void reconcileExistingActiveCall(CallSession callSession, List<CallParticipant> participants) {
+        if (!ACTIVE_CALL_STATUSES.contains(callSession.getStatus())) {
+            return;
+        }
+
+        if (callSession.getStatus() == CallStatus.RINGING) {
+            LocalDateTime deadline = LocalDateTime.now().minusSeconds(Math.max(5L, ringTimeoutSeconds));
+            if (callSession.getCreatedAt() != null && !callSession.getCreatedAt().isAfter(deadline)) {
+                markCallAsMissed(callSession, participants, "RING_TIMEOUT");
+                return;
+            }
+
+            CallStatus previousStatus = callSession.getStatus();
+            maybeCompleteAsMissed(callSession, participants);
+            if (previousStatus != callSession.getStatus()) {
+                publishStatusEvents(callSession, participants);
+                publishConversationParticipantState(callSession, participants);
+            }
+            return;
+        }
+
+        boolean hasJoinedParticipant = participants.stream()
+                .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED && p.getLeftAt() == null);
+
+        if (!hasJoinedParticipant) {
+            markCallAsEnded(callSession, participants, "NO_ACTIVE_PARTICIPANTS");
+        }
+    }
+
+    private void markCallAsMissed(CallSession callSession,
+                                  List<CallParticipant> participants,
+                                  String reason) {
+        LocalDateTime now = LocalDateTime.now();
+        callSession.setStatus(CallStatus.MISSED);
+        callSession.setEndedAt(now);
+        callSession.setEndedReason(reason);
+        callSession.setDurationSeconds(0L);
+        callSessionRepository.save(callSession);
+
+        for (CallParticipant participant : participants) {
+            if (participant.getStatus() == CallParticipantStatus.RINGING) {
+                participant.setStatus(CallParticipantStatus.MISSED);
+            } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
+                participant.setStatus(CallParticipantStatus.LEFT);
+            }
+
+            if (participant.getLeftAt() == null) {
+                participant.setLeftAt(now);
+            }
+        }
+        callParticipantRepository.saveAll(participants);
+
+        publishStatusEvents(callSession, participants);
+        publishConversationParticipantState(callSession, participants);
+    }
+
+    private void markCallAsEnded(CallSession callSession,
+                                 List<CallParticipant> participants,
+                                 String reason) {
+        LocalDateTime now = LocalDateTime.now();
+        callSession.setStatus(CallStatus.ENDED);
+        callSession.setEndedAt(now);
+        callSession.setEndedReason(reason);
+        if (callSession.getStartedAt() != null) {
+            long duration = Math.max(0, callSession.getStartedAt().until(now, ChronoUnit.SECONDS));
+            callSession.setDurationSeconds(duration);
+        } else {
+            callSession.setDurationSeconds(0L);
+        }
+        callSessionRepository.save(callSession);
+
+        for (CallParticipant participant : participants) {
+            if (participant.getLeftAt() != null) {
+                continue;
+            }
+
+            if (participant.getStatus() == CallParticipantStatus.RINGING) {
+                participant.setStatus(CallParticipantStatus.MISSED);
+            } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
+                participant.setStatus(CallParticipantStatus.LEFT);
+            }
+            participant.setLeftAt(now);
+        }
+        callParticipantRepository.saveAll(participants);
+
+        publishStatusEvents(callSession, participants);
+        publishConversationParticipantState(callSession, participants);
     }
 
     private CallHistoryItemResponse mapToHistoryItem(CallSession callSession, Long currentUserId) {

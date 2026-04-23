@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCallStore } from "@/stores/useCallStore";
-import { useAuthStore } from "@/stores/useAuthStore";
-import {
-  Phone,
-  PhoneCall,
-  PhoneIncoming,
-  PhoneOff,
-  Video,
-  Mic,
-  MicOff,
-} from "lucide-react";
+import { Phone, PhoneCall, PhoneIncoming, PhoneOff, Video } from "lucide-react";
 import { toast } from "sonner";
 import ZegoCallRoom from "./ZegoCallRoom";
 
@@ -19,14 +10,12 @@ interface CallOverlayProps {
 }
 
 const CallOverlay = ({ conversationId }: CallOverlayProps) => {
-  const { user } = useAuthStore();
   const {
     incomingCall,
     activeCall,
     acceptCall,
     rejectCall,
     endCall,
-    updateParticipantState,
     ensureActiveCallToken,
   } = useCallStore();
 
@@ -50,20 +39,12 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     );
   }, [incomingForConversation]);
 
-  const myParticipant = useMemo(() => {
-    if (!activeForConversation || !user) {
-      return null;
-    }
-
-    return (
-      activeForConversation.participants.find(
-        (participant) => participant.userId === user.id,
-      ) ?? null
-    );
-  }, [activeForConversation, user]);
-
   useEffect(() => {
     if (!activeForConversation) {
+      return;
+    }
+
+    if (activeForConversation.status !== "ONGOING") {
       return;
     }
 
@@ -112,7 +93,7 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     }
   };
 
-  const handleEnd = async () => {
+  const handleCancelOrEnd = async () => {
     if (!activeForConversation || isSubmitting) {
       return;
     }
@@ -120,10 +101,18 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     setIsSubmitting(true);
     try {
       await endCall(activeForConversation.callId, "ENDED_BY_USER");
-      toast.success("Da ket thuc cuoc goi");
+      toast.success(
+        activeForConversation.status === "RINGING"
+          ? "Da huy cuoc goi"
+          : "Da ket thuc cuoc goi",
+      );
     } catch (error) {
       console.error(error);
-      toast.error("Khong the ket thuc cuoc goi");
+      toast.error(
+        activeForConversation.status === "RINGING"
+          ? "Khong the huy cuoc goi"
+          : "Khong the ket thuc cuoc goi",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -141,42 +130,6 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     } catch (error) {
       console.error(error);
       toast.error("Khong the dong bo ket thuc cuoc goi");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleAudio = async () => {
-    if (!activeForConversation || !myParticipant || isSubmitting) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await updateParticipantState(activeForConversation.callId, {
-        audioMuted: !myParticipant.audioMuted,
-      });
-    } catch (error) {
-      console.error(error);
-      toast.error("Khong the cap nhat microphone");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleVideo = async () => {
-    if (!activeForConversation || !myParticipant || isSubmitting) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await updateParticipantState(activeForConversation.callId, {
-        videoMuted: !myParticipant.videoMuted,
-      });
-    } catch (error) {
-      console.error(error);
-      toast.error("Khong the cap nhat camera");
     } finally {
       setIsSubmitting(false);
     }
@@ -237,61 +190,36 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              {
-                activeForConversation.participants.filter(
-                  (p) => p.status === "JOINED",
-                ).length
-              }{" "}
-              dang tham gia
+              {activeForConversation.status === "RINGING"
+                ? "Dang do chuong..."
+                : `${activeForConversation.participants.filter((p) => p.status === "JOINED").length} dang tham gia`}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8"
-              onClick={() => void handleToggleAudio()}
-              disabled={isSubmitting || !myParticipant}
-            >
-              {myParticipant?.audioMuted ? (
-                <MicOff className="size-4" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-              {myParticipant?.audioMuted ? "Bat mic" : "Tat mic"}
-            </Button>
-
-            {activeForConversation.mediaType === "VIDEO" && (
+          {activeForConversation.status === "RINGING" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Dang cho nguoi nhan tham gia phong goi.
+              </span>
               <Button
                 size="sm"
-                variant="outline"
-                className="h-8"
-                onClick={() => void handleToggleVideo()}
-                disabled={isSubmitting || !myParticipant}
+                variant="destructive"
+                className="ml-auto h-8"
+                onClick={() => void handleCancelOrEnd()}
+                disabled={isSubmitting}
               >
-                <Video className="size-4" />
-                {myParticipant?.videoMuted ? "Bat cam" : "Tat cam"}
+                <PhoneOff className="size-4" />
+                Huy
               </Button>
-            )}
-
-            <Button
-              size="sm"
-              variant="destructive"
-              className="ml-auto h-8"
-              onClick={() => void handleEnd()}
-              disabled={isSubmitting}
-            >
-              <PhoneOff className="size-4" />
-              Ket thuc
-            </Button>
-          </div>
-
-          <ZegoCallRoom
-            call={activeForConversation}
-            mediaType={activeForConversation.mediaType}
-            onLeaveRoom={() => void handleLeaveFromSdkRoom()}
-          />
+            </div>
+          ) : (
+            <ZegoCallRoom
+              key={`${activeForConversation.callId}:${activeForConversation.roomId}`}
+              call={activeForConversation}
+              mediaType={activeForConversation.mediaType}
+              onLeaveRoom={() => void handleLeaveFromSdkRoom()}
+            />
+          )}
         </div>
       )}
     </div>

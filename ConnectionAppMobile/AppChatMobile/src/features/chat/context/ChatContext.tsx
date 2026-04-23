@@ -57,6 +57,10 @@ interface ChatContextType {
     memberId: number,
     role: string,
   ) => Promise<void>;
+  startOutgoingCall: (
+    conversationId: number,
+    mediaType: "VOICE" | "VIDEO",
+  ) => Promise<void>;
   acceptIncomingCall: (callId: number) => Promise<void>;
   rejectIncomingCall: (callId: number) => Promise<void>;
   endActiveCall: (callId: number, reason?: string) => Promise<void>;
@@ -921,6 +925,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
   }, []);
 
+  const startOutgoingCall = useCallback(
+    async (conversationId: number, mediaType: "VOICE" | "VIDEO") => {
+      const session = await callService.startCallSession(
+        conversationId,
+        mediaType,
+      );
+
+      let token = session.token ?? null;
+      if (!token) {
+        try {
+          token = await callService.issueToken(session.callId);
+        } catch (tokenError) {
+          console.warn(
+            "[ChatContext] Failed to issue outgoing call token",
+            tokenError,
+          );
+        }
+      }
+
+      setActiveCall({
+        ...session,
+        token,
+      });
+      setIncomingCall(null);
+    },
+    [],
+  );
+
   const rejectIncomingCall = useCallback(async (callId: number) => {
     await callService.rejectCall(callId);
     setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
@@ -959,6 +991,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     leaveGroup,
     addMemberToGroup,
     updateMemberRole,
+    startOutgoingCall,
     acceptIncomingCall,
     rejectIncomingCall,
     endActiveCall,

@@ -45,8 +45,8 @@ export const getCallMediaEnvironmentWarning = (): string | null => {
 
   const suggestedPublicUrl = resolvePublicAppUrl();
   const secureTarget = suggestedPublicUrl
-    ? `Hay mo app bang URL HTTPS ngrok: ${suggestedPublicUrl}`
-    : "Hay mo app bang URL HTTPS ngrok cua web";
+    ? `Hay mo app bang URL HTTPS forwarded cua web: ${suggestedPublicUrl}`
+    : "Hay mo app bang URL HTTPS forwarded cua web";
 
   if (!window.isSecureContext) {
     return `Trinh duyet dang mo app trong insecure context (${window.location.origin}). ${secureTarget}.`;

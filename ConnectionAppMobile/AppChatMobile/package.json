@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "start:lan": "expo start --lan",
-    "start:tunnel": "expo start --tunnel",
-    "android": "expo start --android",
-    "android:lan": "expo start --lan --android",
-    "ios": "expo start --ios",
+    "start": "expo start --dev-client",
+    "start:lan": "expo start --dev-client --lan",
+    "start:lan:auto": "scripts\\start-lan-dev-client.cmd",
+    "start:tunnel": "expo start --dev-client --tunnel",
+    "start:tunnel:auto": "npx expo start --dev-client --tunnel --clear",
+    "android": "expo start --dev-client --android",
+    "android:lan": "expo start --dev-client --lan --android",
+    "android:lan:auto": "scripts\\android-lan-dev-client.cmd",
+    "ios": "expo start --dev-client --ios",
     "web": "expo start --web"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CallMediaType, CallSession } from "@/types/call";
 import { getCallMediaEnvironmentWarning } from "@/lib/apiConfig";
 
@@ -8,6 +8,89 @@ interface ZegoCallRoomProps {
   onJoinRoom?: () => void;
   onLeaveRoom?: () => void;
 }
+
+interface ZegoRoomHandle {
+  destroy?: () => void;
+  hangUp?: () => void;
+  closeBackgroundProcess?: () => void;
+  localStream?: MediaStream;
+  autoLeaveRoomWhenOnlySelfInRoom?: boolean;
+}
+
+let activeGlobalRoomHandle: ZegoRoomHandle | null = null;
+let activeGlobalRoomKey: string | null = null;
+let pendingGlobalCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
+const stopMediaStream = (stream?: MediaStream | null) => {
+  stream?.getTracks().forEach((track) => {
+    try {
+      track.stop();
+    } catch (trackError) {
+      console.warn("Failed to stop media track", trackError);
+    }
+  });
+};
+
+const detachMediaElements = (root?: ParentNode | null) => {
+  if (!root || typeof root.querySelectorAll !== "function") {
+    return;
+  }
+
+  root.querySelectorAll("audio, video").forEach((element) => {
+    const mediaElement = element as HTMLMediaElement & {
+      srcObject?: MediaStream | null;
+    };
+    const srcObject = mediaElement.srcObject;
+    if (srcObject instanceof MediaStream) {
+      stopMediaStream(srcObject);
+    }
+
+    mediaElement.pause?.();
+    mediaElement.srcObject = null;
+    mediaElement.removeAttribute("src");
+    mediaElement.load?.();
+  });
+};
+
+const cleanupRoomResources = (
+  roomHandle: ZegoRoomHandle | null,
+  container?: HTMLDivElement | null,
+) => {
+  try {
+    roomHandle?.hangUp?.();
+  } catch (cleanupError) {
+    console.warn("ZEGO hangUp cleanup failed", cleanupError);
+  }
+
+  stopMediaStream(roomHandle?.localStream);
+  detachMediaElements(container);
+  detachMediaElements(document.body);
+
+  try {
+    roomHandle?.closeBackgroundProcess?.();
+  } catch (cleanupError) {
+    console.warn("ZEGO closeBackgroundProcess cleanup failed", cleanupError);
+  }
+
+  try {
+    roomHandle?.destroy?.();
+  } catch (cleanupError) {
+    console.warn("ZEGO destroy cleanup failed", cleanupError);
+  }
+
+  container?.replaceChildren();
+};
+
+const cleanupGlobalRoomInstance = () => {
+  if (pendingGlobalCleanupTimer) {
+    clearTimeout(pendingGlobalCleanupTimer);
+    pendingGlobalCleanupTimer = null;
+  }
+
+  cleanupRoomResources(activeGlobalRoomHandle, null);
+  activeGlobalRoomHandle = null;
+  activeGlobalRoomKey = null;
+};
 
 const ZegoCallRoom = ({
   call,
@@ -20,6 +103,8 @@ const ZegoCallRoom = ({
   const onLeaveRoomRef = useRef<(() => void) | undefined>(onLeaveRoom);
   const hasJoinedRoomRef = useRef(false);
   const isCleanupDestroyRef = useRef(false);
+  const hasReportedLeaveRef = useRef(false);
+  const roomInstanceKeyRef = useRef("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,7 +115,7 @@ const ZegoCallRoom = ({
     onLeaveRoomRef.current = onLeaveRoom;
   }, [onLeaveRoom]);
 
-  const resolveDisplayName = (): string => {
+  const displayName = useMemo(() => {
     const expectedId = Number(call.token?.userId);
     if (Number.isFinite(expectedId)) {
       const matched = call.participants.find(
@@ -42,16 +127,21 @@ const ZegoCallRoom = ({
     }
 
     return `user_${call.token?.userId ?? "unknown"}`;
-  };
+  }, [call.participants, call.token?.userId]);
 
   useEffect(() => {
     let destroyed = false;
-    let roomHandle: { destroy?: () => void } | null = null;
+    let roomHandle: ZegoRoomHandle | null = null;
+    const container = containerRef.current;
+    const roomInstanceKey = `${call.callId}:${call.roomId}:${call.token?.userId ?? "unknown"}`;
+
     hasJoinedRoomRef.current = false;
+    hasReportedLeaveRef.current = false;
     isCleanupDestroyRef.current = false;
+    roomInstanceKeyRef.current = roomInstanceKey;
 
     const bootstrap = async () => {
-      if (!containerRef.current || !call.token?.token) {
+      if (!container || !call.token?.token) {
         return;
       }
 
@@ -83,24 +173,37 @@ const ZegoCallRoom = ({
           );
         }
 
+        if (activeGlobalRoomKey && activeGlobalRoomKey !== roomInstanceKey) {
+          cleanupGlobalRoomInstance();
+        }
+
+        container.innerHTML = "";
+
         const kitToken = generateKitTokenForProduction(
           appId,
           rawToken,
           roomId,
           userId,
-          resolveDisplayName(),
+          displayName,
         );
 
         const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zp.autoLeaveRoomWhenOnlySelfInRoom = false;
 
         roomHandle = zp;
-        if (destroyed || !containerRef.current) {
-          zp.destroy?.();
+        activeGlobalRoomHandle = zp;
+        activeGlobalRoomKey = roomInstanceKey;
+        if (destroyed || !container) {
+          cleanupRoomResources(zp, container);
+          if (activeGlobalRoomKey === roomInstanceKey) {
+            activeGlobalRoomHandle = null;
+            activeGlobalRoomKey = null;
+          }
           return;
         }
 
         zp.joinRoom({
-          container: containerRef.current,
+          container,
           sharedLinks: [],
           scenario: {
             mode:
@@ -111,17 +214,29 @@ const ZegoCallRoom = ({
           turnOnMicrophoneWhenJoining: true,
           turnOnCameraWhenJoining: mediaType === "VIDEO",
           showMyCameraToggleButton: mediaType === "VIDEO",
+          showLeavingView: false,
+          showLeaveRoomConfirmDialog: false,
           showPreJoinView: false,
           onJoinRoom: () => {
+            if (roomInstanceKeyRef.current !== roomInstanceKey) {
+              return;
+            }
+
             hasJoinedRoomRef.current = true;
             onJoinRoomRef.current?.();
           },
           onLeaveRoom: () => {
             // Ignore leave events emitted by SDK destroy/cleanup or before room join.
-            if (isCleanupDestroyRef.current || !hasJoinedRoomRef.current) {
+            if (
+              roomInstanceKeyRef.current !== roomInstanceKey ||
+              isCleanupDestroyRef.current ||
+              !hasJoinedRoomRef.current ||
+              hasReportedLeaveRef.current
+            ) {
               return;
             }
 
+            hasReportedLeaveRef.current = true;
             onLeaveRoomRef.current?.();
           },
         });
@@ -140,9 +255,31 @@ const ZegoCallRoom = ({
     return () => {
       destroyed = true;
       isCleanupDestroyRef.current = true;
-      roomHandle?.destroy?.();
+      hasJoinedRoomRef.current = false;
+      hasReportedLeaveRef.current = true;
+      cleanupRoomResources(roomHandle, container);
+
+      if (activeGlobalRoomKey === roomInstanceKey) {
+        activeGlobalRoomHandle = null;
+        activeGlobalRoomKey = null;
+      }
+
+      pendingGlobalCleanupTimer = setTimeout(() => {
+        if (activeGlobalRoomHandle === roomHandle) {
+          cleanupGlobalRoomInstance();
+        }
+      }, 1500);
     };
-  }, [call.roomId, call.token?.token, mediaType]);
+  }, [
+    call.callId,
+    call.roomId,
+    call.token?.appId,
+    call.token?.roomId,
+    call.token?.token,
+    call.token?.userId,
+    displayName,
+    mediaType,
+  ]);
 
   if (!call.token?.token) {
     return (
