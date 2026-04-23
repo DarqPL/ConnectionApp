@@ -11,6 +11,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.PollRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.PollResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.MessageReaction;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Poll;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.PollOption;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
@@ -45,12 +46,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class MessageService {
 
     private static final int MAX_ATTACHMENTS_PER_MESSAGE = 5;
+    private static final Set<String> ALLOWED_REACTION_CODES = Set.of(
+            "👍", "❤️", "😆", "😮", "😢", "😡"
+    );
 
     @Autowired
     private MessageRepository messageRepository;
@@ -319,6 +325,130 @@ public class MessageService {
 
         return response;
     }
+
+    @Transactional
+    public MessageResponse reactToMessage(String messageId, Long userId, String reactionCode) {
+        Message message = messageRepository.findByIdAndIsDeletedFalse(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + messageId));
+
+        validateReactionPermission(message, userId);
+
+        String normalizedReactionCode = normalizeReactionCode(reactionCode);
+        boolean changed = applyReactionUpdate(message, userId, normalizedReactionCode);
+        if (!changed) {
+            return mapToMessageResponse(message);
+        }
+
+        Message updatedMessage = messageRepository.save(message);
+        MessageResponse response = mapToMessageResponse(updatedMessage);
+        broadcastReactionUpdate(updatedMessage.getConversationId(), response);
+        return response;
+    }
+
+    @Transactional
+    public MessageResponse removeReaction(String messageId, Long userId) {
+        Message message = messageRepository.findByIdAndIsDeletedFalse(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + messageId));
+
+        validateReactionPermission(message, userId);
+
+        boolean changed = applyReactionUpdate(message, userId, null);
+        if (!changed) {
+            return mapToMessageResponse(message);
+        }
+
+        Message updatedMessage = messageRepository.save(message);
+        MessageResponse response = mapToMessageResponse(updatedMessage);
+        broadcastReactionUpdate(updatedMessage.getConversationId(), response);
+        return response;
+    }
+
+    private void validateReactionPermission(Message message, Long userId) {
+        boolean isMember = conversationUserRepository.isMember(message.getConversationId(), userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        Conversation conversation = conversationRepository.findById(message.getConversationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + message.getConversationId()));
+
+        validatePrivateConversationBlock(conversation, userId);
+
+        if (message.getRecalledAt() != null) {
+            throw new BadRequestException("Cannot react to a recalled message");
+        }
+    }
+
+    private String normalizeReactionCode(String reactionCode) {
+        if (!StringUtils.hasText(reactionCode)) {
+            throw new BadRequestException("Reaction code is required");
+        }
+
+        String normalized = reactionCode.trim();
+        if (!ALLOWED_REACTION_CODES.contains(normalized)) {
+            throw new BadRequestException("Unsupported reaction code");
+        }
+
+        return normalized;
+    }
+
+    private boolean applyReactionUpdate(Message message, Long userId, String reactionCodeOrNull) {
+        List<MessageReaction> nextReactions =
+                message.getReactions() == null ? new ArrayList<>() : new ArrayList<>(message.getReactions());
+
+        MessageReaction existingReaction = nextReactions.stream()
+                .filter(reaction -> Objects.equals(reaction.getUserId(), userId))
+                .findFirst()
+                .orElse(null);
+
+        if (reactionCodeOrNull == null) {
+            if (existingReaction == null) {
+                return false;
+            }
+
+            nextReactions.removeIf(reaction -> Objects.equals(reaction.getUserId(), userId));
+            message.setReactions(nextReactions);
+            message.setUpdateAt(LocalDateTime.now());
+            return true;
+        }
+
+        if (existingReaction != null && reactionCodeOrNull.equals(existingReaction.getReactionCode())) {
+            nextReactions.removeIf(reaction -> Objects.equals(reaction.getUserId(), userId));
+            message.setReactions(nextReactions);
+            message.setUpdateAt(LocalDateTime.now());
+            return true;
+        }
+
+        if (existingReaction != null) {
+            existingReaction.setReactionCode(reactionCodeOrNull);
+            existingReaction.setReactedAt(LocalDateTime.now());
+            message.setReactions(nextReactions);
+            message.setUpdateAt(LocalDateTime.now());
+            return true;
+        }
+
+        nextReactions.add(MessageReaction.builder()
+                .userId(userId)
+                .reactionCode(reactionCodeOrNull)
+                .reactedAt(LocalDateTime.now())
+                .build());
+        message.setReactions(nextReactions);
+        message.setUpdateAt(LocalDateTime.now());
+        return true;
+    }
+
+    private void broadcastReactionUpdate(Long conversationId, MessageResponse response) {
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : members) {
+            if (member.getUser() != null) {
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + member.getUser().getId() + "/reactions",
+                        response
+                );
+            }
+        }
+    }
+
     @Transactional
     public MessageResponse vote(String messageId, Long userId, List<String> optionIds) {
         Message message = messageRepository.findByIdAndIsDeletedFalse(messageId)
@@ -578,6 +708,17 @@ public class MessageService {
                         .build())
                 .collect(Collectors.toList());
 
+        List<MessageReaction> messageReactions =
+            message.getReactions() == null ? Collections.emptyList() : message.getReactions();
+
+        List<MessageResponse.MessageReactionResponse> reactions = messageReactions.stream()
+            .map(r -> MessageResponse.MessageReactionResponse.builder()
+                .userId(r.getUserId())
+                .reactionCode(r.getReactionCode())
+                .reactedAt(r.getReactedAt())
+                .build())
+            .collect(Collectors.toList());
+
         // Build reply info if parentId exists
         MessageResponse.ReplyInfoResponse replyInfo = null;
         if (message.getParentId() != null) {
@@ -618,6 +759,7 @@ public class MessageService {
                 .recalledAt(message.getRecalledAt())
                 .replyInfo(replyInfo)
                 .poll(mapPollEntityToResponse(message.getPoll()))
+                .reactions(reactions)
                 .build();
     }
 

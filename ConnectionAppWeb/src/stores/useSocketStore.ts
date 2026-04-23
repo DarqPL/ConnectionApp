@@ -92,6 +92,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           useChatStore.getState().updateMessage(recalledMessage);
         });
 
+        client.subscribe(`/topic/user.${userId}/reactions`, (message) => {
+          const updatedMessage = JSON.parse(message.body);
+          useChatStore.getState().updateMessage(updatedMessage);
+        });
+
         client.subscribe(`/topic/user.${userId}/typing`, (message) => {
           const payload: TypingPayload = JSON.parse(message.body);
           if (!payload?.conversationId || !payload?.userId) {
@@ -235,6 +240,17 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               useChatStore
                 .getState()
                 .fetchConversationById(update.conversationId);
+              return;
+            }
+
+            if (update?.type === "CONVERSATION_UPDATED" && update?.updatedConversation) {
+              const updated = update.updatedConversation;
+              if (updated.avatarUrl) {
+                updated.avatarUrl = `${updated.avatarUrl}?t=${Date.now()}`;
+              } else {
+                updated.avatarUrl = null;
+              }
+              useChatStore.getState().updateConversation(updated);
               return;
             }
 

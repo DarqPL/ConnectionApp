@@ -32,7 +32,20 @@ const ChatItem: React.FC<Props> = ({
   const isGroup = type === "GROUP";
   const FALLBACK = "https://i.pravatar.cc/150?img=10";
 
+  const [imageError, setImageError] = React.useState(false);
+
   const renderAvatar = () => {
+    // If we have an explicit avatar URL (e.g. for a group), use it first
+    if (avatar && !imageError) {
+      return (
+        <Image
+          source={{ uri: avatar }}
+          style={styles.avatar}
+          onError={() => setImageError(true)}
+        />
+      );
+    }
+
     if (!isGroup || participants.length < 2) {
       return (
         <Image

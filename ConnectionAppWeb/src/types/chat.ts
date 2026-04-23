@@ -18,6 +18,7 @@ export interface Participant {
 export interface Conversation {
   id: number;
   name: string;
+  description?: string | null;
   avatarUrl?: string | null;
   type: string; // PRIVATE, GROUP
   lastMessageAt: string | null;
@@ -61,7 +62,14 @@ export interface Message {
   recalledAt: string | null;
   replyInfo: ReplyInfo | null;
   poll: Poll | null;
+  reactions?: MessageReaction[];
   isOwn?: boolean; // computed on frontend
+}
+
+export interface MessageReaction {
+  userId: number;
+  reactionCode: string;
+  reactedAt?: string | null;
 }
 
 export interface Poll {

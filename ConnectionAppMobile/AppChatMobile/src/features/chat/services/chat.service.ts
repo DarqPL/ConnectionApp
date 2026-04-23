@@ -311,7 +311,71 @@ export class ChatService {
     }
   }
 
-  async leaveGroup(conversationId: number, userId: number): Promise<void> {
+  // Đã gộp cả name, avatarUrl và description vào payload
+  async updateConversation(
+    conversationId: number,
+    payload?: { name?: string; description?: string | null; avatarUrl?: string },
+    // Để tương thích ngược nếu ở đâu đó đang gọi: updateConversation(id, name, avatarUrl)
+    legacyName?: string,
+    legacyAvatarUrl?: string
+  ): Promise<Conversation> {
+    
+    // Nếu truyền param cũ, thì map sang body
+    const bodyPayload = payload || {};
+    if (legacyName !== undefined) bodyPayload.name = legacyName;
+    if (legacyAvatarUrl !== undefined) bodyPayload.avatarUrl = legacyAvatarUrl;
+
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bodyPayload),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(
+        response,
+        "Không thể cập nhật thông tin nhóm",
+      );
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
+  async updateConversationAvatar(
+    conversationId: number,
+    file: { uri: string; name: string; type: string },
+  ): Promise<Conversation> {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+
+    const response = await authService.authFetch(
+      `/conversations/${conversationId}/avatar`,
+      {
+        method: "PUT",
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể cập nhật ảnh đại diện nhóm");
+    }
+
+    return (await response.json()) as Conversation;
+  }
+
+  async removeMemberFromGroup(
+    conversationId: number,
+    userId: number,
+  ): Promise<void> {
     const response = await authService.authFetch(
       `/conversations/${conversationId}/members/${userId}`,
       {
@@ -320,8 +384,12 @@ export class ChatService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Không thể rời khỏi nhóm");
+      throw await this.parseError(response, "Không thể xóa thành viên");
     }
+  }
+
+  async leaveGroup(conversationId: number, userId: number): Promise<void> {
+    return this.removeMemberFromGroup(conversationId, userId);
   }
 
   async updateMemberRole(
@@ -400,7 +468,47 @@ export class ChatService {
     return (await response.json()) as Message;
   }
 
-  async pinMessage(conversationId: number, messageId: string): Promise<Message> {
+  async reactMessage(
+    messageId: string,
+    reactionCode: string,
+  ): Promise<Message> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/reaction`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reactionCode }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Tha cam xuc that bai");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async removeReaction(messageId: string): Promise<Message> {
+    const response = await authService.authFetch(
+      `/messages/${messageId}/reaction`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Bo cam xuc that bai");
+    }
+
+    return (await response.json()) as Message;
+  }
+
+  async pinMessage(
+    conversationId: number,
+    messageId: string,
+  ): Promise<Message> {
     const response = await authService.authFetch(
       `/messages/${messageId}/pin?conversationId=${conversationId}`,
       {
@@ -415,10 +523,7 @@ export class ChatService {
     return (await response.json()) as Message;
   }
 
-  async unpinMessage(
-    conversationId: number,
-    messageId: string,
-  ): Promise<void> {
+  async unpinMessage(conversationId: number, messageId: string): Promise<void> {
     const response = await authService.authFetch(
       `/messages/${messageId}/unpin?conversationId=${conversationId}`,
       {

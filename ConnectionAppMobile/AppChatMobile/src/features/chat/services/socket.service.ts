@@ -36,7 +36,7 @@ export interface TypingPayload {
  *
  * Key design:
  * - Handlers are stored in a mutable ref so the socket only connects ONCE
- *   per session without needing to reconnect when React callbacks change.
+ * per session without needing to reconnect when React callbacks change.
  * - Only disconnects/reconnects when user logs out or token changes.
  */
 class ChatSocketService {
@@ -154,6 +154,15 @@ class ChatSocketService {
             this.handlersRef?.onCallStatusUpdate?.(payload);
           } catch (e) {
             console.error("[Socket] Failed to parse call status:", e);
+          }
+        });
+
+        client.subscribe(`/topic/user.${userId}/reactions`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body) as Message;
+            this.handlersRef?.onIncomingMessage(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse reaction update:", e);
           }
         });
 

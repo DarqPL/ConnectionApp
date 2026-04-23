@@ -12,6 +12,7 @@ export interface Participant {
 export interface Conversation {
   id: number;
   name: string;
+  description?: string | null;
   avatarUrl?: string | null;
   type: string;
   lastMessageAt: string | null;
@@ -23,7 +24,7 @@ export interface Conversation {
   updatedAt: string | null;
   participants: Participant[];
   unreadCount: number;
-  pinnedMessageIds?: string | null;
+  pinnedMessages?: Message[];
 }
 
 export interface SenderInfo {
@@ -64,6 +65,12 @@ export interface Poll {
   expiredAt: string | null;
 }
 
+export interface MessageReaction {
+  userId: number;
+  reactionCode: string;
+  reactedAt?: string | null;
+}
+
 export interface Message {
   id: string;
   conversationId: number;
@@ -77,6 +84,7 @@ export interface Message {
   recalledAt: string | null;
   replyInfo?: ReplyInfo | null;
   poll?: Poll | null;
+  reactions?: MessageReaction[];
 }
 
 export interface PageResponse<T> {

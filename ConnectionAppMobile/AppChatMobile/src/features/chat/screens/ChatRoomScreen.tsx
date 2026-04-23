@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import {
   View,
   FlatList,
@@ -6,6 +6,7 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
+  Modal,
   Text,
   StatusBar,
   TouchableOpacity,
@@ -166,6 +167,7 @@ const isExpoGoRuntime = (): boolean => {
 const isWebRuntime = (): boolean => Platform.OS === "web";
 
 const ChatRoomScreen = ({ route }: any) => {
+  const REACTION_OPTIONS = ["❤️", "👍", "😆", "😮", "😢", "😡"] as const;
   const insets = useSafeAreaInsets();
   const { conversationId, name, avatarUrl, type, participants } = route.params;
   const {
@@ -178,6 +180,7 @@ const ChatRoomScreen = ({ route }: any) => {
     sendMessage,
     recallMessage,
     deleteMessage,
+    reactMessage,
     pinMessage,
     unpinMessage,
     conversations,
@@ -188,6 +191,11 @@ const ChatRoomScreen = ({ route }: any) => {
     acceptIncomingCall,
     rejectIncomingCall,
     endActiveCall,
+    removeMemberFromGroup,
+    renameGroup,
+    updateGroupDescription,
+    updateGroupAvatar,
+    uploadGroupAvatarFile,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -216,11 +224,10 @@ const ChatRoomScreen = ({ route }: any) => {
   const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
-  const [zegoCallModule, setZegoCallModule] =
-    React.useState<ZegoCallModule | null>(null);
-  const [callSetupError, setCallSetupError] = React.useState<string | null>(
-    null,
-  );
+
+  // Call setup state
+  const [zegoCallModule, setZegoCallModule] = React.useState<ZegoCallModule | null>(null);
+  const [callSetupError, setCallSetupError] = React.useState<string | null>(null);
   const [isPreparingCallRoom, setIsPreparingCallRoom] = React.useState(false);
   const callEndGuardRef = useRef<number | null>(null);
   const zegoAppId = Number.parseInt(getExpoEnv("EXPO_PUBLIC_ZEGO_APP_ID"), 10);
@@ -228,9 +235,12 @@ const ChatRoomScreen = ({ route }: any) => {
   const devRuntimeConnectionWarning = authService.getDevRuntimeConnectionWarning();
   const isGroupCall = type === "GROUP";
 
+  const [actionSheetMessage, setActionSheetMessage] = React.useState<Message | null>(null);
+
   const currentConversation = conversations.find(
-    (c) => c.id === conversationId,
+    (c) => Number(c.id) === Number(conversationId),
   );
+
   const incomingForConversation =
     incomingCall?.conversationId === conversationId ? incomingCall : null;
   const activeForConversation =
@@ -397,41 +407,25 @@ const ChatRoomScreen = ({ route }: any) => {
     }
   };
 
+  const currentParticipants = useMemo(() => {
+    if (currentConversation && currentConversation.participants) {
+      return currentConversation.participants;
+    }
+    return participants || [];
+  }, [currentConversation, participants]);
+
   useEffect(() => {
-    if (!currentConversation?.pinnedMessageIds) {
+    if (
+      !currentConversation?.pinnedMessages ||
+      currentConversation.pinnedMessages.length === 0
+    ) {
       setPinnedMessages([]);
       return;
     }
 
-    const ids = currentConversation.pinnedMessageIds
-      .split(",")
-      .filter((id) => id.trim().length > 0);
-    if (ids.length === 0) {
-      setPinnedMessages([]);
-      return;
-    }
-
-    const fetchPinned = async () => {
-      try {
-        const results = await Promise.all(
-          ids.map(async (id) => {
-            const existing = currentMessages.find((m) => m.id === id);
-            if (existing) return existing;
-            try {
-              return await chatService.getMessage(id);
-            } catch (e) {
-              return null;
-            }
-          }),
-        );
-        setPinnedMessages(results.filter((m): m is Message => m !== null));
-      } catch (error) {
-        console.error("[ChatRoom] Error fetching pinned messages:", error);
-      }
-    };
-
-    fetchPinned();
-  }, [currentConversation?.pinnedMessageIds, currentMessages]);
+    // pinnedMessages already contains full message objects from backend
+    setPinnedMessages(currentConversation.pinnedMessages);
+  }, [currentConversation?.pinnedMessages]);
 
   const activePollMessage = React.useMemo(() => {
     if (!pollToVote) return null;
@@ -794,7 +788,7 @@ const ChatRoomScreen = ({ route }: any) => {
     } catch (error) {
       Alert.alert(
         "Loi",
-        error instanceof Error ? error.message : "Khong the bat dau cuoc goi",
+        error instanceof Error ? error.message : "Khong thể bắt đầu cuộc gọi",
       );
     }
   };
@@ -886,8 +880,8 @@ const ChatRoomScreen = ({ route }: any) => {
     };
   }, [activeForConversation?.mediaType, handleSdkCallEnd, isGroupCall, zegoCallModule]);
 
-  const handleRecallMessage = (msgId: string) => {
-    Alert.alert("Thu hồi hoặc xóa", "Bạn muốn làm gì với tin nhắn này?", [
+  const handleRecallMessage = (msgId: string, isOwnMessage: boolean) => {
+    const options: any[] = [
       { text: "Hủy", style: "cancel" },
       {
         text: "Xóa ở phía tôi",
@@ -901,7 +895,10 @@ const ChatRoomScreen = ({ route }: any) => {
           });
         },
       },
-      {
+    ];
+
+    if (isOwnMessage) {
+      options.push({
         text: "Thu hồi từ tất cả",
         style: "destructive",
         onPress: () => {
@@ -912,65 +909,115 @@ const ChatRoomScreen = ({ route }: any) => {
             );
           });
         },
-      },
-    ]);
+      });
+    }
+
+    Alert.alert(
+      isOwnMessage ? "Thu hồi hoặc xóa" : "Xóa tin nhắn",
+      isOwnMessage
+        ? "Bạn muốn làm gì với tin nhắn này?"
+        : "Tin nhắn này sẽ bị xóa khỏi lịch sử chat của bạn.",
+      options,
+    );
+  };
+
+  const closeActionSheet = () => setActionSheetMessage(null);
+
+  const handleActionSheetReaction = (emoji: string) => {
+    if (!actionSheetMessage) return;
+    const myReaction = actionSheetMessage.reactions?.find(
+      (reaction) => reaction.userId === user?.id,
+    );
+    const nextReaction = myReaction?.reactionCode === emoji ? null : emoji;
+
+    reactMessage(conversationId, actionSheetMessage.id, nextReaction)
+      .catch((err) => {
+        Alert.alert(
+          "Lỗi",
+          err instanceof Error ? err.message : "Không thể thả cảm xúc",
+        );
+      })
+      .finally(closeActionSheet);
+  };
+
+  const handleActionSheetSelect = (
+    action: "reply" | "forward" | "pin" | "remove-reaction" | "recall-delete",
+  ) => {
+    if (!actionSheetMessage) return;
+
+    const target = actionSheetMessage;
+    const isOwnMessage = target.senderInfo?.senderId === user?.id;
+    const currentConv = conversations.find((c) => c.id === conversationId);
+    const isPinned =
+      currentConv?.pinnedMessages?.some((msg) => msg.id === target.id) ?? false;
+
+    closeActionSheet();
+
+    if (action === "reply") {
+      setReplyTo(target);
+      return;
+    }
+
+    if (action === "forward") {
+      setMessageToForward(target);
+      return;
+    }
+
+    if (action === "pin") {
+      (isPinned
+        ? unpinMessage(conversationId, target.id)
+        : pinMessage(conversationId, target.id)
+      ).catch((err) => {
+        Alert.alert(
+          "Lỗi",
+          err instanceof Error ? err.message : "Không thể cập nhật ghim",
+        );
+      });
+      return;
+    }
+
+    if (action === "remove-reaction") {
+      reactMessage(conversationId, target.id, null).catch((err) => {
+        Alert.alert(
+          "Lỗi",
+          err instanceof Error ? err.message : "Không thể bỏ cảm xúc",
+        );
+      });
+      return;
+    }
+
+    handleRecallMessage(target.id, isOwnMessage);
   };
 
   const handleMessageLongPress = (item: Message) => {
     if (item.recalledAt) return;
-
-    const isOwnMessage = item.senderInfo?.senderId === user?.id;
-    const currentConversation = conversations.find(
-      (c) => c.id === conversationId,
-    );
-    const pinnedIds = currentConversation?.pinnedMessageIds
-      ? currentConversation.pinnedMessageIds.split(",")
-      : [];
-    const isPinned = pinnedIds.includes(item.id);
-
-    const actions: any[] = [
-      {
-        text: "Trả lời",
-        onPress: () => setReplyTo(item),
-      },
-      {
-        text: "Chuyển tiếp",
-        onPress: () => setMessageToForward(item),
-      },
-      {
-        text: isPinned ? "Bỏ ghim" : "Ghim tin nhắn",
-        onPress: () => {
-          if (isPinned) {
-            unpinMessage(conversationId, item.id);
-          } else {
-            pinMessage(conversationId, item.id);
-          }
-        },
-      },
-      {
-        text: "Hủy",
-        style: "cancel",
-      },
-    ];
-
-    if (isOwnMessage) {
-      actions.splice(3, 0, {
-        text: "Thu hồi",
-        style: "destructive",
-        onPress: () => handleRecallMessage(item.id),
-      });
-    }
-
-    Alert.alert("Tùy chọn", "Chọn hành động cho tin nhắn", actions);
+    setActionSheetMessage(item);
   };
+
+  const actionSheetIsOwnMessage =
+    actionSheetMessage?.senderInfo?.senderId === user?.id;
+  const actionSheetMyReaction = actionSheetMessage?.reactions?.find(
+    (reaction) => reaction.userId === user?.id,
+  );
+  const actionSheetPinned = (() => {
+    if (!actionSheetMessage) return false;
+    const currentConv = conversations.find((c) => c.id === conversationId);
+    return (
+      currentConv?.pinnedMessages?.some(
+        (msg) => msg.id === actionSheetMessage.id,
+      ) ?? false
+    );
+  })();
+  const firstPinnedMessage = pinnedMessages[0] ?? null;
+  const morePinnedCount = Math.max(pinnedMessages.length - 1, 0);
 
   if (isLoading && displayMessages.length === 0) {
     return (
       <View style={[styles.container, styles.center]}>
         <StatusBar barStyle="light-content" />
         <ChatHeader
-          name={name}
-          avatar={avatarUrl}
+          name={currentConversation?.name || name}
+          avatar={currentConversation?.avatarUrl || avatarUrl}
           type={type}
           participants={participants}
           isBlockedByMe={isBlockedByMe}
@@ -1001,10 +1048,10 @@ const ChatRoomScreen = ({ route }: any) => {
       <View style={{ flex: 1, paddingBottom: insets.bottom }}>
         <StatusBar barStyle="light-content" />
         <ChatHeader
-          name={name}
-          avatar={avatarUrl}
+          name={currentConversation?.name || name}
+          avatar={currentConversation?.avatarUrl || avatarUrl}
           type={type}
-          participants={participants}
+          participants={currentParticipants}
           isBlockedByMe={isBlockedByMe}
           isBlockedByOther={isBlockedByOther}
           onBlockUser={handleBlockUser}
@@ -1145,30 +1192,40 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
-        {pinnedMessages.length > 0 && (
+        {firstPinnedMessage && (
           <TouchableOpacity
             style={styles.pinnedBanner}
-            onPress={() => handleScrollToParent(pinnedMessages[0].id)}
+            onPress={() => handleScrollToParent(firstPinnedMessage.id)}
             activeOpacity={0.8}
           >
-            <View style={styles.pinnedIcon}>
-              <Ionicons name="pin" size={18} color={COLORS.primary} />
+            <View style={styles.pinnedIconWrap}>
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={20}
+                color="#3b82f6"
+              />
             </View>
+
             <View style={styles.pinnedContent}>
-              <Text style={styles.pinnedLabel}>Tin nhắn đã ghim</Text>
               <Text style={styles.pinnedText} numberOfLines={1}>
-                {pinnedMessages[0].content ||
-                  (pinnedMessages[0].attachments?.length
+                {firstPinnedMessage.content ||
+                  (firstPinnedMessage.attachments?.length
                     ? "Tệp đính kèm"
                     : "Tin nhắn bình chọn")}
               </Text>
+              <Text style={styles.pinnedMeta} numberOfLines={1}>
+                {`Tin nhắn của ${firstPinnedMessage.senderInfo?.displayName ?? "Thành viên"}`}
+              </Text>
             </View>
-            <TouchableOpacity
-              style={styles.unpinBannerBtn}
-              onPress={() => unpinMessage(conversationId, pinnedMessages[0].id)}
-            >
-              <Ionicons name="close" size={20} color="#666" />
-            </TouchableOpacity>
+
+            {morePinnedCount > 0 && (
+              <View style={styles.pinnedCountChip}>
+                <Text
+                  style={styles.pinnedCountText}
+                >{`+${morePinnedCount}`}</Text>
+                <Ionicons name="chevron-down" size={16} color="#6b7280" />
+              </View>
+            )}
           </TouchableOpacity>
         )}
 
@@ -1188,6 +1245,20 @@ const ChatRoomScreen = ({ route }: any) => {
                 message={item.content || ""}
                 attachments={item.attachments || []}
                 poll={item.poll}
+                reactions={item.reactions || []}
+                currentUserId={user?.id}
+                onReact={(reactionCode) => {
+                  reactMessage(conversationId, item.id, reactionCode).catch(
+                    (err) => {
+                      Alert.alert(
+                        "Lỗi",
+                        err instanceof Error
+                          ? err.message
+                          : "Không thể thả cảm xúc",
+                      );
+                    },
+                  );
+                }}
                 isMe={item.senderInfo?.senderId === user?.id}
                 senderName={item.senderInfo?.displayName}
                 avatarUrl={item.senderInfo?.avatarUrl}
@@ -1263,6 +1334,109 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
+        <Modal
+          visible={!!actionSheetMessage}
+          transparent
+          animationType="fade"
+          onRequestClose={closeActionSheet}
+        >
+          <View style={styles.actionSheetOverlay}>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={StyleSheet.absoluteFillObject}
+              onPress={closeActionSheet}
+            />
+
+            <View style={styles.actionSheetWrap}>
+              <View style={styles.actionSheetReactionRow}>
+                {REACTION_OPTIONS.map((emoji) => {
+                  const isActive =
+                    actionSheetMyReaction?.reactionCode === emoji;
+                  return (
+                    <TouchableOpacity
+                      key={emoji}
+                      activeOpacity={0.85}
+                      onPress={() => handleActionSheetReaction(emoji)}
+                      style={[
+                        styles.actionSheetReactionBtn,
+                        isActive && styles.actionSheetReactionBtnActive,
+                      ]}
+                    >
+                      <Text style={styles.actionSheetReactionText}>
+                        {emoji}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.actionSheetGrid}>
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("reply")}
+                >
+                  <Ionicons
+                    name="arrow-undo-outline"
+                    size={24}
+                    color="#6a5acd"
+                  />
+                  <Text style={styles.actionSheetItemLabel}>Trả lời</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("forward")}
+                >
+                  <Ionicons
+                    name="arrow-redo-outline"
+                    size={24}
+                    color="#3b82f6"
+                  />
+                  <Text style={styles.actionSheetItemLabel}>Chuyển tiếp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("pin")}
+                >
+                  <Ionicons
+                    name={actionSheetPinned ? "pin-outline" : "attach-outline"}
+                    size={24}
+                    color="#f59e0b"
+                  />
+                  <Text style={styles.actionSheetItemLabel}>
+                    {actionSheetPinned ? "Bỏ ghim" : "Ghim"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={() => handleActionSheetSelect("recall-delete")}
+                >
+                  <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                  <Text style={styles.actionSheetItemLabel}>
+                    {actionSheetIsOwnMessage ? "Thu hồi / Xóa" : "Xóa"}
+                  </Text>
+                </TouchableOpacity>
+
+                {actionSheetMyReaction && (
+                  <TouchableOpacity
+                    style={styles.actionSheetItem}
+                    onPress={() => handleActionSheetSelect("remove-reaction")}
+                  >
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={24}
+                      color="#f97316"
+                    />
+                    <Text style={styles.actionSheetItemLabel}>Bỏ cảm xúc</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <ForwardMessageModal
           message={messageToForward}
           onClose={() => setMessageToForward(null)}
@@ -1272,23 +1446,22 @@ const ChatRoomScreen = ({ route }: any) => {
           <GroupSidebar
             visible={isGroupSidebarOpen}
             onClose={() => setIsGroupSidebarOpen(false)}
-            groupName={name}
-            groupAvatar={avatarUrl}
-            participants={
-              currentConversation?.participants || participants || []
-            }
+            groupName={currentConversation?.name || name || "Tùy chọn"}
+            groupAvatar={currentConversation?.avatarUrl || avatarUrl}
+            participants={currentParticipants}
             messages={displayMessages}
+            pinnedMessages={pinnedMessages}
             conversation={
-              {
+              currentConversation ??
+              ({
                 id: conversationId,
                 type: type || "GROUP",
-                participants:
-                  currentConversation?.participants || participants || [],
-              } as any
+                participants: currentParticipants,
+              } as any)
             }
             currentUserId={user?.id || 0}
             currentUserRole={
-              (currentConversation?.participants || participants)?.find(
+              currentParticipants?.find(
                 (p: Participant) => p.userId === user?.id,
               )?.role || null
             }
@@ -1305,6 +1478,38 @@ const ChatRoomScreen = ({ route }: any) => {
               } catch (error) {
                 console.error("Lỗi cập nhật vai trò:", error);
                 Alert.alert("Lỗi", "Không thể cập nhật vai trò thành viên");
+              }
+            }}
+            onRemoveMember={async (memberId) => {
+              try {
+                await removeMemberFromGroup(conversationId, memberId);
+              } catch (error) {
+                console.error("Lỗi xóa thành viên:", error);
+                throw error;
+              }
+            }}
+            onRenameGroup={async (newName) => {
+              try {
+                await renameGroup(conversationId, newName);
+              } catch (error) {
+                console.error("Lỗi đổi tên nhóm:", error);
+                Alert.alert("Lỗi", "Không thể đổi tên nhóm");
+              }
+            }}
+            onUpdateDescription={async (newDescription) => {
+              try {
+                await updateGroupDescription(conversationId, newDescription);
+              } catch (error) {
+                console.error("Lỗi cập nhật mô tả nhóm:", error);
+                Alert.alert("Lỗi", "Không thể cập nhật mô tả nhóm");
+              }
+            }}
+            onUpdateAvatarFile={async (file) => {
+              try {
+                await uploadGroupAvatarFile(conversationId, file);
+              } catch (error) {
+                console.error("Lỗi cập nhật ảnh nhóm:", error);
+                Alert.alert("Lỗi", "Không thể cập nhật ảnh nhóm");
               }
             }}
           />
@@ -1547,31 +1752,110 @@ const styles = StyleSheet.create({
   },
   pinnedBanner: {
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 14,
+    marginHorizontal: 8,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: "row",
     alignItems: "center",
     zIndex: 10,
   },
-  pinnedIcon: {
+  pinnedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#eff6ff",
     marginRight: 10,
   },
   pinnedContent: {
     flex: 1,
   },
-  pinnedLabel: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: "bold",
-    marginBottom: 2,
-  },
   pinnedText: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: "600",
     color: COLORS.text,
   },
-  unpinBannerBtn: {
-    padding: 5,
+  pinnedMeta: {
+    marginTop: 2,
+    fontSize: 11,
+    color: "#6b7280",
+  },
+  pinnedCountChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#9ca3af",
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    height: 36,
+    marginLeft: 8,
+    gap: 2,
+  },
+  pinnedCountText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4b5563",
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    justifyContent: "flex-end",
+  },
+  actionSheetWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  actionSheetReactionRow: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  actionSheetReactionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionSheetReactionBtnActive: {
+    backgroundColor: "#eef2ff",
+    borderWidth: 1,
+    borderColor: "#93c5fd",
+  },
+  actionSheetReactionText: {
+    fontSize: 30,
+  },
+  actionSheetGrid: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingTop: 10,
+    paddingBottom: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  actionSheetItem: {
+    width: "25%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 6,
+  },
+  actionSheetItemLabel: {
+    fontSize: 13,
+    color: "#293241",
+    textAlign: "center",
+    lineHeight: 16,
+    paddingHorizontal: 4,
   },
 });

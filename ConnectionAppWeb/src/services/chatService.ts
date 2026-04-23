@@ -212,18 +212,66 @@ export const chatService = {
   },
 
   /**
+   * PUT /api/conversations/{conversationId}
+   * Body: { name?, description?, avatarUrl? }
+   */
+  async updateConversation(
+    conversationId: number,
+    payload?: { name?: string; description?: string | null; avatarUrl?: string },
+    legacyName?: string,
+    legacyAvatarUrl?: string
+  ): Promise<Conversation> {
+    
+    // Fallback cho trường hợp vẫn đang gọi theo cách cũ: updateConversation(id, name, avatarUrl)
+    const bodyPayload = payload || {};
+    if (legacyName !== undefined) bodyPayload.name = legacyName;
+    if (legacyAvatarUrl !== undefined) bodyPayload.avatarUrl = legacyAvatarUrl;
+
+    const res = await api.put(`/conversations/${conversationId}`, bodyPayload);
+    return res.data;
+  },
+
+  /**
+   * PUT /api/conversations/{conversationId}/avatar
+   * Body: FormData (multipart/form-data)
+   */
+  async updateConversationAvatar(
+    conversationId: number,
+    formData: FormData,
+  ): Promise<Conversation> {
+    const res = await api.put(`/conversations/${conversationId}/avatar`, formData);
+    return res.data;
+  },
+
+  async renameConversation(
+    conversationId: number,
+    name: string,
+  ): Promise<Conversation> {
+    return this.updateConversation(conversationId, { name });
+  },
+
+  /**
    * PUT /api/conversations/{conversationId}/members/{memberId}/role
    * Transfer ownership to another member
    */
-  async updateMemberRole(conversationId: number, memberId: number, role: string): Promise<void> {
-    await api.put(`/conversations/${conversationId}/members/${memberId}/role`, { role });
+  async updateMemberRole(
+    conversationId: number,
+    memberId: number,
+    role: string,
+  ): Promise<void> {
+    await api.put(`/conversations/${conversationId}/members/${memberId}/role`, {
+      role,
+    });
   },
 
   /**
    * POST /api/conversations/{conversationId}/members/{memberId}
    * Add a member to conversation
    */
-  async addMemberToGroup(conversationId: number, memberId: number): Promise<void> {
+  async addMemberToGroup(
+    conversationId: number,
+    memberId: number,
+  ): Promise<void> {
     await api.post(`/conversations/${conversationId}/members/${memberId}`);
   },
 
@@ -241,7 +289,23 @@ export const chatService = {
     const res = await api.put(`/messages/${messageId}/poll/close`);
     return res.data;
   },
-  async pinMessage(conversationId: number, messageId: string): Promise<Message> {
+  async reactMessage(
+    messageId: string,
+    reactionCode: string,
+  ): Promise<Message> {
+    const res = await api.post(`/messages/${messageId}/reaction`, {
+      reactionCode,
+    });
+    return res.data;
+  },
+  async removeReaction(messageId: string): Promise<Message> {
+    const res = await api.delete(`/messages/${messageId}/reaction`);
+    return res.data;
+  },
+  async pinMessage(
+    conversationId: number,
+    messageId: string,
+  ): Promise<Message> {
     const res = await api.post(`/messages/${messageId}/pin`, null, {
       params: { conversationId },
     });

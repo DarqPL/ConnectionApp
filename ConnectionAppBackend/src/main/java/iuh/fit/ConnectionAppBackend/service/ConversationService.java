@@ -25,6 +25,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -58,6 +60,9 @@ public class ConversationService {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Autowired
+    private S3StorageService s3StorageService;
 
     /**
      * Get all conversations for a user with pagination
@@ -192,8 +197,39 @@ public class ConversationService {
             conversation.setName(request.getName());
         }
 
+        if (request.getAvatarUrl() != null) {
+            conversation.setAvatarUrl(request.getAvatarUrl());
+        }
+
         conversation.setUpdateAt(LocalDateTime.now());
         Conversation updatedConversation = conversationRepository.save(conversation);
+
+        // 🔥 Send real-time notification to all members
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        if (!allMembers.isEmpty()) {
+            ConversationResponse response = mapToConversationResponse(updatedConversation);
+            
+            Map<String, Object> update = new java.util.HashMap<>();
+            update.put("conversationId", conversationId);
+            update.put("type", "CONVERSATION_UPDATED");
+            update.put("name", updatedConversation.getName());
+            update.put("updatedConversation", response);
+
+            // Notify all members
+            for (ConversationUser m : allMembers) {
+                // Send update notification
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + m.getUser().getId() + "/conversation-updates",
+                        update
+                );
+                
+                // Also update the conversation in their main list
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + m.getUser().getId() + "/conversations",
+                        response
+                );
+            }
+        }
 
         return mapToConversationResponse(updatedConversation);
     }
@@ -280,19 +316,43 @@ public class ConversationService {
     }
 
     /**
-     * Remove user from conversation
+     * Remove user from conversation or Leave conversation
+     * @param conversationId
+     * @param requesterId the user who initiated the action
+     * @param targetUserId the user to be removed (or leaving)
      */
     @Transactional
-    public void removeUserFromConversation(Long conversationId, Long userId) {
+    public void removeUserFromConversation(Long conversationId, Long requesterId, Long targetUserId) {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
 
-        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
-        if (!isMember) {
-            throw new BadRequestException("User is not a member of this conversation");
+        // 1. Verify requester is a member
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, requesterId)
+                .orElseThrow(() -> new BadRequestException("You are not a member of this conversation"));
+
+        // 2. If removing someone else, check permissions
+        if (!requesterId.equals(targetUserId)) {
+            if (requester.getRole() != ConversationRole.OWNER && requester.getRole() != ConversationRole.CO_OWNER) {
+                throw new BadRequestException("Only owner or co-owners can remove members");
+            }
+            
+            // Cannot remove the owner
+            ConversationUser targetMember = conversationUserRepository.findByConversationIdAndUserId(conversationId, targetUserId)
+                    .orElseThrow(() -> new BadRequestException("Target user is not a member of this conversation"));
+            
+            if (targetMember.getRole() == ConversationRole.OWNER) {
+                throw new BadRequestException("Cannot remove the owner of the group");
+            }
+
+            // Co-owners cannot remove other co-owners if requester is just co-owner? 
+            // Usually, only OWNER can remove CO_OWNER.
+            if (requester.getRole() == ConversationRole.CO_OWNER && targetMember.getRole() == ConversationRole.CO_OWNER) {
+                 throw new BadRequestException("Co-owners cannot remove other co-owners");
+            }
         }
 
-        conversationUserRepository.deleteByConversationIdAndUserId(conversationId, userId);
+        // 3. Perform removal
+        conversationUserRepository.deleteByConversationIdAndUserId(conversationId, targetUserId);
 
         // Check remaining members
         List<ConversationUser> remainingMembers = conversationUserRepository.findByConversationId(conversationId);
@@ -304,26 +364,32 @@ public class ConversationService {
             return;
         }
 
-        // 🔥 Send real-time notification to all remaining members
-        if (!remainingMembers.isEmpty()) {
-            List<ConversationUserResponse> updatedParticipants = remainingMembers.stream()
-                    .map(this::mapToConversationUserResponse)
-                    .collect(Collectors.toList());
+        // 🔥 Send real-time notification to all remaining members (and the removed user to clear their list?)
+        // The removed user should also be notified to hide the conversation.
+        
+        List<ConversationUserResponse> updatedParticipants = remainingMembers.stream()
+                .map(this::mapToConversationUserResponse)
+                .collect(Collectors.toList());
 
-            Map<String, Object> update = new java.util.HashMap<>();
-            update.put("conversationId", conversationId);
-            update.put("type", "MEMBER_LEFT");
-            update.put("participants", updatedParticipants);
-            update.put("leftUserId", userId); // ID of user who left
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "MEMBER_LEFT");
+        update.put("participants", updatedParticipants);
+        update.put("leftUserId", targetUserId); // ID of user who left or was removed
 
-            // Notify all remaining members
-            for (ConversationUser member : remainingMembers) {
-                messagingTemplate.convertAndSend(
-                        "/topic/user." + member.getUser().getId() + "/conversation-updates",
-                        update
-                );
-            }
+        // Notify all remaining members
+        for (ConversationUser member : remainingMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                    update
+            );
         }
+        
+        // Notify the removed user too
+        messagingTemplate.convertAndSend(
+                "/topic/user." + targetUserId + "/conversation-updates",
+                update
+        );
     }
 
     /**
@@ -444,5 +510,61 @@ public class ConversationService {
                 .joinedAt(conversationUser.getJoinedAt())
                 .unreadCounts(conversationUser.getUnreadCounts())
                 .build();
+    }
+
+    /**
+     * Upsert conversation avatar using S3
+     */
+    @Transactional
+    public ConversationResponse upsertConversationAvatar(Long conversationId, Long userId, MultipartFile avatarFile) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        // Check if user is owner or co-owner
+        ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!conversationUser.getRole().equals(ConversationRole.OWNER) && 
+            !conversationUser.getRole().equals(ConversationRole.CO_OWNER)) {
+            throw new UnauthorizedException("Only owner or co-owner can update conversation avatar");
+        }
+
+        String existingKey = StringUtils.hasText(conversation.getAvatarUrl())
+                ? s3StorageService.extractObjectKeyFromUrl(conversation.getAvatarUrl())
+                : null;
+
+        ImageObjectResponse upload;
+        try {
+            if (StringUtils.hasText(existingKey)) {
+                // Replace the existing object in S3
+                upload = s3StorageService.replaceImage(existingKey, avatarFile);
+            } else {
+                // No avatar yet — upload as new
+                upload = s3StorageService.uploadImage(avatarFile, "conversations/" + conversationId);
+            }
+        } catch (iuh.fit.ConnectionAppBackend.exception.ImageNotFoundException ex) {
+            // Fallback if existing image not found in S3
+            upload = s3StorageService.uploadImage(avatarFile, "conversations/" + conversationId);
+        }
+
+        conversation.setAvatarUrl(upload.getImageUrl());
+        conversation.setUpdateAt(LocalDateTime.now());
+        Conversation updatedConversation = conversationRepository.save(conversation);
+
+        // Send real-time notification to all members
+        ConversationResponse response = mapToConversationResponse(updatedConversation);
+        
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "CONVERSATION_UPDATED");
+        update.put("name", updatedConversation.getName());
+        update.put("updatedConversation", response);
+
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : allMembers) {
+            messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/conversation-updates", update);
+        }
+
+        return response;
     }
 }

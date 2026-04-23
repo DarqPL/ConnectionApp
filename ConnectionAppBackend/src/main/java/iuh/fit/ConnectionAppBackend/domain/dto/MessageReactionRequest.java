@@ -7,9 +7,6 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConversationRequest {
-    private String name;
-    private String type;
-    private String avatarUrl;
-    private Long[] participantIds;
+public class MessageReactionRequest {
+    private String reactionCode;
 }

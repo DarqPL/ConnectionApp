@@ -44,12 +44,21 @@ interface ChatContextType {
   deleteMessage: (messageId: string) => Promise<void>;
   pinMessage: (conversationId: number, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
+  removeMemberFromGroup: (
+    conversationId: number,
+    memberId: number,
+  ) => Promise<void>;
   setCurrentConversation: (
     conversationId: number | null,
     sourceConversationId?: number,
   ) => void;
   notifyTyping: (conversationId: number) => void;
   notifyStoppedTyping: (conversationId: number) => void;
+  reactMessage: (
+    conversationId: number,
+    messageId: string,
+    reactionCode: string | null,
+  ) => Promise<void>;
   leaveGroup: (conversationId: number, userId: number) => Promise<void>;
   addMemberToGroup: (conversationId: number, memberId: number) => Promise<void>;
   updateMemberRole: (
@@ -64,6 +73,11 @@ interface ChatContextType {
   acceptIncomingCall: (callId: number) => Promise<void>;
   rejectIncomingCall: (callId: number) => Promise<void>;
   endActiveCall: (callId: number, reason?: string) => Promise<void>;
+  renameGroup: (conversationId: number, newName: string) => Promise<void>;
+  updateGroupDescription: (
+    conversationId: number,
+    description: string,
+  ) => Promise<void>;
   clearError: () => void;
 }
 
@@ -128,6 +142,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const next = [...messages];
     next[index] = incoming;
     return next;
+  };
+
+  const applyReactionForUser = (
+    message: Message,
+    userId: number,
+    reactionCode: string | null,
+  ): Message => {
+    const existing = message.reactions ?? [];
+    const others = existing.filter((reaction) => reaction.userId !== userId);
+    const mine = existing.find((reaction) => reaction.userId === userId);
+
+    if (!reactionCode) {
+      return {
+        ...message,
+        reactions: others,
+      };
+    }
+
+    if (mine?.reactionCode === reactionCode) {
+      return {
+        ...message,
+        reactions: others,
+      };
+    }
+
+    return {
+      ...message,
+      reactions: [
+        ...others,
+        {
+          userId,
+          reactionCode,
+        },
+      ],
+    };
   };
 
   const buildMessagePreview = (
@@ -375,35 +424,123 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, []);
 
-  const onConversationUpdate = useCallback((payload: any) => {
+  const onConversationUpdate = useCallback((data: any) => {
+    // data is MessageUpdateResponse: { type: string, payload: any }
+    const type = data.type;
+    // Backend events are inconsistent: some send fields in payload,
+    // some send fields directly at root.
+    const payload = data.payload || data;
+    const conversationId = payload?.conversationId || payload?.id;
+
+    if (!conversationId) {
+      console.log("[ChatContext] Invalid conversation update:", data);
+      return;
+    }
+
     console.log(
-      "[ChatContext] Conversation update:",
-      payload.type,
-      "for:",
-      payload.conversationId,
+      `[ChatContext] Update event: ${type} for conv: ${conversationId}`,
     );
 
-    if (payload.type === "PIN_UPDATE") {
+    if (type === "PIN_UPDATE") {
       chatService
-        .getConversation(payload.conversationId)
+        .getConversation(conversationId)
         .then((updatedConvo) => {
           setConversations((prev) =>
-            prev.map((c) => (c.id === updatedConvo.id ? updatedConvo : c)),
+            prev.map((c) =>
+              Number(c.id) === Number(updatedConvo.id) ? updatedConvo : c,
+            ),
           );
         })
         .catch(console.error);
       return;
     }
 
-    if (payload.conversationId && payload.participants) {
+    if (type === "MEMBER_JOINED" || type === "MEMBER_ADDED") {
+      const addedParticipants = payload.participants;
+      if (addedParticipants && Array.isArray(addedParticipants)) {
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (Number(c.id) === Number(conversationId)) {
+              return {
+                ...c,
+                participants: addedParticipants,
+              };
+            }
+            return c;
+          }),
+        );
+      } else {
+        const newParticipant = payload.newMember;
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (Number(c.id) === Number(conversationId)) {
+              const participantToAdd = newParticipant || {
+                userId: payload.joinedUserId,
+                displayName: "Thành viên mới",
+                role: "MEMBER",
+              };
+
+              const exists = c.participants.some(
+                (p) => Number(p.userId) === Number(participantToAdd.userId),
+              );
+              if (exists) return c;
+
+              return {
+                ...c,
+                participants: [...c.participants, participantToAdd],
+              };
+            }
+            return c;
+          }),
+        );
+      }
+      return;
+    }
+
+    if (type === "MEMBER_LEFT") {
+      const leftUserId = payload.leftUserId;
+
+      // If current user left, remove from list
+      if (Number(leftUserId) === Number(userIdRef.current)) {
+        console.log("[ChatContext] Current user removed:", conversationId);
+        setConversations((prev) =>
+          prev.filter((c) => Number(c.id) !== Number(conversationId)),
+        );
+        if (Number(currentConversationRef.current) === Number(conversationId)) {
+          setCurrentConversationId(null);
+          setCurrentMessages([]);
+        }
+        return;
+      }
+
       setConversations((prev) =>
         prev.map((c) => {
-          if (c.id === payload.conversationId) {
-            return { ...c, participants: payload.participants };
+          if (Number(c.id) === Number(conversationId)) {
+            return {
+              ...c,
+              participants: c.participants.filter(
+                (p) => Number(p.userId) !== Number(leftUserId),
+              ),
+            };
           }
           return c;
         }),
       );
+      return;
+    }
+
+    if (type === "CONVERSATION_UPDATED") {
+      const updatedConvo = payload.updatedConversation;
+      if (updatedConvo) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId)
+              ? { ...c, ...updatedConvo }
+              : c,
+          ),
+        );
+      }
+      return;
     }
   }, []);
 
@@ -709,6 +846,93 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const removeMemberFromGroup = useCallback(
+    async (conversationId: number, memberId: number) => {
+      setError(null);
+      try {
+        console.log(
+          `[ChatContext] Calling API to remove member ${memberId} from ${conversationId}`,
+        );
+        await chatService.removeMemberFromGroup(conversationId, memberId);
+        console.log(`[ChatContext] API Success! Updating local state...`);
+
+        // Update the conversation participants in the official state
+        setConversations((prev) => {
+          const next = prev.map((c) => {
+            if (Number(c.id) === Number(conversationId)) {
+              const newList = c.participants.filter(
+                (p) => Number(p.userId) !== Number(memberId),
+              );
+              console.log(
+                `[ChatContext] Updating conv ${c.id}: participants count ${c.participants.length} -> ${newList.length}`,
+              );
+              return {
+                ...c,
+                participants: newList,
+              };
+            }
+            return c;
+          });
+          return [...next]; // Force a new array reference
+        });
+      } catch (err) {
+        console.error("[ChatContext] removeMemberFromGroup Error:", err);
+        const msg =
+          err instanceof Error ? err.message : "Xóa thành viên thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const renameGroup = useCallback(
+    async (conversationId: number, newName: string) => {
+      setError(null);
+      try {
+        await chatService.updateConversation(conversationId, { name: newName });
+        // Socket will handle update, but we can update local state immediately for better UX
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId)
+              ? { ...c, name: newName }
+              : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Đổi tên nhóm thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const updateGroupDescription = useCallback(
+    async (conversationId: number, description: string) => {
+      setError(null);
+      try {
+        await chatService.updateConversation(conversationId, {
+          description: description.trim() || null,
+        });
+        setConversations((prev) =>
+          prev.map((c) =>
+            Number(c.id) === Number(conversationId)
+              ? { ...c, description: description.trim() || null }
+              : c,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Cập nhật mô tả nhóm thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     async (
       conversationId: number,
@@ -841,6 +1065,45 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const reactMessage = useCallback(
+    async (
+      conversationId: number,
+      messageId: string,
+      reactionCode: string | null,
+    ) => {
+      if (!user) {
+        throw new Error("Vui long dang nhap lai");
+      }
+
+      const previousMessage =
+        currentMessages.find((message) => message.id === messageId) ?? null;
+
+      if (!previousMessage) {
+        return;
+      }
+
+      const optimistic = applyReactionForUser(
+        previousMessage,
+        user.id,
+        reactionCode,
+      );
+      setCurrentMessages((prev) => upsertMessage(prev, optimistic));
+
+      try {
+        const serverMessage = reactionCode
+          ? await chatService.reactMessage(messageId, reactionCode)
+          : await chatService.removeReaction(messageId);
+        setCurrentMessages((prev) => upsertMessage(prev, serverMessage));
+      } catch (err) {
+        setCurrentMessages((prev) => upsertMessage(prev, previousMessage));
+        const msg = err instanceof Error ? err.message : "Tha cam xuc that bai";
+        setError(msg);
+        throw err;
+      }
+    },
+    [currentMessages, user],
+  );
+
   const leaveGroup = useCallback(
     async (conversationId: number, userId: number) => {
       try {
@@ -866,7 +1129,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conversationId: number, memberId: number) => {
       try {
         await chatService.addMemberToGroup(conversationId, memberId);
-        // Participant list will be updated via WebSocket, but we can also manually refresh if needed
+
+        // Refresh conversation to get latest participants list
+        const updatedConvo = await chatService.getConversation(conversationId);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conversationId ? updatedConvo : c)),
+        );
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Không thể thêm thành viên";
@@ -985,9 +1253,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     deleteMessage,
     pinMessage,
     unpinMessage,
+    removeMemberFromGroup,
     setCurrentConversation,
     notifyTyping,
     notifyStoppedTyping,
+    reactMessage,
     leaveGroup,
     addMemberToGroup,
     updateMemberRole,
@@ -995,6 +1265,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     acceptIncomingCall,
     rejectIncomingCall,
     endActiveCall,
+    renameGroup,
+    updateGroupDescription,
     clearError,
   };
 

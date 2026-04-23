@@ -1,4 +1,10 @@
-import type { Attachment, Conversation, Message, Participant, PollRequest } from "./chat";
+import type {
+  Attachment,
+  Conversation,
+  Message,
+  Participant,
+  PollRequest,
+} from "./chat";
 import type { Friend, User } from "./user";
 
 export interface AuthState {
@@ -60,6 +66,11 @@ export interface ChatState {
   ) => Promise<void>;
   votePoll: (messageId: string, optionIds: string[]) => Promise<void>;
   closePoll: (messageId: string) => Promise<void>;
+  reactMessage: (
+    conversationId: number,
+    messageId: string,
+    reactionCode: string | null,
+  ) => Promise<void>;
   pinMessage: (conversationId: number, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
   fetchConversationById: (conversationId: number) => Promise<void>;
@@ -70,7 +81,10 @@ export interface ChatState {
   updateConversation: (
     conversation: Partial<Conversation> & { id: number },
   ) => void;
-  updateConversationParticipants: (conversationId: number, participants: Participant[]) => void;
+  updateConversationParticipants: (
+    conversationId: number,
+    participants: Participant[],
+  ) => void;
   upsertTypingUser: (typingUser: TypingUser) => void;
   removeTypingUser: (conversationId: number, userId: number) => void;
   clearTypingUsers: (conversationId: number) => void;
