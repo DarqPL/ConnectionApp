@@ -28,25 +28,40 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import javax.crypto.Mac;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 
 @Service
 public class CallService {
 
     private static final Set<CallStatus> ACTIVE_CALL_STATUSES = Set.of(CallStatus.RINGING, CallStatus.ONGOING);
+    private static final String ZEGO_TOKEN_VERSION = "04";
+    private static final int ZEGO_IV_LENGTH = 16;
+    private static final String ZEGO_TRANSFORMATION = "AES/CBC/PKCS5Padding";
+    private static final String ZEGO_PRIVILEGE_LOGIN_KEY = "1";
+    private static final String ZEGO_PRIVILEGE_PUBLISH_KEY = "2";
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @Autowired
     private UserService userService;
@@ -78,6 +93,9 @@ public class CallService {
     @Value("${app.zego.token-ttl-seconds:3600}")
     private long zegoTokenTtlSeconds;
 
+    @Value("${app.call.ring-timeout-seconds:30}")
+    private long ringTimeoutSeconds;
+
     @Transactional
     public CallSessionResponse startCall(String username, CallStartRequest request) {
         if (request == null || request.getConversationId() == null) {
@@ -101,7 +119,14 @@ public class CallService {
         );
 
         if (!existingActiveCalls.isEmpty()) {
-            throw new BadRequestException("This conversation already has an active call");
+            CallSession existingCall = existingActiveCalls.get(0);
+            List<CallParticipant> existingParticipants = callParticipantRepository.findByCallIdWithUser(existingCall.getId());
+
+            reconcileExistingActiveCall(existingCall, existingParticipants);
+
+            if (ACTIVE_CALL_STATUSES.contains(existingCall.getStatus())) {
+                return toCallSessionResponse(existingCall, existingParticipants, caller.getId(), true);
+            }
         }
 
         validatePrivateConversationBlock(conversation, caller.getId());
@@ -246,7 +271,7 @@ public class CallService {
         callSession.setEndedAt(now);
         callSession.setEndedReason(normalizeEndedReason(request == null ? null : request.getReason()));
         if (callSession.getStartedAt() != null) {
-            long duration = Math.max(0, callSession.getStartedAt().until(now, java.time.temporal.ChronoUnit.SECONDS));
+            long duration = Math.max(0, callSession.getStartedAt().until(now, ChronoUnit.SECONDS));
             callSession.setDurationSeconds(duration);
         }
         callSessionRepository.save(callSession);
@@ -327,6 +352,34 @@ public class CallService {
                 .build();
     }
 
+    @Transactional
+    public int processRingingTimeouts() {
+        long timeoutSeconds = Math.max(5L, ringTimeoutSeconds);
+        LocalDateTime deadline = LocalDateTime.now().minusSeconds(timeoutSeconds);
+
+        List<CallSession> timedOutCalls = callSessionRepository.findByStatusTimedOut(CallStatus.RINGING, deadline);
+        int processedCount = 0;
+
+        for (CallSession callSession : timedOutCalls) {
+            List<CallParticipant> participants = callParticipantRepository.findByCallIdWithUser(callSession.getId());
+            if (participants.isEmpty() || callSession.getStatus() != CallStatus.RINGING) {
+                continue;
+            }
+
+            boolean hasJoinedNonInitiator = participants.stream()
+                    .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED
+                            && !Objects.equals(p.getUser().getId(), callSession.getInitiatedBy().getId()));
+            if (hasJoinedNonInitiator) {
+                continue;
+            }
+
+            markCallAsMissed(callSession, participants, "RING_TIMEOUT");
+            processedCount++;
+        }
+
+        return processedCount;
+    }
+
     private void maybeCompleteAsMissed(CallSession callSession, List<CallParticipant> participants) {
         if (callSession.getStatus() != CallStatus.RINGING) {
             return;
@@ -350,6 +403,95 @@ public class CallService {
             callSession.setDurationSeconds(0L);
             callSessionRepository.save(callSession);
         }
+    }
+
+    private void reconcileExistingActiveCall(CallSession callSession, List<CallParticipant> participants) {
+        if (!ACTIVE_CALL_STATUSES.contains(callSession.getStatus())) {
+            return;
+        }
+
+        if (callSession.getStatus() == CallStatus.RINGING) {
+            LocalDateTime deadline = LocalDateTime.now().minusSeconds(Math.max(5L, ringTimeoutSeconds));
+            if (callSession.getCreatedAt() != null && !callSession.getCreatedAt().isAfter(deadline)) {
+                markCallAsMissed(callSession, participants, "RING_TIMEOUT");
+                return;
+            }
+
+            CallStatus previousStatus = callSession.getStatus();
+            maybeCompleteAsMissed(callSession, participants);
+            if (previousStatus != callSession.getStatus()) {
+                publishStatusEvents(callSession, participants);
+                publishConversationParticipantState(callSession, participants);
+            }
+            return;
+        }
+
+        boolean hasJoinedParticipant = participants.stream()
+                .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED && p.getLeftAt() == null);
+
+        if (!hasJoinedParticipant) {
+            markCallAsEnded(callSession, participants, "NO_ACTIVE_PARTICIPANTS");
+        }
+    }
+
+    private void markCallAsMissed(CallSession callSession,
+                                  List<CallParticipant> participants,
+                                  String reason) {
+        LocalDateTime now = LocalDateTime.now();
+        callSession.setStatus(CallStatus.MISSED);
+        callSession.setEndedAt(now);
+        callSession.setEndedReason(reason);
+        callSession.setDurationSeconds(0L);
+        callSessionRepository.save(callSession);
+
+        for (CallParticipant participant : participants) {
+            if (participant.getStatus() == CallParticipantStatus.RINGING) {
+                participant.setStatus(CallParticipantStatus.MISSED);
+            } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
+                participant.setStatus(CallParticipantStatus.LEFT);
+            }
+
+            if (participant.getLeftAt() == null) {
+                participant.setLeftAt(now);
+            }
+        }
+        callParticipantRepository.saveAll(participants);
+
+        publishStatusEvents(callSession, participants);
+        publishConversationParticipantState(callSession, participants);
+    }
+
+    private void markCallAsEnded(CallSession callSession,
+                                 List<CallParticipant> participants,
+                                 String reason) {
+        LocalDateTime now = LocalDateTime.now();
+        callSession.setStatus(CallStatus.ENDED);
+        callSession.setEndedAt(now);
+        callSession.setEndedReason(reason);
+        if (callSession.getStartedAt() != null) {
+            long duration = Math.max(0, callSession.getStartedAt().until(now, ChronoUnit.SECONDS));
+            callSession.setDurationSeconds(duration);
+        } else {
+            callSession.setDurationSeconds(0L);
+        }
+        callSessionRepository.save(callSession);
+
+        for (CallParticipant participant : participants) {
+            if (participant.getLeftAt() != null) {
+                continue;
+            }
+
+            if (participant.getStatus() == CallParticipantStatus.RINGING) {
+                participant.setStatus(CallParticipantStatus.MISSED);
+            } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
+                participant.setStatus(CallParticipantStatus.LEFT);
+            }
+            participant.setLeftAt(now);
+        }
+        callParticipantRepository.saveAll(participants);
+
+        publishStatusEvents(callSession, participants);
+        publishConversationParticipantState(callSession, participants);
     }
 
     private CallHistoryItemResponse mapToHistoryItem(CallSession callSession, Long currentUserId) {
@@ -457,34 +599,106 @@ public class CallService {
             throw new BadRequestException("ZEGO is not configured on server");
         }
 
-        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(Math.max(60L, zegoTokenTtlSeconds));
-        long expiresAtEpoch = expiresAt.toEpochSecond(ZoneOffset.UTC);
+        byte[] secretBytes = zegoServerSecret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length != 32) {
+            throw new BadRequestException("ZEGO server secret must be 32 bytes");
+        }
 
-        String data = callSession.getZegoRoomId() + ":" + userId + ":" + expiresAtEpoch;
-        String signature = sign(data, zegoServerSecret);
-        String rawToken = data + ":" + signature;
-        String encodedToken = Base64.getUrlEncoder()
-                .withoutPadding()
-                .encodeToString(rawToken.getBytes(StandardCharsets.UTF_8));
+        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(Math.max(60L, zegoTokenTtlSeconds));
+        int effectiveTimeInSeconds = (int) Math.min(Integer.MAX_VALUE, Math.max(60L, zegoTokenTtlSeconds));
+        String payload = buildRtcRoomPayload(callSession.getZegoRoomId());
+        String token = generateToken04(zegoAppId, String.valueOf(userId), zegoServerSecret, effectiveTimeInSeconds, payload);
 
         return CallTokenResponse.builder()
                 .appId(zegoAppId)
                 .roomId(callSession.getZegoRoomId())
                 .userId(String.valueOf(userId))
-                .token(encodedToken)
+                .token(token)
                 .expiresAt(expiresAt)
                 .build();
     }
 
-    private String sign(String data, String secret) {
+    private String buildRtcRoomPayload(String roomId) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("room_id", roomId);
+
+        Map<String, Integer> privilege = new LinkedHashMap<>();
+        privilege.put(ZEGO_PRIVILEGE_LOGIN_KEY, 1);
+        privilege.put(ZEGO_PRIVILEGE_PUBLISH_KEY, 1);
+
+        payload.put("privilege", privilege);
+        payload.put("stream_id_list", null);
+
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] signed = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(signed);
+            return objectMapper.writeValueAsString(payload);
         } catch (Exception ex) {
-            throw new IllegalStateException("Failed to generate call token", ex);
+            throw new IllegalStateException("Failed to serialize ZEGO payload", ex);
         }
+    }
+
+    private String generateToken04(long appId,
+                                   String userId,
+                                   String secret,
+                                   int effectiveTimeInSeconds,
+                                   String payload) {
+        if (appId <= 0) {
+            throw new BadRequestException("Invalid ZEGO appId");
+        }
+        if (!StringUtils.hasText(userId)) {
+            throw new BadRequestException("Invalid ZEGO userId");
+        }
+        if (!StringUtils.hasText(secret) || secret.getBytes(StandardCharsets.UTF_8).length != 32) {
+            throw new BadRequestException("ZEGO server secret must be 32 bytes");
+        }
+        if (effectiveTimeInSeconds <= 0) {
+            throw new BadRequestException("Invalid ZEGO token effective time");
+        }
+
+        long currentEpoch = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
+        long expireEpoch = currentEpoch + effectiveTimeInSeconds;
+
+        Map<String, Object> tokenInfo = new LinkedHashMap<>();
+        tokenInfo.put("app_id", appId);
+        tokenInfo.put("user_id", userId);
+        tokenInfo.put("ctime", currentEpoch);
+        tokenInfo.put("expire", expireEpoch);
+        tokenInfo.put("nonce", ThreadLocalRandom.current().nextInt());
+        tokenInfo.put("payload", payload);
+
+        try {
+            String content = objectMapper.writeValueAsString(tokenInfo);
+            byte[] iv = new byte[ZEGO_IV_LENGTH];
+            secureRandom.nextBytes(iv);
+
+            byte[] encrypted = encryptTokenPayload(content.getBytes(StandardCharsets.UTF_8), secret.getBytes(StandardCharsets.UTF_8), iv);
+
+            ByteBuffer buffer = ByteBuffer.allocate(8 + 2 + iv.length + 2 + encrypted.length)
+                    .order(ByteOrder.BIG_ENDIAN);
+            buffer.putLong(expireEpoch);
+            packBytes(buffer, iv);
+            packBytes(buffer, encrypted);
+
+            return ZEGO_TOKEN_VERSION + Base64.getEncoder().encodeToString(buffer.array());
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to generate ZEGO token04", ex);
+        }
+    }
+
+    private byte[] encryptTokenPayload(byte[] plainText, byte[] secretKey, byte[] ivBytes) throws Exception {
+        Cipher cipher = Cipher.getInstance(ZEGO_TRANSFORMATION);
+        SecretKeySpec keySpec = new SecretKeySpec(secretKey, "AES");
+        IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
+        return cipher.doFinal(plainText);
+    }
+
+    private void packBytes(ByteBuffer target, byte[] source) {
+        if (source.length > 65535) {
+            throw new IllegalArgumentException("Token field too large");
+        }
+
+        target.putShort((short) source.length);
+        target.put(source);
     }
 
     private String generateRoomId(Long conversationId) {

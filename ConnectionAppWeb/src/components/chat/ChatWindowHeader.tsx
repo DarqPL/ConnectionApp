@@ -28,6 +28,9 @@ import { toast } from "sonner";
 import { useState } from "react";
 import type { CallMediaType } from "@/types/call";
 
+const isActiveCallStatus = (status?: string | null): boolean =>
+  status === "RINGING" || status === "ONGOING";
+
 interface ChatWindowHeaderProps {
   chat?: Conversation;
   peerUserId?: number | null;
@@ -48,7 +51,7 @@ const ChatWindowHeader = ({
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
-  const { startCall } = useCallStore();
+  const { startCall, activeCall } = useCallStore();
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
 
@@ -80,6 +83,14 @@ const ChatWindowHeader = ({
 
   const handleStartCall = async (mediaType: CallMediaType) => {
     if (!chat || isStartingCall || !canStartCall) {
+      return;
+    }
+
+    if (
+      activeCall?.conversationId === chat.id &&
+      isActiveCallStatus(activeCall.status)
+    ) {
+      toast.info("Cuoc goi cua doan chat nay dang dien ra");
       return;
     }
 

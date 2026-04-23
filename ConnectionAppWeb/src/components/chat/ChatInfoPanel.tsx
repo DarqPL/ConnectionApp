@@ -6,6 +6,7 @@ import {
   Download,
   File,
   UserPlus,
+  Settings,
   BellOff,
   Pin,
   ChevronDown,
@@ -20,6 +21,9 @@ import {
   MessageCircle,
   Link as LinkIcon,
   BarChart3,
+  Phone,
+  PhoneMissed,
+  Video,
 } from "lucide-react";
 import type { Message, Conversation } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -31,6 +35,7 @@ import { MemberListDialog } from "./MemberListDialog";
 import AddMemberDialog from "./AddMemberDialog";
 import { RenameGroupDialog } from "./RenameGroupDialog";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
@@ -87,11 +92,18 @@ const ChatInfoPanel = ({
   onDeleteHistory,
 }: ChatInfoPanelProps) => {
   const { user } = useAuthStore();
+  const {
+    history: callHistory,
+    loading: isCallHistoryLoading,
+    fetchHistory,
+  } = useCallStore();
   const fetchConversationById = useChatStore(
     (state) => state.fetchConversationById,
   );
+  
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     members: true,
+    calls: false,
     board: true,
     media: true,
     files: true,
@@ -110,12 +122,19 @@ const ChatInfoPanel = ({
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
 
-  // Đã gộp state của cả nhánh feature và main
+  // State update properties
   const [descriptionDraft, setDescriptionDraft] = useState(
     chat.description ?? "",
   );
   const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    void fetchHistory(0, 50);
+  }, [fetchHistory, isOpen]);
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -231,7 +250,6 @@ const ChatInfoPanel = ({
     }
   };
 
-  // Đã giữ lại cả 2 hàm handleSaveDescription và handleAvatarUpdate
   const handleSaveDescription = async () => {
     if (!canEditDescription) {
       return;
@@ -332,6 +350,24 @@ const ChatInfoPanel = ({
     );
   }, [messages]);
 
+  const conversationCallHistory = useMemo(
+    () => callHistory.filter((item) => item.conversationId === chat.id),
+    [callHistory, chat.id],
+  );
+
+  const formatDuration = (seconds?: number | null): string => {
+    if (!seconds || seconds <= 0) {
+      return "0s";
+    }
+
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) {
+      return `${secs}s`;
+    }
+    return `${mins}m ${secs}s`;
+  };
+
   const handleDownload = (fileUrl: string, fileName?: string) => {
     const link = document.createElement("a");
     link.href = fileUrl;
@@ -422,6 +458,7 @@ const ChatInfoPanel = ({
                 label: "Thêm thành viên",
                 action: "add-member",
               },
+              { icon: Settings, label: "Quản lý", action: "settings" },
             ].map((action, i) => (
               <button
                 key={i}
@@ -613,6 +650,55 @@ const ChatInfoPanel = ({
                 Sao chép link
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Call History Section */}
+        <SectionHeader
+          title="Lịch sử cuộc gọi"
+          count={conversationCallHistory.length}
+          isOpen={openSections.calls}
+          onToggle={() => toggleSection("calls")}
+        />
+        {openSections.calls && (
+          <div className="px-4 pb-4 space-y-2">
+            {isCallHistoryLoading ? (
+              <p className="text-xs text-muted-foreground">
+                Đang tải lịch sử cuộc gọi...
+              </p>
+            ) : conversationCallHistory.length > 0 ? (
+              conversationCallHistory.slice(0, 8).map((item) => (
+                <div
+                  key={item.callId}
+                  className="flex items-center gap-3 rounded-lg border border-border/40 bg-secondary/20 p-2"
+                >
+                  <div className="size-8 rounded-full bg-background flex items-center justify-center">
+                    {item.status === "MISSED" ? (
+                      <PhoneMissed className="size-4 text-red-500" />
+                    ) : item.mediaType === "VIDEO" ? (
+                      <Video className="size-4 text-primary" />
+                    ) : (
+                      <Phone className="size-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {item.mediaType === "VIDEO"
+                        ? "Cuộc gọi video"
+                        : "Cuộc gọi thoại"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {item.status} • {formatDuration(item.durationSeconds)} •{" "}
+                      {new Date(item.createdAt).toLocaleString("vi-VN")}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="py-4 text-center text-muted-foreground">
+                <p className="text-xs italic">Chưa có lịch sử cuộc gọi</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -846,6 +932,7 @@ const ChatInfoPanel = ({
         onClose={() => setShowAddMemberDialog(false)}
       />
 
+      {/* Rename Group Dialog */}
       <RenameGroupDialog
         isOpen={showRenameDialog}
         onClose={() => setShowRenameDialog(false)}

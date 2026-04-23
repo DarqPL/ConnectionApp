@@ -4,12 +4,33 @@ import { Platform } from "react-native";
 
 const ACCESS_TOKEN_KEY = "accessToken";
 const API_BASE_URL_KEY = "apiBaseUrl";
+const DEV_SERVER_HOST_ENV_KEY = "EXPO_PUBLIC_DEV_SERVER_HOST";
+const API_BASE_URL_ENV_KEY = "EXPO_PUBLIC_API_BASE_URL";
+const USE_FORWARDED_API_ENV_KEY = "EXPO_PUBLIC_USE_FORWARDED_API";
+const FORWARDED_API_BASE_URL_ENV_KEY = "EXPO_PUBLIC_FORWARDED_API_BASE_URL";
+
+const getExpoEnv = (key: string): string | null => {
+  const processValue = (globalThis as any)?.process?.env?.[key];
+  if (typeof processValue === "string" && processValue.trim().length > 0) {
+    return processValue.trim();
+  }
+
+  const extra = Constants.expoConfig?.extra as
+    | Record<string, unknown>
+    | undefined;
+  const extraValue = extra?.[key] ?? extra?.[key.replace(/^EXPO_PUBLIC_/, "")];
+  if (typeof extraValue === "string" && extraValue.trim().length > 0) {
+    return extraValue.trim();
+  }
+
+  return null;
+};
 
 const normalizeApiBaseUrl = (url: string): string => {
   const compact = url.trim().replace(/\s+/g, "");
 
   if (!compact) {
-    throw new Error("URL backend không hợp lệ");
+    throw new Error("URL backend khong hop le");
   }
 
   const withProtocol = /^https?:\/\//i.test(compact)
@@ -24,18 +45,59 @@ const normalizeApiBaseUrl = (url: string): string => {
   try {
     parsed = new URL(withApiPath);
   } catch {
-    throw new Error("URL backend không hợp lệ");
+    throw new Error("URL backend khong hop le");
   }
 
   if (!parsed.hostname) {
-    throw new Error("URL backend không hợp lệ");
+    throw new Error("URL backend khong hop le");
   }
 
   return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
 };
 
-const migrateLegacyPort = (url: string): string => {
-  return url.replace(":8082", ":8080");
+const parseBooleanEnv = (value: string | null): boolean => {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+};
+
+const shouldUseForwardedApi = (): boolean =>
+  parseBooleanEnv(getExpoEnv(USE_FORWARDED_API_ENV_KEY));
+
+const getConfiguredForwardedApiBaseUrl = (): string | null => {
+  const value = getExpoEnv(FORWARDED_API_BASE_URL_ENV_KEY);
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizeApiBaseUrl(value);
+  } catch {
+    return null;
+  }
+};
+
+const getConfiguredLanApiBaseUrl = (): string | null => {
+  const value = getExpoEnv(API_BASE_URL_ENV_KEY);
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizeApiBaseUrl(value);
+  } catch {
+    return null;
+  }
+};
+
+const migrateLegacyPort = (url: string): string => url.replace(":8082", ":8080");
+
+const isLocalhostHost = (host: string): boolean => {
+  const normalized = host.trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1";
 };
 
 const isPrivateIpv4 = (host: string): boolean => {
@@ -61,7 +123,10 @@ const getExpoDebugHost = (): string | null => {
     (Constants as any)?.manifest?.debuggerHost ??
     null;
 
-  if (!hostUri || typeof hostUri !== "string") return null;
+  if (!hostUri || typeof hostUri !== "string") {
+    return null;
+  }
+
   return hostUri.split(":")[0] || null;
 };
 
@@ -70,20 +135,97 @@ const isTunnelHost = (host: string): boolean => {
   return (
     lower.includes("exp.direct") ||
     lower.includes("ngrok") ||
-    lower.includes("trycloudflare")
+    lower.includes("trycloudflare") ||
+    lower.includes("devtunnels.ms")
   );
 };
 
-const getDefaultApiBaseUrl = (): string => {
-  const expoHost = getExpoDebugHost();
+const getConfiguredDevServerHost = (): string | null => {
+  const host = getExpoEnv(DEV_SERVER_HOST_ENV_KEY);
+  if (!host || isLocalhostHost(host)) {
+    return null;
+  }
 
-  if (
-    expoHost &&
-    expoHost !== "localhost" &&
-    expoHost !== "127.0.0.1" &&
-    !isTunnelHost(expoHost)
-  ) {
-    return `http://${expoHost}:8080/api`;
+  return host;
+};
+
+const getPreferredLanHost = (): string | null => {
+  const configuredHost = getConfiguredDevServerHost();
+  if (configuredHost) {
+    return configuredHost;
+  }
+
+  const expoHost = getExpoDebugHost();
+  if (expoHost && !isLocalhostHost(expoHost) && !isTunnelHost(expoHost)) {
+    return expoHost;
+  }
+
+  return null;
+};
+
+const buildLanApiBaseUrl = (host: string): string => `http://${host}:8080/api`;
+
+const getSuggestedLanApiBaseUrl = (): string | null => {
+  const preferredHost = getPreferredLanHost();
+  return preferredHost ? buildLanApiBaseUrl(preferredHost) : null;
+};
+
+const isLikelyAndroidEmulatorBaseUrl = (baseUrl: string): boolean => {
+  try {
+    return new URL(baseUrl).hostname === "10.0.2.2";
+  } catch {
+    return false;
+  }
+};
+
+export const getDevRuntimeConnectionWarning = (
+  baseUrl: string,
+): string | null => {
+  if (shouldUseForwardedApi() && !getConfiguredForwardedApiBaseUrl()) {
+    return "Dang bat EXPO_PUBLIC_USE_FORWARDED_API=true nhung chua dat EXPO_PUBLIC_FORWARDED_API_BASE_URL hop le.";
+  }
+
+  if (!__DEV__) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    return null;
+  }
+
+  if (!isLocalhostHost(parsed.hostname)) {
+    return null;
+  }
+
+  if (Platform.OS === "android") {
+    const suggestedLanBaseUrl = getSuggestedLanApiBaseUrl();
+    if (suggestedLanBaseUrl) {
+      return `Android development build khong the dung localhost. Hay chay Metro bang LAN va dat backend ve ${suggestedLanBaseUrl}, hoac bat forwarded backend URL trong VS Code.`;
+    }
+
+    return "Android development build khong the dung localhost. Hay dat EXPO_PUBLIC_DEV_SERVER_HOST hoac EXPO_PUBLIC_API_BASE_URL theo IP LAN cua may dev, hoac dung EXPO_PUBLIC_FORWARDED_API_BASE_URL.";
+  }
+
+  return null;
+};
+
+const getDefaultApiBaseUrl = (): string => {
+  const forwardedBaseUrl = getConfiguredForwardedApiBaseUrl();
+  if (shouldUseForwardedApi() && forwardedBaseUrl) {
+    return forwardedBaseUrl;
+  }
+
+  const envBaseUrl = getConfiguredLanApiBaseUrl();
+  if (envBaseUrl) {
+    return envBaseUrl;
+  }
+
+  const preferredLanHost = getPreferredLanHost();
+  if (preferredLanHost) {
+    return buildLanApiBaseUrl(preferredLanHost);
   }
 
   if (Platform.OS === "android") {
@@ -94,11 +236,19 @@ const getDefaultApiBaseUrl = (): string => {
 };
 
 const syncApiBaseUrlWithCurrentLanHost = (baseUrl: string): string => {
-  const expoHost = getExpoDebugHost();
-  if (!expoHost || !isPrivateIpv4(expoHost)) {
+  if (shouldUseForwardedApi()) {
+    const forwardedBaseUrl = getConfiguredForwardedApiBaseUrl();
+    if (forwardedBaseUrl) {
+      return forwardedBaseUrl;
+    }
+  }
+
+  const suggestedLanBaseUrl = getSuggestedLanApiBaseUrl();
+  if (!suggestedLanBaseUrl) {
     return baseUrl;
   }
 
+  const expoHost = new URL(suggestedLanBaseUrl).hostname;
   let parsed: URL;
   try {
     parsed = new URL(baseUrl);
@@ -106,7 +256,16 @@ const syncApiBaseUrlWithCurrentLanHost = (baseUrl: string): string => {
     return baseUrl;
   }
 
-  if (!isPrivateIpv4(parsed.hostname) || parsed.hostname === expoHost) {
+  if (parsed.hostname === expoHost) {
+    return baseUrl;
+  }
+
+  if (isLocalhostHost(parsed.hostname)) {
+    parsed.hostname = expoHost;
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  }
+
+  if (!isPrivateIpv4(parsed.hostname)) {
     return baseUrl;
   }
 
@@ -166,6 +325,10 @@ export class AuthService {
     return `${this.apiBaseUrl}${path}`;
   }
 
+  getDevRuntimeConnectionWarning(): string | null {
+    return getDevRuntimeConnectionWarning(this.apiBaseUrl);
+  }
+
   private async safeFetch(url: string, init: RequestInit): Promise<Response> {
     try {
       return await fetch(url, {
@@ -173,7 +336,12 @@ export class AuthService {
         credentials: "include",
       });
     } catch {
-      throw new Error(`Không thể kết nối backend tại ${this.apiBaseUrl}.`);
+      const warning = this.getDevRuntimeConnectionWarning();
+      throw new Error(
+        warning
+          ? `Khong the ket noi backend tai ${this.apiBaseUrl}. ${warning}`
+          : `Khong the ket noi backend tai ${this.apiBaseUrl}.`,
+      );
     }
   }
 
@@ -189,7 +357,7 @@ export class AuthService {
       let message = data?.message || data?.error || fallback;
 
       if (code === "ACCOUNT_TEMP_LOCKED" && remainingMinutes > 0) {
-        message = `${message}. Còn ${remainingMinutes} phút để gỡ khóa.`;
+        message = `${message}. Con ${remainingMinutes} phut de go khoa.`;
       }
 
       return new AuthApiError(
@@ -205,12 +373,31 @@ export class AuthService {
   }
 
   async initializeSession(): Promise<string | null> {
+    const preferredEnvBaseUrl = getDefaultApiBaseUrl();
     const storedBaseUrl = await AsyncStorage.getItem(API_BASE_URL_KEY);
     if (storedBaseUrl) {
       try {
         const migrated = migrateLegacyPort(storedBaseUrl);
         const normalized = normalizeApiBaseUrl(migrated);
         this.apiBaseUrl = syncApiBaseUrlWithCurrentLanHost(normalized);
+
+        if (this.apiBaseUrl !== preferredEnvBaseUrl) {
+          this.apiBaseUrl = preferredEnvBaseUrl;
+        }
+
+        const warning = getDevRuntimeConnectionWarning(this.apiBaseUrl);
+        if (
+          warning &&
+          Platform.OS === "android" &&
+          !isLikelyAndroidEmulatorBaseUrl(this.apiBaseUrl) &&
+          !shouldUseForwardedApi()
+        ) {
+          const suggestedLanBaseUrl = getSuggestedLanApiBaseUrl();
+          if (suggestedLanBaseUrl) {
+            this.apiBaseUrl = suggestedLanBaseUrl;
+          }
+        }
+
         if (
           migrated !== storedBaseUrl ||
           this.apiBaseUrl !== storedBaseUrl ||
@@ -219,10 +406,11 @@ export class AuthService {
           await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
         }
       } catch {
-        this.apiBaseUrl = getDefaultApiBaseUrl();
+        this.apiBaseUrl = preferredEnvBaseUrl;
         await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
       }
     } else {
+      this.apiBaseUrl = preferredEnvBaseUrl;
       await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
     }
 
@@ -237,8 +425,8 @@ export class AuthService {
 
   async setApiBaseUrl(url: string): Promise<void> {
     const normalized = normalizeApiBaseUrl(url);
-    this.apiBaseUrl = normalized;
-    await AsyncStorage.setItem(API_BASE_URL_KEY, normalized);
+    this.apiBaseUrl = syncApiBaseUrlWithCurrentLanHost(normalized);
+    await AsyncStorage.setItem(API_BASE_URL_KEY, this.apiBaseUrl);
   }
 
   getWebSocketUrl(): string {
@@ -272,7 +460,7 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Không thể gửi mã OTP");
+      throw await this.parseError(response, "Khong the gui ma OTP");
     }
   }
 
@@ -298,7 +486,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Đăng ký thất bại");
+      throw await this.parseError(response, "Dang ky that bai");
     }
   }
 
@@ -315,10 +503,7 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(
-        response,
-        "Không thể gửi yêu cầu quên mật khẩu",
-      );
+      throw await this.parseError(response, "Khong the gui yeu cau quen mat khau");
     }
   }
 
@@ -332,7 +517,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Mã OTP không hợp lệ");
+      throw await this.parseError(response, "Ma OTP khong hop le");
     }
   }
 
@@ -353,7 +538,7 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Đặt lại mật khẩu thất bại");
+      throw await this.parseError(response, "Dat lai mat khau that bai");
     }
   }
 
@@ -372,7 +557,7 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Đổi mật khẩu thất bại");
+      throw await this.parseError(response, "Doi mat khau that bai");
     }
   }
 
@@ -382,7 +567,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Không thể gửi mã OTP");
+      throw await this.parseError(response, "Khong the gui ma OTP");
     }
   }
 
@@ -396,10 +581,7 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(
-        response,
-        "Mã OTP không chính xác hoặc đã hết hạn",
-      );
+      throw await this.parseError(response, "Ma OTP khong chinh xac hoac da het han");
     }
   }
 
@@ -409,7 +591,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Xóa tài khoản thất bại");
+      throw await this.parseError(response, "Xoa tai khoan that bai");
     }
   }
 
@@ -423,7 +605,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Đăng nhập thất bại");
+      throw await this.parseError(response, "Dang nhap that bai");
     }
 
     const data = (await response.json()) as SignInResponse;
@@ -433,7 +615,7 @@ export class AuthService {
   async fetchMe(): Promise<User> {
     const response = await this.authFetch("/users/profile", { method: "GET" });
     if (!response.ok) {
-      throw await this.parseError(response, "Không tải được hồ sơ người dùng");
+      throw await this.parseError(response, "Khong tai duoc ho so nguoi dung");
     }
     return (await response.json()) as User;
   }
@@ -447,7 +629,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Phiên đăng nhập đã hết hạn");
+      throw await this.parseError(response, "Phien dang nhap da het han");
     }
 
     const data = (await response.json()) as SignInResponse;
@@ -460,11 +642,6 @@ export class AuthService {
     init: RequestInit = {},
     retried = false,
   ): Promise<Response> {
-    // When body is FormData, do NOT touch the headers object.
-    // fetch() needs to set Content-Type: multipart/form-data; boundary=... automatically.
-    // Manually constructing a Headers object breaks this.
-    // Use duck-typing to detect FormData in both web and React Native environments.
-    // Check if body is FormData (compatible with both web and React Native)
     const isFormData =
       init.body instanceof FormData ||
       (init.body !== null &&
@@ -487,7 +664,6 @@ export class AuthService {
     let requestInit: RequestInit;
 
     if (isFormData) {
-      // Only inject Authorization, leave everything else (especially Content-Type) to fetch
       requestInit = {
         ...init,
         headers: {
@@ -497,7 +673,7 @@ export class AuthService {
           Accept: "application/json",
         },
       };
-      console.log(`[AuthService] Using FormData headers with auth token`);
+      console.log("[AuthService] Using FormData headers with auth token");
     } else {
       const headers = new Headers(init.headers ?? {});
       if (this.accessToken) {
@@ -505,7 +681,7 @@ export class AuthService {
       }
       headers.set("Accept", "application/json");
       requestInit = { ...init, headers };
-      console.log(`[AuthService] Using regular headers`);
+      console.log("[AuthService] Using regular headers");
     }
 
     const response = await this.safeFetch(this.buildUrl(path), requestInit);

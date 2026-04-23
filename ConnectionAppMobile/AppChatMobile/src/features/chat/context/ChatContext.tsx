@@ -11,6 +11,7 @@ import type { Attachment, Message, Conversation } from "../types";
 import { chatService } from "../services/chat.service";
 import { chatSocketService } from "../services/socket.service";
 import type { TypingPayload } from "../services/socket.service";
+import { callService, type CallSession } from "../services/call.service";
 import { useAuth } from "../../auth/context/AuthContext";
 import { authService } from "../../auth/services/auth.service";
 
@@ -27,6 +28,8 @@ interface ChatContextType {
   isLoading: boolean;
   error: string | null;
   typingUsers: TypingPresence[];
+  incomingCall: CallSession | null;
+  activeCall: CallSession | null;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
   sendMessage: (
@@ -63,6 +66,13 @@ interface ChatContextType {
     memberId: number,
     role: string,
   ) => Promise<void>;
+  startOutgoingCall: (
+    conversationId: number,
+    mediaType: "VOICE" | "VIDEO",
+  ) => Promise<void>;
+  acceptIncomingCall: (callId: number) => Promise<void>;
+  rejectIncomingCall: (callId: number) => Promise<void>;
+  endActiveCall: (callId: number, reason?: string) => Promise<void>;
   renameGroup: (conversationId: number, newName: string) => Promise<void>;
   updateGroupDescription: (
     conversationId: number,
@@ -92,6 +102,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<TypingPresence[]>([]);
+  const [incomingCall, setIncomingCall] = useState<CallSession | null>(null);
+  const [activeCall, setActiveCall] = useState<CallSession | null>(null);
   const [appState, setAppState] = useState<AppStateStatus>(
     AppState.currentState,
   );
@@ -532,6 +544,80 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const onCallInvite = useCallback((payload: any) => {
+    if (!payload?.callId) {
+      return;
+    }
+
+    setIncomingCall(payload as CallSession);
+
+    if (payload?.conversationId === currentConversationRef.current) {
+      return;
+    }
+
+    const callerName = payload?.participants?.find(
+      (participant: any) => participant?.userId === payload?.initiatedBy,
+    )?.displayName;
+
+    Alert.alert(
+      "Cuoc goi den",
+      callerName
+        ? `${callerName} dang goi ${payload?.mediaType === "VIDEO" ? "video" : "thoai"}`
+        : "Ban co cuoc goi moi",
+    );
+  }, []);
+
+  const onCallStatusUpdate = useCallback((payload: any) => {
+    if (!payload?.status || !payload?.callId) {
+      return;
+    }
+
+    const session = payload as CallSession;
+
+    if (payload.status === "RINGING") {
+      const isIncoming = payload?.initiatedBy !== userIdRef.current;
+      if (isIncoming) {
+        setIncomingCall(session);
+      } else {
+        setActiveCall((prev) => ({
+          ...session,
+          token:
+            session.token ??
+            (prev?.callId === session.callId ? prev.token : null),
+        }));
+      }
+      return;
+    }
+
+    if (payload.status === "ONGOING") {
+      setActiveCall((prev) => ({
+        ...session,
+        token:
+          session.token ??
+          (prev?.callId === session.callId ? prev.token : null),
+      }));
+      setIncomingCall((prev) =>
+        prev?.callId === session.callId ? null : prev,
+      );
+      return;
+    }
+
+    if (
+      payload.status === "ENDED" ||
+      payload.status === "MISSED" ||
+      payload.status === "CANCELLED"
+    ) {
+      setActiveCall((prev) => (prev?.callId === session.callId ? null : prev));
+      setIncomingCall((prev) =>
+        prev?.callId === session.callId ? null : prev,
+      );
+
+      if (payload?.conversationId === currentConversationRef.current) {
+        Alert.alert("Cuoc goi", "Cuoc goi da ket thuc");
+      }
+    }
+  }, []);
+
   const onSecurityNotification = useCallback(
     (payload: {
       type?: string;
@@ -605,6 +691,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onIncomingMessage,
       onIncomingConversation,
       onRecallMessage,
+      onCallInvite,
+      onCallStatusUpdate,
       onUserTyping,
       onUserStoppedTyping,
       onSecurityNotification,
@@ -631,6 +719,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     appState,
     onSecurityNotification,
     onConversationUpdate,
+    onCallInvite,
+    onCallStatusUpdate,
   ]);
   // ↑ intentionally excluding handler callbacks — they're stable (empty deps)
   //   and the socket service updates them via ref when needed
@@ -642,6 +732,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onIncomingMessage,
         onIncomingConversation,
         onRecallMessage,
+        onCallInvite,
+        onCallStatusUpdate,
         onUserTyping,
         onUserStoppedTyping,
         onSecurityNotification,
@@ -657,6 +749,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     onIncomingMessage,
     onIncomingConversation,
     onRecallMessage,
+    onCallInvite,
+    onCallStatusUpdate,
     onUserTyping,
     onUserStoppedTyping,
     onSecurityNotification,
@@ -1080,6 +1174,68 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const acceptIncomingCall = useCallback(async (callId: number) => {
+    const session = await callService.acceptCall(callId);
+
+    let token = session.token ?? null;
+    if (!token) {
+      try {
+        token = await callService.issueToken(callId);
+      } catch (tokenError) {
+        console.warn("[ChatContext] Failed to issue call token", tokenError);
+      }
+    }
+
+    setActiveCall({
+      ...session,
+      token,
+    });
+    setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+  }, []);
+
+  const startOutgoingCall = useCallback(
+    async (conversationId: number, mediaType: "VOICE" | "VIDEO") => {
+      const session = await callService.startCallSession(
+        conversationId,
+        mediaType,
+      );
+
+      let token = session.token ?? null;
+      if (!token) {
+        try {
+          token = await callService.issueToken(session.callId);
+        } catch (tokenError) {
+          console.warn(
+            "[ChatContext] Failed to issue outgoing call token",
+            tokenError,
+          );
+        }
+      }
+
+      setActiveCall({
+        ...session,
+        token,
+      });
+      setIncomingCall(null);
+    },
+    [],
+  );
+
+  const rejectIncomingCall = useCallback(async (callId: number) => {
+    await callService.rejectCall(callId);
+    setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+    setActiveCall((prev) => (prev?.callId === callId ? null : prev));
+  }, []);
+
+  const endActiveCall = useCallback(
+    async (callId: number, reason = "ENDED_BY_USER") => {
+      await callService.endCall(callId, reason);
+      setActiveCall((prev) => (prev?.callId === callId ? null : prev));
+      setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+    },
+    [],
+  );
+
   const value: ChatContextType = {
     conversations,
     currentMessages,
@@ -1087,6 +1243,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoading,
     error,
     typingUsers,
+    incomingCall,
+    activeCall,
     fetchConversations,
     fetchMessages,
     sendMessage,
@@ -1103,6 +1261,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     leaveGroup,
     addMemberToGroup,
     updateMemberRole,
+    startOutgoingCall,
+    acceptIncomingCall,
+    rejectIncomingCall,
+    endActiveCall,
     renameGroup,
     updateGroupDescription,
     clearError,

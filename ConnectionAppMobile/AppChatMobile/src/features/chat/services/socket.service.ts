@@ -5,6 +5,8 @@ export interface ChatSocketHandlers {
   onIncomingMessage: (message: Message) => void;
   onIncomingConversation: (conversation: Conversation) => void;
   onRecallMessage: (message: Message) => void;
+  onCallInvite?: (payload: any) => void;
+  onCallStatusUpdate?: (payload: any) => void;
   onUserTyping?: (data: TypingPayload) => void;
   onUserStoppedTyping?: (data: TypingPayload) => void;
   onSecurityNotification?: (payload: {
@@ -34,7 +36,7 @@ export interface TypingPayload {
  *
  * Key design:
  * - Handlers are stored in a mutable ref so the socket only connects ONCE
- *   per session without needing to reconnect when React callbacks change.
+ * per session without needing to reconnect when React callbacks change.
  * - Only disconnects/reconnects when user logs out or token changes.
  */
 class ChatSocketService {
@@ -134,6 +136,24 @@ class ChatSocketService {
             this.handlersRef?.onIncomingMessage(payload);
           } catch (e) {
             console.error("[Socket] Failed to parse poll update:", e);
+          }
+        });
+
+        client.subscribe(`/topic/user.${userId}/call-invite`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body);
+            this.handlersRef?.onCallInvite?.(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse call invite:", e);
+          }
+        });
+
+        client.subscribe(`/topic/user.${userId}/call-status`, (stompFrame) => {
+          try {
+            const payload = JSON.parse(stompFrame.body);
+            this.handlersRef?.onCallStatusUpdate?.(payload);
+          } catch (e) {
+            console.error("[Socket] Failed to parse call status:", e);
           }
         });
 

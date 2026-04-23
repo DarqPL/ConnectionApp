@@ -1,6 +1,7 @@
 package iuh.fit.ConnectionAppBackend.security;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,7 +17,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -24,6 +27,24 @@ public class SecurityConfig {
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${app.cors.allowed-origin-patterns}")
+    private String allowedOriginPatterns;
+
+    @Value("${app.cors.allowed-methods}")
+    private String allowedMethods;
+
+    @Value("${app.cors.allowed-headers}")
+    private String allowedHeaders;
+
+    @Value("${app.cors.exposed-headers}")
+    private String exposedHeaders;
+
+    @Value("${app.cors.allow-credentials:true}")
+    private boolean allowCredentials;
+
+    @Value("${app.cors.max-age-seconds:3600}")
+    private long maxAgeSeconds;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -77,31 +98,23 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "http://192.168.*:*",
-                "http://10.*:*",
-                "http://172.16.*:*",
-                "http://172.17.*:*",
-                "http://172.18.*:*",
-                "http://172.19.*:*",
-                "http://172.2*.*:*",
-                "https://*.ngrok-free.app",
-                "http://*.ngrok-free.app",
-                "https://*.ngrok.io",
-                "http://*.ngrok.io",
-                "exp://*"
-        ));
-        configuration.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        configuration.setAllowedOriginPatterns(parseCsv(allowedOriginPatterns));
+        configuration.setAllowedMethods(parseCsv(allowedMethods));
+        configuration.setAllowedHeaders(parseCsv(allowedHeaders));
+        configuration.setExposedHeaders(parseCsv(exposedHeaders));
+        configuration.setAllowCredentials(allowCredentials);
+        configuration.setMaxAge(maxAgeSeconds);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    private List<String> parseCsv(String value) {
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .collect(Collectors.toList());
     }
 }

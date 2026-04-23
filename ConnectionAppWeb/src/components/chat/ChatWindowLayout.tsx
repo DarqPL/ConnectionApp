@@ -3,6 +3,7 @@ import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
+import CallOverlay from "./CallOverlay";
 import MessageInput from "./MessageInput";
 import ChatInfoPanel from "./ChatInfoPanel";
 import PinnedMessagesBar from "./PinnedMessagesBar";
@@ -233,6 +234,8 @@ const ChatWindowLayout = () => {
           onBlockStatusChanged={refreshBlockStatus}
           onFilesOpen={() => setIsFilesPanelOpen(true)}
         />
+
+        <CallOverlay conversationId={selectedConvo.id} />
 
         {activeConversationId && (
           <PinnedMessagesBar conversationId={activeConversationId} />

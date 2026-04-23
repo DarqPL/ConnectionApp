@@ -108,20 +108,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const sendSignupOtp = useCallback(async (email: string, username?: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await authService.sendSignupOtp(username || "", email);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Gửi OTP thất bại";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const sendSignupOtp = useCallback(
+    async (email: string, username?: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.sendSignupOtp(username || "", email);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Gửi OTP thất bại";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
 
   const signUp = useCallback(
     async (
@@ -254,9 +257,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const deleteAccount = useCallback(async (otp: string) => {
-    await confirmDeleteAccount(otp);
-  }, [confirmDeleteAccount]);
+  const deleteAccount = useCallback(
+    async (otp: string) => {
+      await confirmDeleteAccount(otp);
+    },
+    [confirmDeleteAccount],
+  );
 
   const updateUserProfile = useCallback(async (data: Partial<User>) => {
     const { userService } = await import("../../chat/services/user.service");
@@ -269,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const updatedUser = await userService.updateAvatar(formData);
       setUser(updatedUser);
-      
+
       // Force refetch to ensure avatar update is synced
       await authService.fetchMe().then((freshUser) => {
         setUser(freshUser);
