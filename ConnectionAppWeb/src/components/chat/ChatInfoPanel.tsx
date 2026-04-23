@@ -18,6 +18,9 @@ import {
   Image as ImageIcon,
   LogOut,
   Trash2,
+  Edit2,
+  AlarmClock,
+  Clock,
   MessageCircle,
   Link as LinkIcon,
   BarChart3,
@@ -25,7 +28,7 @@ import {
   PhoneMissed,
   Video,
 } from "lucide-react";
-import type { Message, Conversation } from "@/types/chat";
+import type { Message, Conversation, Reminder } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import GroupChatAvatar from "./GroupChatAvatar";
@@ -38,6 +41,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chatService";
+import ReminderCreator from "./ReminderCreator";
 import { toast } from "sonner";
 import "yet-another-react-lightbox/styles.css";
 import Lightbox from "yet-another-react-lightbox";
@@ -100,7 +104,7 @@ const ChatInfoPanel = ({
   const fetchConversationById = useChatStore(
     (state) => state.fetchConversationById,
   );
-  
+
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     members: true,
     calls: false,
@@ -112,6 +116,7 @@ const ChatInfoPanel = ({
     schedule: false,
     polls: false,
     groupLink: false,
+    reminders: false,
   });
   const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [showAllImages, setShowAllImages] = useState(false);
@@ -121,6 +126,8 @@ const ChatInfoPanel = ({
   const [showMemberListDialog, setShowMemberListDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isLoadingReminders, setIsLoadingReminders] = useState(false);
 
   // State update properties
   const [descriptionDraft, setDescriptionDraft] = useState(
@@ -128,13 +135,59 @@ const ChatInfoPanel = ({
   );
   const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [isEditReminderOpen, setIsEditReminderOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
     void fetchHistory(0, 50);
-  }, [fetchHistory, isOpen]);
+    fetchReminders();
+  }, [fetchHistory, isOpen, chat.id]);
+
+  const fetchReminders = async () => {
+    setIsLoadingReminders(true);
+    try {
+      const data = await chatService.fetchReminders(chat.id);
+      setReminders(data);
+    } catch (error) {
+      console.error("Failed to fetch reminders", error);
+    } finally {
+      setIsLoadingReminders(false);
+    }
+  };
+
+  const handleDeleteReminder = async (id: string) => {
+    try {
+      await chatService.deleteReminder(id);
+      setReminders(reminders.filter((r) => r.id !== id));
+      toast.success("Đã xóa nhắc hẹn");
+    } catch (error) {
+      toast.error("Không thể xóa nhắc hẹn");
+    }
+  };
+
+  const handleEditReminder = (reminder: Reminder) => {
+    setEditingReminder(reminder);
+    setIsEditReminderOpen(true);
+  };
+
+  const handleUpdateReminder = async (updatedData: Omit<ReminderRequest, "conversationId">) => {
+    if (!editingReminder) return;
+    try {
+      await chatService.deleteReminder(editingReminder.id);
+      const newReminder = await chatService.createReminder({
+        ...updatedData,
+        conversationId: chat.id
+      });
+      // Refresh list
+      fetchReminders();
+      toast.success("Đã cập nhật nhắc hẹn");
+    } catch (error) {
+      toast.error("Lỗi khi cập nhật nhắc hẹn");
+    }
+  };
 
   // Check if current user is group owner
   const currentUserRole = useMemo(() => {
@@ -419,17 +472,17 @@ const ChatInfoPanel = ({
             )}
             {(currentUserRole === "OWNER" ||
               currentUserRole === "CO_OWNER") && (
-              <label className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors cursor-pointer">
-                <Pencil className="size-3" />
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleAvatarUpdate}
-                  disabled={isUpdatingAvatar}
-                />
-              </label>
-            )}
+                <label className="absolute bottom-0 right-0 p-1 bg-background border border-border rounded-full shadow-sm hover:bg-accent transition-colors cursor-pointer">
+                  <Pencil className="size-3" />
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleAvatarUpdate}
+                    disabled={isUpdatingAvatar}
+                  />
+                </label>
+              )}
           </div>
 
           <div className="space-y-1">
@@ -437,15 +490,15 @@ const ChatInfoPanel = ({
               {chat.name}
               {(currentUserRole === "OWNER" ||
                 currentUserRole === "CO_OWNER") && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 rounded-full opacity-0 group-hover/title:opacity-100 transition-opacity"
-                  onClick={() => setShowRenameDialog(true)}
-                >
-                  <Pencil className="size-3 text-muted-foreground" />
-                </Button>
-              )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 rounded-full opacity-0 group-hover/title:opacity-100 transition-opacity"
+                    onClick={() => setShowRenameDialog(true)}
+                  >
+                    <Pencil className="size-3 text-muted-foreground" />
+                  </Button>
+                )}
             </h3>
           </div>
 
@@ -568,6 +621,104 @@ const ChatInfoPanel = ({
               <p className="text-xs text-muted-foreground italic">
                 Chỉ trưởng nhóm hoặc phó nhóm mới có thể chỉnh sửa mô tả.
               </p>
+            )}
+          </div>
+        )}
+
+        {/* Reminders Section */}
+        <SectionHeader
+          title="Danh sách nhắc hẹn"
+          count={reminders.length}
+          isOpen={openSections.reminders}
+          onToggle={() => toggleSection("reminders")}
+        />
+        {openSections.reminders && (
+          <div className="px-4 pb-4 space-y-3">
+            {isLoadingReminders ? (
+              <p className="text-xs text-muted-foreground">Đang tải...</p>
+            ) : reminders.length === 0 ? (
+              <div className="text-center py-6">
+                <BellOff className="size-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-xs text-muted-foreground">Chưa có nhắc hẹn nào.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {reminders.map((reminder) => {
+                  const reminderDate = new Date(reminder.reminderTime);
+                  const isExpired = reminderDate < new Date();
+
+                  return (
+                    <div
+                      key={reminder.id}
+                      className={cn(
+                        "rounded-xl border border-border/50 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group/item",
+                        isExpired ? "bg-muted/30 grayscale-[0.2]" : "bg-white dark:bg-zinc-900"
+                      )}
+                    >
+                      {/* Mini Header */}
+                      <div className="bg-primary/5 p-2 px-3 flex items-center justify-between border-b border-border/30">
+                        <div className="flex items-center gap-1.5 text-primary">
+                          <AlarmClock className="size-3" />
+                          <span className="text-[9px] font-bold uppercase tracking-wider">Nhắc hẹn</span>
+                        </div>
+                        {isExpired && (
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase">Đã qua</span>
+                        )}
+                      </div>
+
+                      <div className="p-3">
+                        <div className="flex justify-between items-start gap-2 mb-2">
+                          <h4 className={cn(
+                            "text-sm font-bold truncate flex-1",
+                            isExpired ? "text-muted-foreground" : "text-foreground group-hover/item:text-primary transition-colors"
+                          )}>
+                            {reminder.title}
+                          </h4>
+                          {(reminder.creatorId === user?.id || canEditDescription) && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handleEditReminder(reminder)}
+                                className="p-1 hover:bg-primary/10 rounded-full transition-colors text-primary"
+                              >
+                                <Edit2 className="size-3" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteReminder(reminder.id)}
+                                className="p-1 hover:bg-destructive/10 rounded-full transition-colors text-destructive"
+                              >
+                                <Trash2 className="size-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {reminder.content && (
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 mb-3 leading-tight">
+                            {reminder.content}
+                          </p>
+                        )}
+
+                        <div className="flex flex-col gap-1.5">
+                          <div className={cn(
+                            "flex items-center gap-2 text-[10px] font-bold p-1.5 px-2 rounded-lg border",
+                            isExpired ? "bg-muted/50 border-border" : "bg-primary/5 border-primary/10 text-primary"
+                          )}>
+                            <Calendar className="size-3" />
+                            {reminderDate.toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </div>
+                          <div className={cn(
+                            "flex items-center gap-2 text-[10px] font-bold p-1.5 px-2 rounded-lg border",
+                            isExpired ? "bg-muted/50 border-border" : "bg-amber-500/5 border-amber-500/10 text-amber-600"
+                          )}>
+                            <Clock className="size-3" />
+                            {reminderDate.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -702,28 +853,7 @@ const ChatInfoPanel = ({
           </div>
         )}
 
-        {/* Board Section */}
-        <SectionHeader
-          title="Bảng tin nhóm"
-          isOpen={openSections.board}
-          onToggle={() => toggleSection("board")}
-        />
-        {openSections.board && (
-          <div className="px-4 pb-4 space-y-1">
-            {[
-              { icon: Calendar, label: "Danh sách nhắc hẹn" },
-              { icon: StickyNote, label: "Ghi chú, ghim, bình chọn" },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
-              >
-                <item.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="text-sm font-medium">{item.label}</span>
-              </div>
-            ))}
-          </div>
-        )}
+
 
         {/* Media Section */}
         <SectionHeader
@@ -938,6 +1068,20 @@ const ChatInfoPanel = ({
         onClose={() => setShowRenameDialog(false)}
         currentName={chat.name}
         conversationId={chat.id}
+      />
+
+      <ReminderCreator
+        isOpen={isEditReminderOpen}
+        onClose={() => {
+          setIsEditReminderOpen(false);
+          setEditingReminder(null);
+        }}
+        onSave={handleUpdateReminder}
+        initialData={editingReminder ? {
+          title: editingReminder.title,
+          content: editingReminder.content || "",
+          reminderTime: editingReminder.reminderTime
+        } : undefined}
       />
     </div>
   );

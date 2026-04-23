@@ -1,6 +1,6 @@
 import { chatService } from "@/services/chatService";
 import type { ChatState } from "@/types/store";
-import type { Message } from "@/types/chat";
+import type { Message, ReminderRequest } from "@/types/chat";
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 
@@ -287,14 +287,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     };
     const preview = buildMessagePreview(messageWithOwn);
 
-    // If message already exists, we might be receiving a poll update (bumping)
-    // or a manual update. We remove the old one to re-add at the correct position.
+    // If message already exists -> update it IN-PLACE (do not move to bottom)
+    // This handles Join/Decline/Edit on reminder & poll cards correctly.
     const exists = prevItems.some((m) => m.id === message.id);
-    let updatedItems = prevItems;
 
     if (exists) {
-      updatedItems = prevItems.filter((m) => m.id !== message.id);
+      get().updateMessage(messageWithOwn);
+      return; // Stop here - do NOT append to bottom
     }
+
+    const updatedItems = prevItems;
 
     // Check if conversation exists in state
     const convoExists = get().conversations.some((c) => c.id === convoId);
@@ -728,6 +730,62 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
     } catch (error) {
       console.error("Error fetching conversation by id:", error);
+    }
+  },
+  
+  createReminder: async (request) => {
+    try {
+      const { activeConversationId } = get();
+      const targetConvoId = request.conversationId || activeConversationId;
+      if (!targetConvoId) return;
+      
+      const response = await chatService.createReminder({
+        ...request,
+        conversationId: targetConvoId
+      });
+      
+      // The socket will eventually broadcast the new message, 
+      // but we can optimistic add it or wait. 
+      // ReminderService.createReminder sends a WS to /reminders topic.
+      // But it also saves a Message. 
+      // Let's rely on the Message broadcast from backend if any.
+      // Actually ReminderService doesn't seem to broadcast to /topic/conversation/{id}.
+      // It only sends to /reminders. 
+      // I should probably manually fetch messages or wait for the Message response.
+      
+      // Update: I'll manually add the reminder message if it's returned as a ReminderResponse 
+      // but wait, createReminder returns ReminderResponse which has the messageId.
+      // I'll fetch the messages again to be sure.
+      await get().fetchMessages(activeConversationId);
+    } catch (error) {
+      console.error("Error creating reminder:", error);
+      throw error;
+    }
+  },
+
+  deleteReminder: async (messageId) => {
+    try {
+      const { activeConversationId } = get();
+      if (!activeConversationId) return;
+      
+      await chatService.deleteReminder(messageId);
+      
+      // Update local state by removing the message
+      set((state) => {
+        const prevItems = state.messages[activeConversationId]?.items ?? [];
+        return {
+          messages: {
+            ...state.messages,
+            [activeConversationId]: {
+              ...state.messages[activeConversationId],
+              items: prevItems.filter((m) => m.id !== messageId),
+            },
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Error deleting reminder:", error);
+      throw error;
     }
   },
 }));

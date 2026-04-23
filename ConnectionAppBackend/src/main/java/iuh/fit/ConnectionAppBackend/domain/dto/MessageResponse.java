@@ -25,6 +25,7 @@ public class MessageResponse {
     private LocalDateTime recalledAt;
     private ReplyInfoResponse replyInfo;
     private PollResponse poll;
+    private ReminderResponse reminder;
     private List<MessageReactionResponse> reactions;
 
     @Data

@@ -9,11 +9,13 @@ import iuh.fit.ConnectionAppBackend.domain.dto.MessageRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PollRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.PollResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.ReminderResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.MessageReaction;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Poll;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.PollOption;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.ReminderInfo;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
@@ -759,6 +761,7 @@ public class MessageService {
                 .recalledAt(message.getRecalledAt())
                 .replyInfo(replyInfo)
                 .poll(mapPollEntityToResponse(message.getPoll()))
+                .reminder(mapReminderEntityToResponse(message.getReminder(), message.getConversationId(), message.getId(), message.getCreatedAt()))
                 .reactions(reactions)
                 .build();
     }
@@ -806,6 +809,24 @@ public class MessageService {
                 .isAnonymous(poll.isAnonymous())
                 .closed(poll.isClosed())
                 .expiredAt(poll.getExpiredAt())
+                .build();
+    }
+
+    private ReminderResponse mapReminderEntityToResponse(ReminderInfo info, Long conversationId, String messageId, LocalDateTime createdAt) {
+        if (info == null) return null;
+
+        return ReminderResponse.builder()
+                .id(messageId) // For embedded, we use messageId as the logical reminder ID
+                .title(info.getTitle())
+                .content(info.getContent())
+                .reminderTime(info.getReminderTime())
+                .isNotified(info.isNotified())
+                .conversationId(conversationId)
+                .creatorId(info.getCreatorId())
+                .creatorName(info.getCreatorName())
+                .participantIds(info.getParticipantIds())
+                .declinedIds(info.getDeclinedIds())
+                .createdAt(createdAt)
                 .build();
     }
 
