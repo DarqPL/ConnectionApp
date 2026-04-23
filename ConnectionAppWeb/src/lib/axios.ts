@@ -1,10 +1,8 @@
 import axios from "axios";
+import { resolveApiBaseUrl } from "./apiConfig";
 
 const api = axios.create({
-  baseURL:
-    import.meta.env.MODE === "development"
-      ? "http://localhost:8080/api"
-      : "/api",
+  baseURL: resolveApiBaseUrl(),
   withCredentials: true,
 });
 

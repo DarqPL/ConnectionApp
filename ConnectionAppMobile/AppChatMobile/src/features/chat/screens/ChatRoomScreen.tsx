@@ -13,6 +13,7 @@ import {
   NativeScrollEvent,
   KeyboardAvoidingView,
   Platform,
+  PermissionsAndroid,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
@@ -26,6 +27,7 @@ import PollCreatorModal from "../components/PollCreatorModal";
 import VotePollModal from "../components/VotePollModal";
 import { useChat, type PendingAttachment } from "../context/ChatContext";
 import { useAuth } from "../../auth/context/AuthContext";
+import { authService } from "../../auth/services/auth.service";
 import { COLORS } from "../../../theme";
 import type { Message, Poll, Participant } from "../types";
 import { chatService } from "../services/chat.service";
@@ -166,9 +168,14 @@ const ChatRoomScreen = ({ route }: any) => {
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
   const [zegoCallModule, setZegoCallModule] =
     React.useState<ZegoCallModule | null>(null);
-  const [zegoLoadError, setZegoLoadError] = React.useState<string | null>(null);
+  const [callSetupError, setCallSetupError] = React.useState<string | null>(
+    null,
+  );
+  const [isPreparingCallRoom, setIsPreparingCallRoom] = React.useState(false);
   const callEndGuardRef = useRef<number | null>(null);
+  const zegoAppId = Number.parseInt(getExpoEnv("EXPO_PUBLIC_ZEGO_APP_ID"), 10);
   const zegoAppSign = getExpoEnv("EXPO_PUBLIC_ZEGO_APP_SIGN");
+  const devRuntimeConnectionWarning = authService.getDevRuntimeConnectionWarning();
 
   const currentConversation = conversations.find(
     (c) => c.id === conversationId,
@@ -178,46 +185,139 @@ const ChatRoomScreen = ({ route }: any) => {
   const activeForConversation =
     activeCall?.conversationId === conversationId ? activeCall : null;
 
+  const ensureCallPermissions = React.useCallback(
+    async (mediaType: CallMediaType) => {
+      if (Platform.OS !== "android") {
+        return { ok: true as const };
+      }
+
+      const permissions = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+      if (mediaType === "VIDEO") {
+        permissions.push(PermissionsAndroid.PERMISSIONS.CAMERA);
+      }
+
+      try {
+        const result = await PermissionsAndroid.requestMultiple(permissions);
+        const deniedPermissions = permissions.filter(
+          (permission) =>
+            result[permission] !== PermissionsAndroid.RESULTS.GRANTED,
+        );
+
+        if (deniedPermissions.length === 0) {
+          return { ok: true as const };
+        }
+
+        return {
+          ok: false as const,
+          error:
+            mediaType === "VIDEO"
+              ? "Can cap quyen camera va microphone de vao cuoc goi video."
+              : "Can cap quyen microphone de vao cuoc goi thoai.",
+        };
+      } catch (error) {
+        console.warn("[ChatRoom] Failed to request call permissions", error);
+        return {
+          ok: false as const,
+          error: "Khong the xac nhan quyen camera/microphone tren thiet bi.",
+        };
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     let mounted = true;
 
     if (!activeForConversation || isExpoGoRuntime()) {
       setZegoCallModule(null);
+      setCallSetupError(null);
+      setIsPreparingCallRoom(false);
       return () => {
         mounted = false;
       };
     }
 
-    import("@zegocloud/zego-uikit-prebuilt-call-rn")
-      .then((module) => {
-        if (!mounted) {
-          return;
-        }
+    setIsPreparingCallRoom(true);
+    setCallSetupError(null);
 
-        const exportedModule = ((module as any).default ??
-          module) as ZegoCallModule;
-        if (!exportedModule?.ZegoUIKitPrebuiltCall) {
-          setZegoLoadError("SDK goi khong kha dung trong runtime hien tai");
-          return;
+    const prepareCallRoom = async () => {
+      if (!activeForConversation.token?.token) {
+        if (mounted) {
+          setIsPreparingCallRoom(false);
         }
+        return;
+      }
 
-        setZegoLoadError(null);
-        setZegoCallModule(exportedModule);
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
+      if (!zegoAppId || !zegoAppSign) {
+        if (mounted) {
+          setZegoCallModule(null);
+          setCallSetupError("Thieu cau hinh ZEGO_APP_ID hoac ZEGO_APP_SIGN.");
+          setIsPreparingCallRoom(false);
         }
+        return;
+      }
 
-        console.warn("[ChatRoom] Failed to load ZEGO call module", error);
+      if (activeForConversation.token.appId !== zegoAppId) {
+        if (mounted) {
+          setZegoCallModule(null);
+          setCallSetupError(
+            "ZEGO_APP_ID tren mobile khong khop appId backend dang cap token.",
+          );
+          setIsPreparingCallRoom(false);
+        }
+        return;
+      }
+
+      const permissionResult = await ensureCallPermissions(
+        activeForConversation.mediaType,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      if (!permissionResult.ok) {
         setZegoCallModule(null);
-        setZegoLoadError("Khong the khoi tao ZEGO SDK");
-      });
+        setCallSetupError(permissionResult.error);
+        setIsPreparingCallRoom(false);
+        return;
+      }
+
+      import("@zegocloud/zego-uikit-prebuilt-call-rn")
+        .then((module) => {
+          if (!mounted) {
+            return;
+          }
+
+          const exportedModule = ((module as any).default ??
+            module) as ZegoCallModule;
+          if (!exportedModule?.ZegoUIKitPrebuiltCall) {
+            setCallSetupError("SDK goi khong kha dung trong runtime hien tai");
+            setIsPreparingCallRoom(false);
+            return;
+          }
+
+          setCallSetupError(null);
+          setZegoCallModule(exportedModule);
+          setIsPreparingCallRoom(false);
+        })
+        .catch((error) => {
+          if (!mounted) {
+            return;
+          }
+
+          console.warn("[ChatRoom] Failed to load ZEGO call module", error);
+          setZegoCallModule(null);
+          setCallSetupError("Khong the khoi tao ZEGO SDK");
+          setIsPreparingCallRoom(false);
+        });
+    };
+
+    void prepareCallRoom();
 
     return () => {
       mounted = false;
     };
-  }, [activeForConversation]);
+  }, [activeForConversation, ensureCallPermissions, zegoAppId, zegoAppSign]);
 
   const getBackendEndReason = (reason?: string) => {
     if (reason === "remoteHangUp") {
@@ -620,6 +720,12 @@ const ChatRoomScreen = ({ route }: any) => {
     }
 
     try {
+      const permissionResult = await ensureCallPermissions(mediaType);
+      if (!permissionResult.ok) {
+        Alert.alert("Thong bao", permissionResult.error);
+        return;
+      }
+
       const session = await callService.startCallSession(
         conversationId,
         mediaType,
@@ -642,6 +748,14 @@ const ChatRoomScreen = ({ route }: any) => {
     }
 
     try {
+      const permissionResult = await ensureCallPermissions(
+        incomingForConversation.mediaType,
+      );
+      if (!permissionResult.ok) {
+        Alert.alert("Thong bao", permissionResult.error);
+        return;
+      }
+
       await acceptIncomingCall(incomingForConversation.callId);
     } catch (error) {
       Alert.alert(
@@ -900,9 +1014,16 @@ const ChatRoomScreen = ({ route }: any) => {
                   Development Build.
                 </Text>
               </View>
-            ) : zegoLoadError ? (
+            ) : callSetupError ? (
               <View style={styles.callRoomLoading}>
-                <Text style={styles.callRoomLoadingText}>{zegoLoadError}</Text>
+                <Text style={styles.callRoomLoadingText}>{callSetupError}</Text>
+                {devRuntimeConnectionWarning ? (
+                  <Text
+                    style={[styles.callRoomLoadingText, { marginTop: 10 }]}
+                  >
+                    {devRuntimeConnectionWarning}
+                  </Text>
+                ) : null}
               </View>
             ) : activeForConversation.token?.token &&
               zegoAppSign &&
@@ -930,7 +1051,9 @@ const ChatRoomScreen = ({ route }: any) => {
               <View style={styles.callRoomLoading}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
                 <Text style={styles.callRoomLoadingText}>
-                  Dang khoi tao phong goi...
+                  {isPreparingCallRoom
+                    ? "Dang chuan bi quyen va khoi tao phong goi..."
+                    : "Dang khoi tao phong goi..."}
                 </Text>
               </View>
             )}

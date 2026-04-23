@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CallMediaType, CallSession } from "@/types/call";
+import { getCallMediaEnvironmentWarning } from "@/lib/apiConfig";
 
 interface ZegoCallRoomProps {
   call: CallSession;
@@ -56,6 +57,11 @@ const ZegoCallRoom = ({
 
       try {
         setError(null);
+        const environmentWarning = getCallMediaEnvironmentWarning();
+        if (environmentWarning) {
+          throw new Error(environmentWarning);
+        }
+
         const zegoModule = await import("@zegocloud/zego-uikit-prebuilt");
         const ZegoUIKitPrebuilt =
           zegoModule.ZegoUIKitPrebuilt ?? zegoModule.default ?? zegoModule;
