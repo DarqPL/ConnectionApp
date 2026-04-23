@@ -126,6 +126,30 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             .removeTypingUser(payload.conversationId, payload.userId);
         });
 
+        // Subscribe to reminder deletion — remove the card from chat for all members
+        client.subscribe(`/topic/user.${userId}/reminder-deleted`, (message) => {
+          const deletedMessageId: string = JSON.parse(message.body);
+          // Find which conversation this message belongs to and remove it
+          const state = useChatStore.getState();
+          const allMessages = state.messages;
+          for (const convoId in allMessages) {
+            const items = allMessages[convoId]?.items ?? [];
+            const found = items.some((m) => m.id === deletedMessageId);
+            if (found) {
+              useChatStore.setState((s) => ({
+                messages: {
+                  ...s.messages,
+                  [convoId]: {
+                    ...s.messages[convoId],
+                    items: s.messages[convoId].items.filter((m) => m.id !== deletedMessageId),
+                  },
+                },
+              }));
+              break;
+            }
+          }
+        });
+
         client.subscribe(`/topic/user.${userId}/call-invite`, (message) => {
           const payload: CallSession = JSON.parse(message.body);
           useCallStore.getState().setIncomingCall(payload);
@@ -228,6 +252,23 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             description: `${acceptedFriend.displayName} đã chấp nhận lời mời kết bạn`,
             duration: 4000,
           });
+        });
+
+        // Subscribe to reminder trigger notifications
+        client.subscribe(`/topic/user.${userId}/reminders`, (message) => {
+           const reminder = JSON.parse(message.body);
+           toast.info(`Nhắc hẹn mới: ${reminder.title}`, {
+             description: `Hẹn lúc: ${new Date(reminder.reminderTime).toLocaleString("vi-VN")}`,
+             duration: 5000,
+           });
+        });
+
+        client.subscribe(`/topic/user.${userId}/reminder-trigger`, (message) => {
+           const reminder = JSON.parse(message.body);
+           toast.success(`ĐẾN GIỜ: ${reminder.title}`, {
+             description: reminder.content || "Bạn có một lịch hẹn ngay bây giờ!",
+             duration: 10000,
+           });
         });
 
         // Subscribe to conversation updates (member joined/left)

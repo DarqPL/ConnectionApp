@@ -4,6 +4,7 @@ import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Attachment;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.MessageReaction;
 import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.Poll;
+import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.ReminderInfo;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -34,6 +35,8 @@ public class Message {
     private String content;
 
     private Poll poll;
+
+    private ReminderInfo reminder;
 
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
@@ -96,5 +99,9 @@ public class Message {
 
     public void setPoll(Poll poll) {
         this.poll = poll;
+    }
+
+    public void setReminder(ReminderInfo reminder) {
+        this.reminder = reminder;
     }
 }

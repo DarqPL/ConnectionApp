@@ -8,6 +8,8 @@ import type {
   MessageRequest,
   PageResponse,
   PollRequest,
+  Reminder,
+  ReminderRequest,
 } from "@/types/chat";
 
 interface UploadedObjectResponse {
@@ -231,7 +233,7 @@ export const chatService = {
     legacyName?: string,
     legacyAvatarUrl?: string
   ): Promise<Conversation> {
-    
+
     // Fallback cho trường hợp vẫn đang gọi theo cách cũ: updateConversation(id, name, avatarUrl)
     const bodyPayload = payload || {};
     if (legacyName !== undefined) bodyPayload.name = legacyName;
@@ -325,5 +327,24 @@ export const chatService = {
     await api.delete(`/messages/${messageId}/unpin`, {
       params: { conversationId },
     });
+  },
+  async fetchReminders(conversationId: number): Promise<Reminder[]> {
+    const res = await api.get(`/reminders/conversation/${conversationId}`);
+    return res.data;
+  },
+  async createReminder(payload: ReminderRequest): Promise<Reminder> {
+    const res = await api.post("/reminders", payload);
+    return res.data;
+  },
+  async deleteReminder(reminderId: string | number): Promise<void> {
+    await api.delete(`/reminders/${reminderId}`);
+  },
+  async joinReminder(reminderId: string): Promise<Reminder> {
+    const res = await api.post(`/reminders/${reminderId}/join`);
+    return res.data;
+  },
+  async declineReminder(reminderId: string): Promise<Reminder> {
+    const res = await api.post(`/reminders/${reminderId}/decline`);
+    return res.data;
   },
 };

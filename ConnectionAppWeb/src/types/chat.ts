@@ -63,6 +63,7 @@ export interface Message {
   recalledAt: string | null;
   replyInfo: ReplyInfo | null;
   poll: Poll | null;
+  reminder?: Reminder | null;
   reactions?: MessageReaction[];
   isOwn?: boolean; // computed on frontend
 }
@@ -133,6 +134,46 @@ export interface PollRequest {
 
 export interface PollOptionRequest {
   text: string;
+}
+
+export interface PollResponse {
+  id: string;
+  question: string;
+  options: PollOptionResponse[];
+  multiChoice: boolean;
+  allowAddOptions: boolean;
+  isAnonymous: boolean;
+  expiredAt: string | null;
+  closed: boolean;
+}
+
+export interface PollOptionResponse {
+  id: string;
+  text: string;
+  voterIds: number[];
+}
+
+export interface ReminderRequest {
+  title: string;
+  content?: string;
+  reminderTime: string;
+  conversationId: number;
+}
+
+export interface Reminder {
+  id: string;
+  title: string;
+  content?: string;
+  reminderTime: string;
+  isNotified: boolean;
+  notified?: boolean;
+  conversationId: number;
+  creatorId: number;
+  creatorName: string;
+  createdAt: string;
+  participantIds?: number[];
+  declinedIds?: number[];
+  messageId?: string;
 }
 
 /**
