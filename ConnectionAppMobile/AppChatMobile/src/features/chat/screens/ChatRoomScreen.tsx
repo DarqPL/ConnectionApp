@@ -157,40 +157,17 @@ const ChatRoomScreen = ({ route }: any) => {
   }, [currentConversation]);
 
   useEffect(() => {
-    if (!currentConversation?.pinnedMessageIds) {
+    if (
+      !currentConversation?.pinnedMessages ||
+      currentConversation.pinnedMessages.length === 0
+    ) {
       setPinnedMessages([]);
       return;
     }
 
-    const ids = currentConversation.pinnedMessageIds
-      .split(",")
-      .filter((id) => id.trim().length > 0);
-    if (ids.length === 0) {
-      setPinnedMessages([]);
-      return;
-    }
-
-    const fetchPinned = async () => {
-      try {
-        const results = await Promise.all(
-          ids.map(async (id) => {
-            const existing = currentMessages.find((m) => m.id === id);
-            if (existing) return existing;
-            try {
-              return await chatService.getMessage(id);
-            } catch (e) {
-              return null;
-            }
-          }),
-        );
-        setPinnedMessages(results.filter((m): m is Message => m !== null));
-      } catch (error) {
-        console.error("[ChatRoom] Error fetching pinned messages:", error);
-      }
-    };
-
-    fetchPinned();
-  }, [currentConversation?.pinnedMessageIds, currentMessages]);
+    // pinnedMessages already contains full message objects from backend
+    setPinnedMessages(currentConversation.pinnedMessages);
+  }, [currentConversation?.pinnedMessages]);
 
   const activePollMessage = React.useMemo(() => {
     if (!pollToVote) return null;
@@ -588,10 +565,8 @@ const ChatRoomScreen = ({ route }: any) => {
     const target = actionSheetMessage;
     const isOwnMessage = target.senderInfo?.senderId === user?.id;
     const currentConv = conversations.find((c) => c.id === conversationId);
-    const pinnedIds = currentConv?.pinnedMessageIds
-      ? currentConv.pinnedMessageIds.split(",")
-      : [];
-    const isPinned = pinnedIds.includes(target.id);
+    const isPinned =
+      currentConv?.pinnedMessages?.some((msg) => msg.id === target.id) ?? false;
 
     closeActionSheet();
 
@@ -644,11 +619,14 @@ const ChatRoomScreen = ({ route }: any) => {
   const actionSheetPinned = (() => {
     if (!actionSheetMessage) return false;
     const currentConv = conversations.find((c) => c.id === conversationId);
-    const pinnedIds = currentConv?.pinnedMessageIds
-      ? currentConv.pinnedMessageIds.split(",")
-      : [];
-    return pinnedIds.includes(actionSheetMessage.id);
+    return (
+      currentConv?.pinnedMessages?.some(
+        (msg) => msg.id === actionSheetMessage.id,
+      ) ?? false
+    );
   })();
+  const firstPinnedMessage = pinnedMessages[0] ?? null;
+  const morePinnedCount = Math.max(pinnedMessages.length - 1, 0);
 
   if (isLoading && displayMessages.length === 0) {
     return (
@@ -715,30 +693,40 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
-        {pinnedMessages.length > 0 && (
+        {firstPinnedMessage && (
           <TouchableOpacity
             style={styles.pinnedBanner}
-            onPress={() => handleScrollToParent(pinnedMessages[0].id)}
+            onPress={() => handleScrollToParent(firstPinnedMessage.id)}
             activeOpacity={0.8}
           >
-            <View style={styles.pinnedIcon}>
-              <Ionicons name="pin" size={18} color={COLORS.primary} />
+            <View style={styles.pinnedIconWrap}>
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={20}
+                color="#3b82f6"
+              />
             </View>
+
             <View style={styles.pinnedContent}>
-              <Text style={styles.pinnedLabel}>Tin nhắn đã ghim</Text>
               <Text style={styles.pinnedText} numberOfLines={1}>
-                {pinnedMessages[0].content ||
-                  (pinnedMessages[0].attachments?.length
+                {firstPinnedMessage.content ||
+                  (firstPinnedMessage.attachments?.length
                     ? "Tệp đính kèm"
                     : "Tin nhắn bình chọn")}
               </Text>
+              <Text style={styles.pinnedMeta} numberOfLines={1}>
+                {`Tin nhắn của ${firstPinnedMessage.senderInfo?.displayName ?? "Thành viên"}`}
+              </Text>
             </View>
-            <TouchableOpacity
-              style={styles.unpinBannerBtn}
-              onPress={() => unpinMessage(conversationId, pinnedMessages[0].id)}
-            >
-              <Ionicons name="close" size={20} color="#666" />
-            </TouchableOpacity>
+
+            {morePinnedCount > 0 && (
+              <View style={styles.pinnedCountChip}>
+                <Text
+                  style={styles.pinnedCountText}
+                >{`+${morePinnedCount}`}</Text>
+                <Ionicons name="chevron-down" size={16} color="#6b7280" />
+              </View>
+            )}
           </TouchableOpacity>
         )}
 
@@ -1045,7 +1033,7 @@ const ChatRoomScreen = ({ route }: any) => {
               const check =
                 !!user &&
                 Number(activePollMessage.senderInfo?.senderId) ===
-                Number(user?.id);
+                  Number(user?.id);
               console.log("[ChatRoom] Creator check:", {
                 senderId: activePollMessage.senderInfo?.senderId,
                 userId: user?.id,
@@ -1184,32 +1172,54 @@ const styles = StyleSheet.create({
   },
   pinnedBanner: {
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 14,
+    marginHorizontal: 8,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: "row",
     alignItems: "center",
     zIndex: 10,
   },
-  pinnedIcon: {
+  pinnedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#eff6ff",
     marginRight: 10,
   },
   pinnedContent: {
     flex: 1,
   },
-  pinnedLabel: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: "bold",
-    marginBottom: 2,
-  },
   pinnedText: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: "600",
     color: COLORS.text,
   },
-  unpinBannerBtn: {
-    padding: 5,
+  pinnedMeta: {
+    marginTop: 2,
+    fontSize: 11,
+    color: "#6b7280",
+  },
+  pinnedCountChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#9ca3af",
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    height: 36,
+    marginLeft: 8,
+    gap: 2,
+  },
+  pinnedCountText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4b5563",
   },
   actionSheetOverlay: {
     flex: 1,
