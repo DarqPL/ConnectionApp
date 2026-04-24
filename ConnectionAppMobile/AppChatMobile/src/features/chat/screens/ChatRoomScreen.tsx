@@ -223,7 +223,6 @@ const ChatRoomScreen = ({ route }: any) => {
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
-  const [isReminderCreatorOpen, setIsReminderCreatorOpen] = React.useState(false);
   const [reminderToEdit, setReminderToEdit] = React.useState<Message | null>(null);
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
 
@@ -1270,7 +1269,6 @@ const ChatRoomScreen = ({ route }: any) => {
                 recalledAt={item.recalledAt}
                 replyInfo={item.replyInfo}
                 isGroup={isGroup}
-                participants={currentParticipants}
                 onLongPress={() => handleMessageLongPress(item)}
                 onReplyPreviewPress={
                   item.replyInfo?.parentId
@@ -1330,7 +1328,6 @@ const ChatRoomScreen = ({ route }: any) => {
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
               onOpenPollCreator={() => setIsPollCreatorOpen(true)}
-              onOpenReminderCreator={() => setIsReminderCreatorOpen(true)}
             />
           </>
         ) : (
@@ -1529,11 +1526,8 @@ const ChatRoomScreen = ({ route }: any) => {
         />
 
         <ReminderCreatorModal
-          visible={isReminderCreatorOpen || !!reminderToEdit}
-          onClose={() => {
-            setIsReminderCreatorOpen(false);
-            setReminderToEdit(null);
-          }}
+          visible={!!reminderToEdit}
+          onClose={() => setReminderToEdit(null)}
           conversationId={conversationId}
           initialData={
             reminderToEdit?.reminder

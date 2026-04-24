@@ -40,7 +40,7 @@ const ReminderBanner = ({ conversationId }: ReminderBannerProps) => {
     fetchReminders();
 
     if (client && client.connected && user) {
-      const subReminders = client.subscribe(`/topic/user.${user.id}/reminders`, (message) => {
+      const subscription = client.subscribe(`/topic/user.${user.id}/reminders`, (message) => {
         const updatedReminder = JSON.parse(message.body);
         setReminders(prev => {
           const exists = prev.some(r => r.id === updatedReminder.id);
@@ -52,29 +52,7 @@ const ReminderBanner = ({ conversationId }: ReminderBannerProps) => {
             .sort((a, b) => new Date(a.reminderTime).getTime() - new Date(b.reminderTime).getTime());
         });
       });
-
-      const subDeleted = client.subscribe(`/topic/user.${user.id}/reminder-deleted`, (message) => {
-        try {
-          let deletedId: string;
-          try {
-            deletedId = JSON.parse(message.body);
-          } catch {
-            deletedId = message.body;
-          }
-          
-          if (deletedId) {
-            const idStr = String(deletedId);
-            setReminders(prev => prev.filter(r => String(r.id) !== idStr));
-          }
-        } catch (error) {
-          console.error("Error processing banner reminder-deleted:", error);
-        }
-      });
-
-      return () => {
-        subReminders.unsubscribe();
-        subDeleted.unsubscribe();
-      };
+      return () => subscription.unsubscribe();
     }
 
     const interval = setInterval(fetchReminders, 60000);

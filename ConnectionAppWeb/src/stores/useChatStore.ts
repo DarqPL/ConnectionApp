@@ -548,29 +548,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   deleteMessage: async (conversationId, messageId) => {
     try {
       await chatService.deleteMessage(messageId);
-      get().removeMessage(conversationId, messageId);
+
+      set((state) => {
+        const prevItems = state.messages[conversationId]?.items ?? [];
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: {
+              ...state.messages[conversationId],
+              items: prevItems.filter((m) => m.id !== messageId),
+            },
+          },
+        };
+      });
     } catch (error) {
       console.error("Error deleting message:", error);
       throw error;
     }
-  },
-
-  removeMessage: (conversationId, messageId) => {
-    set((state) => {
-      const prevItems = state.messages[conversationId]?.items ?? [];
-      const idStr = String(messageId);
-      if (!prevItems.some((m) => String(m.id) === idStr)) return state;
-
-      return {
-        messages: {
-          ...state.messages,
-          [conversationId]: {
-            ...state.messages[conversationId],
-            items: prevItems.filter((m) => String(m.id) !== idStr),
-          },
-        },
-      };
-    });
   },
 
   addConvo: (convo) => {

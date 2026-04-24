@@ -38,7 +38,6 @@ interface ChatInputProps {
   replyTo?: Message | null;
   onCancelReply?: () => void;
   onOpenPollCreator?: () => void;
-  onOpenReminderCreator?: () => void;
 }
 
 const MAX_FILES = 5;
@@ -85,7 +84,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   replyTo = null,
   onCancelReply,
   onOpenPollCreator,
-  onOpenReminderCreator,
 }) => {
   const { notifyTyping, notifyStoppedTyping } = useChat();
   const [text, setText] = useState("");
@@ -490,20 +488,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
             >
               <Ionicons
                 name="stats-chart-outline"
-                size={22}
-                color={COLORS.textMuted}
-              />
-            </TouchableOpacity>
-          )}
-
-          {onOpenReminderCreator && (
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={onOpenReminderCreator}
-              disabled={isSending || disabled}
-            >
-              <Ionicons
-                name="alarm-outline"
                 size={22}
                 color={COLORS.textMuted}
               />

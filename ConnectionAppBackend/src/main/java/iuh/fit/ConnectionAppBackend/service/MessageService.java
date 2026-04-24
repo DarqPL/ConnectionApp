@@ -827,7 +827,6 @@ public class MessageService {
                 .participantIds(info.getParticipantIds())
                 .declinedIds(info.getDeclinedIds())
                 .createdAt(createdAt)
-                .reminderGroupId(info.getReminderGroupId())
                 .build();
     }
 

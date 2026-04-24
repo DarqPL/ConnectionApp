@@ -18,7 +18,7 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import PollMessage from "./PollMessage";
 import ReminderMessage from "./ReminderMessage";
-import type { Attachment, ReplyInfo, Poll, MessageReaction, Reminder, Participant } from "../types";
+import type { Attachment, ReplyInfo, Poll, MessageReaction, Reminder } from "../types";
 import {
   detectEmailInMessage,
   isValidEmailFormat,
@@ -50,7 +50,6 @@ interface Props {
   isHighlighted?: boolean;
   reactions?: MessageReaction[];
   currentUserId?: number;
-  participants?: Participant[];
   onReact?: (reactionCode: string | null) => void;
   onReminderEdit?: () => void;
 }
@@ -137,7 +136,6 @@ const MessageBubble: React.FC<Props> = ({
   messageId,
   reactions = [],
   currentUserId,
-  participants = [],
   onReact,
   onReminderEdit,
 }) => {
@@ -734,11 +732,9 @@ const MessageBubble: React.FC<Props> = ({
                     conversationId={reminder.conversationId}
                     reminder={reminder}
                     currentUserId={currentUserId ?? 0}
-                    participants={participants}
                     onEdit={onReminderEdit}
                   />
                 )}
-
 
                 {/* Business card — shown when message contains a known email */}
                 {!isRecalled && emailUser && detectedEmail && (

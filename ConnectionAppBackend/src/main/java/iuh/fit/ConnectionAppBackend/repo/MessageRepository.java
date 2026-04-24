@@ -85,7 +85,4 @@ public interface MessageRepository extends MongoRepository<Message, String> {
      */
     @Query("{ 'conversationId': ?0, 'reminder.title': ?1 }")
     List<Message> findByConversationIdAndReminderTitle(Long conversationId, String title);
-
-    @Query("{ 'conversationId': ?0, 'reminder.reminderGroupId': ?1 }")
-    List<Message> findByConversationIdAndReminderReminderGroupId(Long conversationId, String groupId);
 }

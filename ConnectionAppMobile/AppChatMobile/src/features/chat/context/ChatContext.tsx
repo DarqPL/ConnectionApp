@@ -42,7 +42,6 @@ interface ChatContextType {
   updateMessage: (updatedMsg: Message) => void;
   recallMessage: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
-  deleteReminder: (messageId: string) => Promise<void>;
   pinMessage: (conversationId: number, messageId: string) => Promise<void>;
   unpinMessage: (conversationId: number, messageId: string) => Promise<void>;
   removeMemberFromGroup: (
@@ -633,30 +632,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const onReminderDeleted = useCallback((messageId: string) => {
-    console.log("[ChatContext] Reminder deleted:", messageId);
-    setCurrentMessages((prev) => {
-      // Find the message to be deleted to see if it belongs to a group
-      const target = prev.find((m) => m.id === messageId);
-      const groupId = target?.reminder?.reminderGroupId;
-
-      if (groupId) {
-        // Remove ALL messages sharing this reminderGroupId
-        return prev.filter(
-          (m) => m.id !== messageId && m.reminder?.reminderGroupId !== groupId,
-        );
-      }
-
-      // Fallback: just remove the single message
-      return prev.filter((m) => m.id !== messageId);
-    });
-  }, []);
-
-  const onReminderTriggered = useCallback((payload: any) => {
-    console.log("[ChatContext] Reminder triggered:", payload);
-    Alert.alert("ĐẾN GIỜ: " + payload.title, payload.content || "Bạn có một lịch hẹn ngay bây giờ!");
-  }, []);
-
   const onSecurityNotification = useCallback(
     (payload: {
       type?: string;
@@ -736,8 +711,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       onUserStoppedTyping,
       onSecurityNotification,
       onConversationUpdate,
-      onReminderDeleted,
-      onReminderTriggered,
       onConnectionError: (socketError) => {
         if (appStateRef.current !== "active") {
           console.log("[ChatContext] Ignored socket error while app inactive.");
@@ -779,8 +752,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         onUserStoppedTyping,
         onSecurityNotification,
         onConversationUpdate,
-        onReminderDeleted,
-        onReminderTriggered,
         onConnectionError: (socketError) => {
           if (appStateRef.current === "active") {
             setError(socketError);
@@ -798,8 +769,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     onUserStoppedTyping,
     onSecurityNotification,
     onConversationUpdate,
-    onReminderDeleted,
-    onReminderTriggered,
   ]);
 
   // ─── Regular methods ───────────────────────────────────────────────────────
@@ -1062,20 +1031,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       throw err;
     }
   }, []);
-
-  const deleteReminder = useCallback(async (messageId: string) => {
-    setError(null);
-    try {
-      // Optimistic delete: trigger the group deletion logic locally
-      onReminderDeleted(messageId);
-      await chatService.deleteReminder(messageId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Xóa nhắc hẹn thất bại";
-      setError(msg);
-      // Optional: we could refetch messages here to restore the card if delete failed
-      throw err;
-    }
-  }, [onReminderDeleted]);
 
   const setCurrentConversation = useCallback(
     (conversationId: number | null, sourceConversationId?: number) => {
@@ -1354,7 +1309,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     updateMessage,
     recallMessage,
     deleteMessage,
-    deleteReminder,
     pinMessage,
     unpinMessage,
     removeMemberFromGroup,

@@ -47,8 +47,7 @@
         {
           "launchMode": "most-recent"
         }
-      ],
-      "@react-native-community/datetimepicker"
+      ]
     ],
     "extra": {
       "maxUploadFileSizeBytes": 2097152,

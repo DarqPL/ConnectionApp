@@ -128,32 +128,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
         // Subscribe to reminder deletion — remove the card from chat for all members
         client.subscribe(`/topic/user.${userId}/reminder-deleted`, (message) => {
-          try {
-            // Handle both raw strings and JSON-quoted strings
-            let deletedMessageId: string;
-            try {
-              deletedMessageId = JSON.parse(message.body);
-            } catch {
-              deletedMessageId = message.body;
+          const deletedMessageId: string = JSON.parse(message.body);
+          // Find which conversation this message belongs to and remove it
+          const state = useChatStore.getState();
+          const allMessages = state.messages;
+          for (const convoId in allMessages) {
+            const items = allMessages[convoId]?.items ?? [];
+            const found = items.some((m) => m.id === deletedMessageId);
+            if (found) {
+              useChatStore.setState((s) => ({
+                messages: {
+                  ...s.messages,
+                  [convoId]: {
+                    ...s.messages[convoId],
+                    items: s.messages[convoId].items.filter((m) => m.id !== deletedMessageId),
+                  },
+                },
+              }));
+              break;
             }
-
-            if (!deletedMessageId) return;
-
-            // Find which conversation this message belongs to and remove it
-            const state = useChatStore.getState();
-            const allMessages = state.messages;
-            
-            for (const convoIdStr in allMessages) {
-              const convoId = Number(convoIdStr);
-              const items = allMessages[convoId]?.items ?? [];
-              const found = items.some((m) => String(m.id) === String(deletedMessageId));
-              if (found) {
-                state.removeMessage(convoId, String(deletedMessageId));
-                break;
-              }
-            }
-          } catch (error) {
-            console.error("Error processing reminder-deleted message:", error);
           }
         });
 
