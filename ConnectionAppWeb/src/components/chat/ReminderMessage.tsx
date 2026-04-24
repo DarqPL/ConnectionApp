@@ -5,8 +5,9 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import ReminderCreator from "./ReminderCreator";
+import UserAvatar from "./UserAvatar";
 import type { ReminderRequest } from "@/types/chat";
 
 interface ReminderMessageProps {
@@ -27,7 +28,7 @@ interface ReminderMessageProps {
 
 const ReminderMessage = ({ messageId, conversationId, reminder }: ReminderMessageProps) => {
   const { user } = useAuthStore();
-  const { deleteReminder, createReminder } = useChatStore();
+  const { deleteReminder, createReminder, conversations } = useChatStore();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isLoading, setIsLoading] = useState<"join" | "decline" | null>(null);
 
@@ -40,6 +41,22 @@ const ReminderMessage = ({ messageId, conversationId, reminder }: ReminderMessag
 
   const reminderDate = new Date(reminder.reminderTime);
   const isNotified = reminder.isNotified || reminder.notified;
+
+  const currentConvo = useMemo(() => 
+    conversations.find(c => c.id === conversationId),
+  [conversations, conversationId]);
+
+  const joinedUsers = useMemo(() => {
+    return participantIds.map(id => 
+      currentConvo?.participants.find(p => p.userId === id)
+    ).filter(Boolean);
+  }, [participantIds, currentConvo]);
+
+  const declinedUsers = useMemo(() => {
+    return declinedIds.map(id => 
+      currentConvo?.participants.find(p => p.userId === id)
+    ).filter(Boolean);
+  }, [declinedIds, currentConvo]);
 
   const handleJoin = async () => {
     if (isJoined || isLoading) return;
@@ -150,7 +167,7 @@ const ReminderMessage = ({ messageId, conversationId, reminder }: ReminderMessag
           </div>
 
           {/* Action Buttons - Join / Decline */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-4">
             <Button
               onClick={handleJoin}
               disabled={isLoading !== null}
@@ -189,6 +206,55 @@ const ReminderMessage = ({ messageId, conversationId, reminder }: ReminderMessag
               {isDeclined ? "Đã từ chối" : "Từ chối"}
             </Button>
           </div>
+
+          {/* Participant Lists */}
+          {(joinedUsers.length > 0 || declinedUsers.length > 0) && (
+            <div className="space-y-4 border-t border-border/40 pt-4 animate-in slide-in-from-top-2 duration-300">
+              {joinedUsers.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-primary uppercase mb-2 flex items-center gap-1.5">
+                    <Check className="size-3" />
+                    Đã xác nhận ({joinedUsers.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {joinedUsers.map((u: any) => (
+                      <div key={u.userId} className="flex items-center gap-1.5 bg-primary/5 border border-primary/10 rounded-full pl-1 pr-2 py-0.5" title={u.displayName}>
+                        <UserAvatar 
+                          type="chat" 
+                          name={u.displayName} 
+                          avatarUrl={u.avatarUrl} 
+                          className="size-5 text-[8px]" 
+                        />
+                        <span className="text-[10px] font-medium max-w-[80px] truncate">{u.displayName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {declinedUsers.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-destructive uppercase mb-2 flex items-center gap-1.5">
+                    <X className="size-3" />
+                    Đã từ chối ({declinedUsers.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {declinedUsers.map((u: any) => (
+                      <div key={u.userId} className="flex items-center gap-1.5 bg-destructive/5 border border-destructive/10 rounded-full pl-1 pr-2 py-0.5" title={u.displayName}>
+                        <UserAvatar 
+                          type="chat" 
+                          name={u.displayName} 
+                          avatarUrl={u.avatarUrl} 
+                          className="size-5 text-[8px]" 
+                        />
+                        <span className="text-[10px] font-medium max-w-[80px] truncate">{u.displayName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

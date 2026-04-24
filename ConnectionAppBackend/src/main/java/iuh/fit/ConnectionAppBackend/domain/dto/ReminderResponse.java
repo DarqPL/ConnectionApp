@@ -24,4 +24,5 @@ public class ReminderResponse {
     private List<Long> participantIds;
     private List<Long> declinedIds;
     private LocalDateTime createdAt;
+    private String reminderGroupId;
 }

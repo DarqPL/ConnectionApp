@@ -11,6 +11,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { COLORS } from "../../../theme";
 import { chatService } from "../services/chat.service";
 
@@ -38,6 +39,8 @@ const ReminderCreatorModal: React.FC<ReminderCreatorModalProps> = ({
   const [content, setContent] = useState("");
   const [date, setDate] = useState(""); // YYYY-MM-DD
   const [time, setTime] = useState(""); // HH:mm
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -60,6 +63,37 @@ const ReminderCreatorModal: React.FC<ReminderCreatorModalProps> = ({
       }
     }
   }, [visible, initialData]);
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setDate(
+        `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`
+      );
+    }
+  };
+
+  const onTimeChange = (event: any, selectedTime?: Date) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      setTime(`${pad(selectedTime.getHours())}:${pad(selectedTime.getMinutes())}`);
+    }
+  };
+
+  const getDatePickerValue = () => {
+    if (!date) return new Date();
+    const [y, m, d] = date.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const getTimePickerValue = () => {
+    const d = getDatePickerValue();
+    if (!time) return d;
+    const [h, min] = time.split(":").map(Number);
+    d.setHours(h);
+    d.setMinutes(min);
+    return d;
+  };
 
   const handleSave = async () => {
     if (!title.trim() || !date || !time) {
@@ -131,35 +165,86 @@ const ReminderCreatorModal: React.FC<ReminderCreatorModalProps> = ({
             {/* Date & Time row */}
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Ngày nhắc *</Text>
-                <View style={styles.inputWithIcon}>
-                  <Ionicons name="calendar-outline" size={16} color={COLORS.primary} style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, styles.inputFlex, { paddingLeft: 36 }]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9ca3af"
-                    value={date}
-                    onChangeText={setDate}
-                    keyboardType="numeric"
-                    maxLength={10}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setShowDatePicker(true)}
+                  style={styles.inputWithIcon}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={COLORS.primary}
+                    style={styles.inputIcon}
                   />
-                </View>
+                  <View
+                    style={[
+                      styles.input,
+                      styles.inputFlex,
+                      { paddingLeft: 36, justifyContent: "center" },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        color: date ? "#111827" : "#9ca3af",
+                      }}
+                    >
+                      {date || "YYYY-MM-DD"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={getDatePickerValue()}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={onDateChange}
+                    minimumDate={new Date()}
+                  />
+                )}
               </View>
               <View style={{ width: 12 }} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Giờ nhắc *</Text>
-                <View style={styles.inputWithIcon}>
-                  <Ionicons name="time-outline" size={16} color="#f59e0b" style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, styles.inputFlex, { paddingLeft: 36 }]}
-                    placeholder="HH:MM"
-                    placeholderTextColor="#9ca3af"
-                    value={time}
-                    onChangeText={setTime}
-                    keyboardType="numeric"
-                    maxLength={5}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setShowTimePicker(true)}
+                  style={styles.inputWithIcon}
+                >
+                  <Ionicons
+                    name="time-outline"
+                    size={16}
+                    color="#f59e0b"
+                    style={styles.inputIcon}
                   />
-                </View>
+                  <View
+                    style={[
+                      styles.input,
+                      styles.inputFlex,
+                      { paddingLeft: 36, justifyContent: "center" },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        color: time ? "#111827" : "#9ca3af",
+                      }}
+                    >
+                      {time || "HH:MM"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={getTimePickerValue()}
+                    mode="time"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    is24Hour={true}
+                    onChange={onTimeChange}
+                  />
+                )}
               </View>
             </View>
 
