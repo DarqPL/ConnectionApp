@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,6 +52,13 @@ public class ReminderService {
         User creator = userRepository.findById(creatorId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        // Enforce only one active reminder per conversation
+        List<Message> existingReminders = messageRepository.findByConversationIdAndReminderNotNull(request.getConversationId());
+        for (Message m : existingReminders) {
+            messageRepository.delete(m);
+            notifyMembers(request.getConversationId(), "/reminder-deleted", m.getId());
+        }
+
         ReminderInfo reminderInfo = ReminderInfo.builder()
                 .title(request.getTitle())
                 .content(request.getContent())
@@ -59,6 +67,7 @@ public class ReminderService {
                 .creatorId(creator.getId())
                 .creatorName(creator.getDisplayName())
                 .participantIds(new ArrayList<>())
+                .reminderGroupId(UUID.randomUUID().toString())
                 .build();
 
         SenderInfo senderInfo = SenderInfo.builder()
@@ -108,13 +117,17 @@ public class ReminderService {
             throw new RuntimeException("Only creator can delete reminder");
         }
 
-        String reminderTitle = message.getReminder().getTitle();
+        String groupId = message.getReminder().getReminderGroupId();
         Long conversationId = message.getConversationId();
 
-        // Find ALL messages sharing this reminder title in the conversation
-        // (original + any notification re-display messages sent at trigger time)
-        List<Message> allRelatedMessages = messageRepository
-                .findByConversationIdAndReminderTitle(conversationId, reminderTitle);
+        // Find ALL messages sharing this reminder group ID in the conversation
+        List<Message> allRelatedMessages;
+        if (groupId != null) {
+            allRelatedMessages = messageRepository.findByConversationIdAndReminderReminderGroupId(conversationId, groupId);
+        } else {
+            // Fallback for legacy reminders without groupId
+            allRelatedMessages = messageRepository.findByConversationIdAndReminderTitle(conversationId, message.getReminder().getTitle());
+        }
 
         for (Message related : allRelatedMessages) {
             messageRepository.delete(related);
@@ -136,23 +149,35 @@ public class ReminderService {
     }
 
     private void sendReminderNotification(Message message) {
-        ReminderResponse response = mapToResponse(message);
-        // Toast notification via personal topic
-        notifyMembers(message.getConversationId(), "/reminder-trigger", response);
-
         ReminderInfo originalInfo = message.getReminder();
+        Long conversationId = message.getConversationId();
+        String groupId = originalInfo.getReminderGroupId();
 
-        // Build a copy of the reminder with notified=true so the scheduler
-        // does NOT pick up this notification message again on the next run.
+        // 1. Delete all old messages for this reminder to satisfy "only 1 in list" 
+        // and "don't bloat Mongo with notification copies"
+        List<Message> oldMessages;
+        if (groupId != null) {
+            oldMessages = messageRepository.findByConversationIdAndReminderReminderGroupId(conversationId, groupId);
+        } else {
+            oldMessages = messageRepository.findByConversationIdAndReminderTitle(conversationId, originalInfo.getTitle());
+        }
+
+        for (Message old : oldMessages) {
+            messageRepository.delete(old);
+            notifyMembers(conversationId, "/reminder-deleted", old.getId());
+        }
+
+        // 2. Prepare new notification message
         ReminderInfo notifiedCopy = ReminderInfo.builder()
                 .title(originalInfo.getTitle())
                 .content(originalInfo.getContent())
                 .reminderTime(originalInfo.getReminderTime())
-                .notified(true)   // <-- critical: prevents re-trigger
+                .notified(true)
                 .creatorId(originalInfo.getCreatorId())
                 .creatorName(originalInfo.getCreatorName())
                 .participantIds(originalInfo.getParticipantIds())
                 .declinedIds(originalInfo.getDeclinedIds())
+                .reminderGroupId(groupId)
                 .build();
 
         SenderInfo systemSender = SenderInfo.builder()
@@ -161,16 +186,24 @@ public class ReminderService {
                 .build();
 
         Message notificationMsg = Message.builder()
-                .conversationId(message.getConversationId())
+                .conversationId(conversationId)
                 .senderInfo(systemSender)
                 .content("🔔 ĐẾN GIỜ: " + originalInfo.getTitle())
-                .reminder(notifiedCopy)   // use the notified=true copy
+                .reminder(notifiedCopy)
                 .isDeleted(false)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         Message saved = messageRepository.save(notificationMsg);
-        notifyMembers(message.getConversationId(), "", messageService.mapToMessageResponse(saved));
+        
+        // Broadcast to main chat to show at bottom
+        notifyMembers(conversationId, "", messageService.mapToMessageResponse(saved));
+        
+        // Broadcast to /reminders topic to update sidebar list
+        notifyMembers(conversationId, "/reminders", mapToResponse(saved));
+        
+        // Also send trigger toast
+        notifyMembers(conversationId, "/reminder-trigger", mapToResponse(saved));
     }
 
     private void notifyMembers(Long conversationId, String suffix, Object payload) {
@@ -193,6 +226,7 @@ public class ReminderService {
                 .creatorName(info.getCreatorName())
                 .participantIds(info.getParticipantIds())
                 .declinedIds(info.getDeclinedIds())
+                .reminderGroupId(info.getReminderGroupId())
                 .createdAt(message.getCreatedAt())
                 .build();
     }
@@ -211,13 +245,13 @@ public class ReminderService {
                     .notified(true)
                     .creatorId(message.getSenderInfo().getSenderId())
                     .creatorName(message.getSenderInfo().getDisplayName())
+                    .reminderGroupId(java.util.UUID.randomUUID().toString())
                     .build();
             message.setReminder(info);
         }
 
         List<Long> participants = info.getParticipantIds();
         if (participants == null) participants = new ArrayList<>();
-        // Remove from declined if switching
         List<Long> declined = info.getDeclinedIds();
         if (declined == null) declined = new ArrayList<>();
         declined.remove(userId);
@@ -227,13 +261,33 @@ public class ReminderService {
         }
         info.setParticipantIds(participants);
         info.setDeclinedIds(declined);
+
+        // Delete ALL old messages for this reminder chain and save as NEW message at the bottom
+        String groupId = info.getReminderGroupId();
+        Long conversationId = message.getConversationId();
+        
+        List<Message> oldMessages;
+        if (groupId != null) {
+            oldMessages = messageRepository.findByConversationIdAndReminderReminderGroupId(conversationId, groupId);
+        } else {
+            oldMessages = messageRepository.findByConversationIdAndReminderTitle(conversationId, info.getTitle());
+        }
+
+        for (Message old : oldMessages) {
+            messageRepository.delete(old);
+            notifyMembers(conversationId, "/reminder-deleted", old.getId());
+        }
+
+        // Save as NEW message to re-display at bottom
+        message.setId(null); 
+        message.setCreatedAt(LocalDateTime.now());
         Message saved = messageRepository.save(message);
 
-        // Broadcast updated message card to all members (updates in-place via addMessage dedup)
-        notifyMembers(message.getConversationId(), "", messageService.mapToMessageResponse(saved));
+        // Broadcast new message card
+        notifyMembers(conversationId, "", messageService.mapToMessageResponse(saved));
 
         ReminderResponse response = mapToResponse(saved);
-        notifyMembers(message.getConversationId(), "/reminders", response);
+        notifyMembers(conversationId, "/reminders", response);
         return response;
     }
 
@@ -251,13 +305,13 @@ public class ReminderService {
                     .notified(true)
                     .creatorId(message.getSenderInfo().getSenderId())
                     .creatorName(message.getSenderInfo().getDisplayName())
+                    .reminderGroupId(java.util.UUID.randomUUID().toString())
                     .build();
             message.setReminder(info);
         }
 
         List<Long> declined = info.getDeclinedIds();
         if (declined == null) declined = new ArrayList<>();
-        // Remove from participants if switching
         List<Long> participants = info.getParticipantIds();
         if (participants == null) participants = new ArrayList<>();
         participants.remove(userId);
@@ -267,13 +321,33 @@ public class ReminderService {
         }
         info.setDeclinedIds(declined);
         info.setParticipantIds(participants);
+
+        // Delete ALL old messages and re-display at bottom
+        String groupId = info.getReminderGroupId();
+        Long conversationId = message.getConversationId();
+        
+        List<Message> oldMessages;
+        if (groupId != null) {
+            oldMessages = messageRepository.findByConversationIdAndReminderReminderGroupId(conversationId, groupId);
+        } else {
+            oldMessages = messageRepository.findByConversationIdAndReminderTitle(conversationId, info.getTitle());
+        }
+
+        for (Message old : oldMessages) {
+            messageRepository.delete(old);
+            notifyMembers(conversationId, "/reminder-deleted", old.getId());
+        }
+
+        // Save as NEW message
+        message.setId(null);
+        message.setCreatedAt(LocalDateTime.now());
         Message saved = messageRepository.save(message);
 
-        // Broadcast updated message card
-        notifyMembers(message.getConversationId(), "", messageService.mapToMessageResponse(saved));
+        // Broadcast new message card
+        notifyMembers(conversationId, "", messageService.mapToMessageResponse(saved));
 
         ReminderResponse response = mapToResponse(saved);
-        notifyMembers(message.getConversationId(), "/reminders", response);
+        notifyMembers(conversationId, "/reminders", response);
         return response;
     }
 }

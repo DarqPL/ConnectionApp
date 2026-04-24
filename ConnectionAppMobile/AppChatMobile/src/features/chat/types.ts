@@ -85,6 +85,7 @@ export interface Reminder {
   createdAt?: string;
   participantIds?: number[];
   declinedIds?: number[];
+  reminderGroupId?: string;
 }
 
 export interface ReminderRequest {

@@ -568,6 +568,73 @@ export class ChatService {
       throw await this.parseError(response, "Không thể bỏ ghim tin nhắn");
     }
   }
+
+  async fetchReminders(conversationId: number): Promise<any[]> {
+    const response = await authService.authFetch(`/reminders/conversation/${conversationId}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể tải danh sách nhắc hẹn");
+    }
+
+    return (await response.json()) as any[];
+  }
+
+  async joinReminder(messageId: string): Promise<any> {
+    const response = await authService.authFetch(`/reminders/${messageId}/join`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể tham gia nhắc hẹn");
+    }
+
+    return (await response.json()) as any;
+  }
+
+  async declineReminder(messageId: string): Promise<any> {
+    const response = await authService.authFetch(`/reminders/${messageId}/decline`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể từ chối nhắc hẹn");
+    }
+
+    return (await response.json()) as any;
+  }
+
+  async deleteReminder(messageId: string): Promise<void> {
+    const response = await authService.authFetch(`/reminders/${messageId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể xóa nhắc hẹn");
+    }
+  }
+
+  async createReminder(request: {
+    title: string;
+    content?: string;
+    reminderTime: string;
+    conversationId: number;
+  }): Promise<any> {
+    const response = await authService.authFetch("/reminders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể tạo nhắc hẹn");
+    }
+
+    return (await response.json()) as any;
+  }
 }
 
 export const chatService = new ChatService();
