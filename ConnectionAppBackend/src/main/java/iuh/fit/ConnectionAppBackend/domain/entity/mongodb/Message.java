@@ -18,6 +18,7 @@ import java.util.List;
 
 @Document(collection = "messages")
 @Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
