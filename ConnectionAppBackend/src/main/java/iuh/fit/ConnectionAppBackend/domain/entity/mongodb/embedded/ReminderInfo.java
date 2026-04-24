@@ -27,4 +27,5 @@ public class ReminderInfo {
 
     private Long creatorId;
     private String creatorName;
+    private String reminderGroupId;
 }

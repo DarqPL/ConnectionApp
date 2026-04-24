@@ -21,6 +21,8 @@ export interface ChatSocketHandlers {
     lockUntil?: string;
   }) => void;
   onConversationUpdate?: (payload: any) => void;
+  onReminderDeleted?: (messageId: string) => void;
+  onReminderTriggered?: (payload: any) => void;
   onConnectionError?: (error: string) => void;
 }
 
@@ -209,6 +211,39 @@ class ChatSocketService {
               this.handlersRef?.onConversationUpdate?.(payload);
             } catch (e) {
               console.error("[Socket] Failed to parse conversation update:", e);
+            }
+          },
+        );
+
+        client.subscribe(
+          `/topic/user.${userId}/reminder-deleted`,
+          (stompFrame) => {
+            try {
+              // Handle both raw strings and JSON strings
+              let deletedMessageId: string;
+              try {
+                deletedMessageId = JSON.parse(stompFrame.body);
+              } catch {
+                deletedMessageId = stompFrame.body;
+              }
+
+              if (deletedMessageId) {
+                this.handlersRef?.onReminderDeleted?.(deletedMessageId);
+              }
+            } catch (e) {
+              console.error("[Socket] Failed to parse reminder deletion:", e);
+            }
+          },
+        );
+
+        client.subscribe(
+          `/topic/user.${userId}/reminder-trigger`,
+          (stompFrame) => {
+            try {
+              const payload = JSON.parse(stompFrame.body);
+              this.handlersRef?.onReminderTriggered?.(payload);
+            } catch (e) {
+              console.error("[Socket] Failed to parse reminder trigger:", e);
             }
           },
         );

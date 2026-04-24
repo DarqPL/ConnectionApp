@@ -9,14 +9,17 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../theme";
-import type { Reminder } from "../types";
+import type { Reminder, Participant } from "../types";
 import { chatService } from "../services/chat.service";
+import { useChat } from "../context/ChatContext";
+import { Image } from "react-native";
 
 interface Props {
   messageId: string;
   conversationId: number;
   reminder: Reminder;
   currentUserId: number;
+  participants: Participant[];
   onEdit?: () => void;
 }
 
@@ -25,8 +28,10 @@ const ReminderMessage: React.FC<Props> = ({
   conversationId,
   reminder,
   currentUserId,
+  participants = [],
   onEdit,
 }) => {
+  const { deleteReminder } = useChat();
   const [isLoading, setIsLoading] = useState<"join" | "decline" | null>(null);
 
   const participantIds = reminder.participantIds ?? [];
@@ -35,6 +40,18 @@ const ReminderMessage: React.FC<Props> = ({
   const isDeclined = declinedIds.includes(currentUserId);
   const isCreator = reminder.creatorId === currentUserId;
   const participantCount = participantIds.length;
+
+  const joinedUsers = React.useMemo(() => {
+    return participantIds
+      .map((id) => participants.find((p) => p.userId === id))
+      .filter((p): p is Participant => !!p);
+  }, [participantIds, participants]);
+
+  const declinedUsers = React.useMemo(() => {
+    return declinedIds
+      .map((id) => participants.find((p) => p.userId === id))
+      .filter((p): p is Participant => !!p);
+  }, [declinedIds, participants]);
 
   const reminderDate = new Date(reminder.reminderTime);
   const dateStr = reminderDate.toLocaleDateString("vi-VN", {
@@ -71,6 +88,29 @@ const ReminderMessage: React.FC<Props> = ({
     }
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      "Xóa nhắc hẹn",
+      "Bạn có chắc muốn xóa nhắc hẹn này cho tất cả mọi người?",
+      [
+        { text: "Hủy", style: "cancel" },
+        { 
+          text: "Xóa", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteReminder(messageId);
+            } catch (e) {
+              Alert.alert("Lỗi", "Không thể xóa nhắc hẹn");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const FALLBACK = "https://i.pravatar.cc/150?img=5";
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -84,6 +124,45 @@ const ReminderMessage: React.FC<Props> = ({
           <Text style={styles.participantText}>{participantCount} tham gia</Text>
         </View>
       </View>
+
+      {/* Participant Lists (Always visible if not empty) */}
+      {(joinedUsers.length > 0 || declinedUsers.length > 0) && (
+        <View style={styles.membersExpand}>
+          {joinedUsers.length > 0 && (
+            <View style={styles.memberSection}>
+              <Text style={styles.sectionTitle}>Đã tham gia ({joinedUsers.length})</Text>
+              <View style={styles.avatarRow}>
+                {joinedUsers.map((u) => (
+                  <View key={`join-${u.userId}`} style={styles.avatarChip}>
+                    <Image 
+                      source={{ uri: u.avatarUrl || FALLBACK }} 
+                      style={styles.miniAvatar} 
+                    />
+                    <Text style={styles.chipName} numberOfLines={1}>{u.displayName}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {declinedUsers.length > 0 && (
+            <View style={styles.memberSection}>
+              <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Từ chối ({declinedUsers.length})</Text>
+              <View style={styles.avatarRow}>
+                {declinedUsers.map((u) => (
+                  <View key={`decline-${u.userId}`} style={styles.avatarChip}>
+                    <Image 
+                      source={{ uri: u.avatarUrl || FALLBACK }} 
+                      style={[styles.miniAvatar, { borderColor: "#fee2e2" }]} 
+                    />
+                    <Text style={[styles.chipName, { color: "#991b1b" }]} numberOfLines={1}>{u.displayName}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Body */}
       <View style={styles.body}>
@@ -137,10 +216,10 @@ const ReminderMessage: React.FC<Props> = ({
             />
             <Text style={[styles.btnText, isJoined && styles.btnTextJoined]}>
               {isLoading === "join"
-                ? "Đang xử lý..."
+                ? "..."
                 : isJoined
                 ? "Đã tham gia"
-                : "Tôi sẽ tham gia"}
+                : "Tôi tham gia"}
             </Text>
           </TouchableOpacity>
 
@@ -164,7 +243,7 @@ const ReminderMessage: React.FC<Props> = ({
               style={[styles.btnText, styles.btnTextDecline, isDeclined && styles.btnTextDeclinedActive]}
             >
               {isLoading === "decline"
-                ? "Đang xử lý..."
+                ? "..."
                 : isDeclined
                 ? "Đã từ chối"
                 : "Từ chối"}
@@ -176,17 +255,27 @@ const ReminderMessage: React.FC<Props> = ({
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={styles.footerCreator}>
-          Người tạo: <Text style={styles.footerCreatorName}>{reminder.creatorName}</Text>
+          Tạo bởi: <Text style={styles.footerCreatorName}>{reminder.creatorName}</Text>
         </Text>
-        {isCreator && onEdit && (
-          <TouchableOpacity onPress={onEdit}>
-            <Text style={styles.editBtn}>Chỉnh sửa</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.footerRight}>
+          {isCreator && (
+            <>
+              {onEdit && (
+                <TouchableOpacity onPress={onEdit} style={styles.footerActionBtn}>
+                  <Ionicons name="create-outline" size={14} color={COLORS.primary} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={handleDelete} style={styles.footerActionBtn}>
+                <Ionicons name="trash-outline" size={14} color="#ef4444" />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </View>
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -211,7 +300,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: `${COLORS.primary}20`,
   },
+  membersExpand: {
+    backgroundColor: "#f9fafb",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  memberSection: {
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#6b7280",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  avatarRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  miniAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: `${COLORS.primary}20`,
+  },
+  noMembersText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontStyle: "italic",
+    textAlign: "center",
+    paddingVertical: 4,
+  },
   headerLeft: {
+
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -352,6 +478,22 @@ const styles = StyleSheet.create({
   btnTextDeclinedActive: {
     color: "#ef4444",
   },
+  avatarChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f9fafb",
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
+    borderRadius: 16,
+    paddingRight: 8,
+    gap: 4,
+  },
+  chipName: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#4b5563",
+    maxWidth: 80,
+  },
   footer: {
     flexDirection: "row",
     alignItems: "center",
@@ -370,12 +512,13 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: "600",
   },
-  editBtn: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.primary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  footerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  footerActionBtn: {
+    padding: 4,
   },
 });
 

@@ -78,6 +78,7 @@ export interface ChatState {
   updateMessage: (message: Message) => void;
   recallMessage: (conversationId: number, messageId: string) => Promise<void>;
   deleteMessage: (conversationId: number, messageId: string) => Promise<void>;
+  removeMessage: (conversationId: number, messageId: string) => void;
   updateConversation: (
     conversation: Partial<Conversation> & { id: number },
   ) => void;
