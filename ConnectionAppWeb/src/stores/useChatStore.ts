@@ -739,13 +739,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
   
-  createReminder: async (request) => {
+  createReminder: async (request: ReminderRequest) => {
     try {
       const { activeConversationId } = get();
       const targetConvoId = request.conversationId || activeConversationId;
       if (!targetConvoId) return;
       
-      const response = await chatService.createReminder({
+      await chatService.createReminder({
         ...request,
         conversationId: targetConvoId
       });
@@ -762,14 +762,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       // Update: I'll manually add the reminder message if it's returned as a ReminderResponse 
       // but wait, createReminder returns ReminderResponse which has the messageId.
       // I'll fetch the messages again to be sure.
-      await get().fetchMessages(activeConversationId);
+      await get().fetchMessages(targetConvoId);
     } catch (error) {
       console.error("Error creating reminder:", error);
       throw error;
     }
   },
 
-  deleteReminder: async (messageId) => {
+  deleteReminder: async (messageId: string) => {
     try {
       const { activeConversationId } = get();
       if (!activeConversationId) return;

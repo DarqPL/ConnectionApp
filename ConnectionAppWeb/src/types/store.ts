@@ -4,6 +4,7 @@ import type {
   Message,
   Participant,
   PollRequest,
+  ReminderRequest,
 } from "./chat";
 import type { Friend, User } from "./user";
 
@@ -97,6 +98,8 @@ export interface ChatState {
     participantIds: number[],
   ) => Promise<void>;
   removeConversation: (conversationId: number) => void;
+  createReminder: (request: ReminderRequest) => Promise<void>;
+  deleteReminder: (messageId: string) => Promise<void>;
 }
 
 export interface TypingUser {
