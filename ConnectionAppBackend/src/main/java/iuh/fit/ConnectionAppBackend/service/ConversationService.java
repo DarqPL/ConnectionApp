@@ -19,7 +19,6 @@ import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -70,17 +69,8 @@ public class ConversationService {
      * Get all conversations for a user with pagination
      */
     public Page<ConversationResponse> getUserConversations(Long userId, Pageable pageable) {
-        List<Conversation> conversations = conversationRepository.findAllByUserId(userId);
-        
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), conversations.size());
-        List<Conversation> pageContent = conversations.subList(start, end);
-
-        List<ConversationResponse> responses = pageContent.stream()
-                .map(this::mapToConversationResponse)
-                .collect(Collectors.toList());
-
-        return new PageImpl<>(responses, pageable, conversations.size());
+        return conversationRepository.findAllByUserId(userId, pageable)
+                .map(this::mapToConversationResponse);
     }
 
     /**
@@ -515,12 +505,23 @@ public class ConversationService {
 
         List<MessageResponse> pinnedMessages = new ArrayList<>();
         if (StringUtils.hasText(conversation.getPinnedMessageIds())) {
-            String[] ids = conversation.getPinnedMessageIds().split(",");
-            for (String id : ids) {
-                messageRepository.findById(id).ifPresent(msg -> {
-                    pinnedMessages.add(messageService.mapToMessageResponse(msg));
-                });
-            }
+            List<String> pinnedIds = List.of(conversation.getPinnedMessageIds().split(",")).stream()
+                    .map(String::trim)
+                    .filter(StringUtils::hasText)
+                    .toList();
+
+            Map<String, iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message> pinnedMessagesById =
+                    messageRepository.findAllById(pinnedIds).stream()
+                            .collect(Collectors.toMap(
+                                    iuh.fit.ConnectionAppBackend.domain.entity.mongodb.Message::getId,
+                                    message -> message
+                            ));
+
+            pinnedMessages = pinnedIds.stream()
+                    .map(pinnedMessagesById::get)
+                    .filter(java.util.Objects::nonNull)
+                    .map(messageService::mapToMessageResponse)
+                    .collect(Collectors.toList());
         }
 
         return ConversationResponse.builder()

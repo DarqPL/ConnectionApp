@@ -9,6 +9,8 @@ import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
@@ -16,6 +18,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@CompoundIndexes({
+    @CompoundIndex(name = "conversation_deleted_created_idx", def = "{'conversation_id': 1, 'is_deleted': 1, 'createdAt': -1}"),
+    @CompoundIndex(name = "reminder_notified_time_idx", def = "{'reminder.notified': 1, 'reminder.reminderTime': 1}")
+})
 @Document(collection = "messages")
 @Getter
 @Setter

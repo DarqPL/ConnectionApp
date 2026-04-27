@@ -35,7 +35,7 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     /**
      * Search messages by content
      */
-    @Query("{ 'conversationId': ?0, 'content': { $regex: ?1, $options: 'i' }, 'isDeleted': false }")
+    @Query("{ 'conversation_id': ?0, 'content': { $regex: ?1, $options: 'i' }, 'is_deleted': false }")
     List<Message> searchByContent(Long conversationId, String searchTerm);
 
     /**
@@ -57,7 +57,7 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     /**
      * Get unread messages count for a user in conversation
      */
-    @Query("{ 'conversationId': ?0, 'senderInfo.senderId': { $ne: ?1 }, 'isDeleted': false }")
+    @Query("{ 'conversation_id': ?0, 'senderInfo.sender_id': { $ne: ?1 }, 'is_deleted': false }")
     long countUnreadMessages(Long conversationId, Long userId);
 
     /**
@@ -83,9 +83,9 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     /**
      * Find all messages (original + notification re-displays) sharing the same reminder title in a conversation
      */
-    @Query("{ 'conversationId': ?0, 'reminder.title': ?1 }")
+    @Query("{ 'conversation_id': ?0, 'reminder.title': ?1 }")
     List<Message> findByConversationIdAndReminderTitle(Long conversationId, String title);
 
-    @Query("{ 'conversationId': ?0, 'reminder.reminderGroupId': ?1 }")
+    @Query("{ 'conversation_id': ?0, 'reminder.reminderGroupId': ?1 }")
     List<Message> findByConversationIdAndReminderReminderGroupId(Long conversationId, String groupId);
 }

@@ -232,7 +232,8 @@ public class MessageService {
         Page<Message> messages = messageRepository
                 .findByConversationIdAndIsDeletedFalseOrderByCreatedAtDesc(conversationId, pageable);
 
-        return messages.map(this::mapToMessageResponse);
+        Map<String, Message> parentMessagesById = preloadParentMessages(messages.getContent());
+        return messages.map(message -> mapToMessageResponse(message, parentMessagesById));
     }
 
     /**
@@ -645,8 +646,9 @@ public class MessageService {
         }
 
         List<Message> messages = messageRepository.searchByContent(conversationId, searchTerm);
+        Map<String, Message> parentMessagesById = preloadParentMessages(messages);
         return messages.stream()
-                .map(this::mapToMessageResponse)
+                .map(message -> mapToMessageResponse(message, parentMessagesById))
                 .collect(Collectors.toList());
     }
 
@@ -693,6 +695,10 @@ public class MessageService {
      * Map Message entity to MessageResponse DTO
      */
     public MessageResponse mapToMessageResponse(Message message) {
+        return mapToMessageResponse(message, Collections.emptyMap());
+    }
+
+    private MessageResponse mapToMessageResponse(Message message, Map<String, Message> parentMessagesById) {
         MessageResponse.SenderInfoResponse senderInfo = MessageResponse.SenderInfoResponse.builder()
                 .senderId(message.getSenderInfo().getSenderId())
                 .displayName(message.getSenderInfo().getDisplayName())
@@ -721,32 +727,7 @@ public class MessageService {
                 .build())
             .collect(Collectors.toList());
 
-        // Build reply info if parentId exists
-        MessageResponse.ReplyInfoResponse replyInfo = null;
-        if (message.getParentId() != null) {
-            replyInfo = messageRepository.findById(message.getParentId())
-                    .map(parent -> {
-                        boolean parentRecalled = parent.getRecalledAt() != null;
-                        List<MessageResponse.AttachmentResponse> parentAttachments = parentRecalled
-                                ? Collections.emptyList()
-                                : (parent.getAttachments() == null ? Collections.emptyList()
-                                    : parent.getAttachments().stream()
-                                        .map(a -> MessageResponse.AttachmentResponse.builder()
-                                                .fileUrl(a.getFileUrl())
-                                                .type(a.getType() == null ? AttachmentType.FILE.name() : a.getType().name())
-                                                .originalFileName(resolveOriginalFileName(a.getOriginalFileName(), a.getFileUrl()))
-                                                .build())
-                                        .collect(Collectors.toList()));
-                        return MessageResponse.ReplyInfoResponse.builder()
-                                .parentId(parent.getId())
-                                .parentContent(parentRecalled ? null : parent.getContent())
-                                .parentSenderName(parent.getSenderInfo().getDisplayName())
-                                .parentAttachments(parentAttachments)
-                                .parentRecalled(parentRecalled)
-                                .build();
-                    })
-                    .orElse(null);
-        }
+        MessageResponse.ReplyInfoResponse replyInfo = buildReplyInfo(message, parentMessagesById);
 
         return MessageResponse.builder()
                 .id(message.getId())
@@ -764,6 +745,60 @@ public class MessageService {
                 .reminder(mapReminderEntityToResponse(message.getReminder(), message.getConversationId(), message.getId(), message.getCreatedAt()))
                 .reactions(reactions)
                 .build();
+    }
+
+    private Map<String, Message> preloadParentMessages(List<Message> messages) {
+        Set<String> parentIds = messages.stream()
+                .map(Message::getParentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (parentIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return messageRepository.findAllById(parentIds).stream()
+                .collect(Collectors.toMap(Message::getId, parent -> parent));
+    }
+
+    private MessageResponse.ReplyInfoResponse buildReplyInfo(Message message, Map<String, Message> parentMessagesById) {
+        if (message.getParentId() == null) {
+            return null;
+        }
+
+        Message parent = parentMessagesById.get(message.getParentId());
+        if (parent == null) {
+            parent = messageRepository.findById(message.getParentId()).orElse(null);
+        }
+
+        if (parent == null) {
+            return null;
+        }
+
+        boolean parentRecalled = parent.getRecalledAt() != null;
+        List<MessageResponse.AttachmentResponse> parentAttachments = parentRecalled
+                ? Collections.emptyList()
+                : mapAttachments(parent.getAttachments());
+
+        return MessageResponse.ReplyInfoResponse.builder()
+                .parentId(parent.getId())
+                .parentContent(parentRecalled ? null : parent.getContent())
+                .parentSenderName(parent.getSenderInfo().getDisplayName())
+                .parentAttachments(parentAttachments)
+                .parentRecalled(parentRecalled)
+                .build();
+    }
+
+    private List<MessageResponse.AttachmentResponse> mapAttachments(List<Attachment> attachments) {
+        List<Attachment> safeAttachments = attachments == null ? Collections.emptyList() : attachments;
+
+        return safeAttachments.stream()
+                .map(a -> MessageResponse.AttachmentResponse.builder()
+                        .fileUrl(a.getFileUrl())
+                        .type(a.getType() == null ? AttachmentType.FILE.name() : a.getType().name())
+                        .originalFileName(resolveOriginalFileName(a.getOriginalFileName(), a.getFileUrl()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     private Poll mapPollRequestToEntity(PollRequest request) {
