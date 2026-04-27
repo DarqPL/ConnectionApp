@@ -22,6 +22,9 @@ public interface ConversationUserRepository extends JpaRepository<ConversationUs
             "WHERE cu.conversation.id = :conversationId")
     List<ConversationUser> findByConversationId(@Param("conversationId") Long conversationId);
 
+    @Query("SELECT cu.user.id FROM ConversationUser cu WHERE cu.conversation.id = :conversationId")
+    List<Long> findMemberIdsByConversationId(@Param("conversationId") Long conversationId);
+
     /**
      * Get user in a specific conversation
      */
