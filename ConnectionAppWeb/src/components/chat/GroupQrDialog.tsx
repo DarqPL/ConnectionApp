@@ -6,14 +6,14 @@ import { Download, X, ZoomIn, ZoomOut } from "lucide-react";
 interface GroupQrDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  groupName: string;
+  groupName: string | null | undefined;
   qrValue: string | null;
 }
 
 const clampZoom = (value: number): number => Math.max(1, Math.min(4, value));
 
-const sanitizeFileName = (value: string): string =>
-  value
+const sanitizeFileName = (value: string | null | undefined): string =>
+  (value ?? "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/gi, "-")
@@ -27,6 +27,7 @@ const GroupQrDialog = ({
 }: GroupQrDialogProps) => {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const normalizedGroupName = groupName?.trim() || "Nhom";
 
   useEffect(() => {
     if (!open || !qrValue) {
@@ -63,8 +64,8 @@ const GroupQrDialog = ({
   }, [open, qrValue]);
 
   const fileName = useMemo(
-    () => `${sanitizeFileName(groupName)}-qr.png`,
-    [groupName],
+    () => `${sanitizeFileName(normalizedGroupName)}-qr.png`,
+    [normalizedGroupName],
   );
 
   const handleDownload = () => {
@@ -98,7 +99,7 @@ const GroupQrDialog = ({
 
           <div className="relative overflow-hidden rounded-lg border-4 border-black bg-black">
             <div className="flex h-[72vh] flex-col items-center justify-center gap-3 overflow-hidden bg-zinc-900 px-6 py-6 text-white">
-              <p className="text-lg font-semibold">{groupName}</p>
+              <p className="text-lg font-semibold">{normalizedGroupName}</p>
               <p className="max-w-xl text-center text-xs text-zinc-400 break-all">
                 {qrValue}
               </p>
@@ -107,7 +108,7 @@ const GroupQrDialog = ({
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
-                    alt={`QR ${groupName}`}
+                    alt={`QR ${normalizedGroupName}`}
                     className="max-h-[55vh] max-w-[55vh] rounded-2xl bg-white p-3"
                     style={{
                       transform: `scale(${zoom})`,

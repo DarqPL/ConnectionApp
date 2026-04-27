@@ -118,7 +118,7 @@ const getReplyPreviewText = (
   return "Tin nhắn đã được thu hồi";
 };
 
-const MessageBubble: React.FC<Props> = ({
+const MessageBubbleBase: React.FC<Props> = ({
   message,
   attachments = [],
   isMe = false,
@@ -908,6 +908,8 @@ const MessageBubble: React.FC<Props> = ({
     </View>
   );
 };
+
+const MessageBubble = React.memo(MessageBubbleBase);
 
 export default MessageBubble;
 

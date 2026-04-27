@@ -17,7 +17,7 @@ import { toast } from "sonner";
 interface RenameGroupDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  currentName: string;
+  currentName: string | null | undefined;
   conversationId: number;
 }
 
@@ -27,17 +27,19 @@ export const RenameGroupDialog = ({
   currentName,
   conversationId,
 }: RenameGroupDialogProps) => {
-  const [name, setName] = useState(currentName);
+  const normalizedCurrentName = currentName ?? "";
+  const [name, setName] = useState(normalizedCurrentName);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setName(currentName);
+      setName(normalizedCurrentName);
     }
-  }, [isOpen, currentName]);
+  }, [isOpen, normalizedCurrentName]);
 
   const handleRename = async () => {
-    if (!name.trim() || name.trim() === currentName) {
+    const trimmedName = (name ?? "").trim();
+    if (!trimmedName || trimmedName === normalizedCurrentName) {
       onClose();
       return;
     }
@@ -45,7 +47,7 @@ export const RenameGroupDialog = ({
     setIsLoading(true);
     try {
       const updated = await chatService.updateConversation(conversationId, {
-        name: name.trim(),
+        name: trimmedName,
       });
       useChatStore.getState().updateConversation(updated);
       toast.success("Đã đổi tên nhóm thành công");
@@ -72,7 +74,7 @@ export const RenameGroupDialog = ({
             <Label htmlFor="name">Tên nhóm</Label>
             <Input
               id="name"
-              value={name}
+              value={name ?? ""}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nhập tên nhóm..."
               autoFocus
@@ -88,7 +90,11 @@ export const RenameGroupDialog = ({
           </Button>
           <Button 
             onClick={handleRename} 
-            disabled={isLoading || !name.trim() || name.trim() === currentName}
+            disabled={
+              isLoading ||
+              !(name ?? "").trim() ||
+              (name ?? "").trim() === normalizedCurrentName
+            }
           >
             {isLoading ? "Đang lưu..." : "Lưu thay đổi"}
           </Button>

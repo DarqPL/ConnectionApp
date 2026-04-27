@@ -1,7 +1,7 @@
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import { Bell, Calendar as CalendarIcon, Clock, Trash2, Edit3, AlarmClock } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, AlarmClock } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { ReminderRequest } from "@/types/chat";
 import {
@@ -12,7 +12,6 @@ import {
   DialogFooter,
   DialogDescription,
 } from "../ui/dialog";
-import { cn } from "@/lib/utils";
 
 interface ReminderCreatorProps {
   isOpen: boolean;

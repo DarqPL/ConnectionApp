@@ -3,6 +3,8 @@ package iuh.fit.ConnectionAppBackend.repo;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,9 +21,8 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
     @Query("SELECT c FROM Conversation c " +
             "JOIN c.conversationUsers cu " +
             "WHERE cu.user.id = :userId " +
-            "AND c.activate = true " +
-            "ORDER BY c.lastMessageAt DESC")
-    List<Conversation> findAllByUserId(@Param("userId") Long userId);
+            "AND c.activate = true")
+    Page<Conversation> findAllByUserId(@Param("userId") Long userId, Pageable pageable);
 
     /**
      * Get conversation by ID with all participants

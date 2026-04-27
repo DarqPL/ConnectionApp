@@ -42,6 +42,7 @@ import { getOrFetchEmailUser } from "@/lib/userCache";
 import { useAuthStore } from "@/stores/useAuthStore";
 import PollMessage from "./PollMessage";
 import ReminderMessage from "./ReminderMessage";
+import React from "react";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😆", "😮", "😢", "😡"] as const;
 
@@ -88,7 +89,7 @@ interface MessageItemProps {
   isHighlighted?: boolean;
 }
 
-const MessageItem = ({
+const MessageItemBase = ({
   message,
   index,
   messages,
@@ -1198,5 +1199,7 @@ const MessageItem = ({
     </>
   );
 };
+
+const MessageItem = React.memo(MessageItemBase);
 
 export default MessageItem;
