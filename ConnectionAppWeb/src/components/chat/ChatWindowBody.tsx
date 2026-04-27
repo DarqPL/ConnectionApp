@@ -2,7 +2,7 @@ import { useChatStore } from "@/stores/useChatStore";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import type { Message } from "@/types/chat";
 import { toast } from "sonner";
@@ -47,7 +47,11 @@ const ChatWindowBody = ({
   const messages = selectedConvo
     ? (allMessages[selectedConvo.id]?.items ?? [])
     : [];
-  const reversedMessages = [...messages].reverse();
+  const reversedMessages = useMemo(() => {
+    const nextMessages = messages.slice();
+    nextMessages.reverse();
+    return nextMessages;
+  }, [messages]);
   const hasMore = selectedConvo
     ? (allMessages[selectedConvo.id]?.hasMore ?? false)
     : false;

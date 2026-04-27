@@ -1242,6 +1242,10 @@ const ChatRoomScreen = ({ route }: any) => {
             ref={flatListRef}
             data={displayMessages}
             keyExtractor={(item) => item.id}
+            windowSize={10}
+            initialNumToRender={20}
+            maxToRenderPerBatch={12}
+            removeClippedSubviews
             renderItem={({ item }) => (
               <MessageBubble
                 message={item.content || ""}

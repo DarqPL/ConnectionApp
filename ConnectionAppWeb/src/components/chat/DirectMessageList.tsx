@@ -1,13 +1,12 @@
 import { useChatStore } from "@/stores/useChatStore";
+import { useShallow } from "zustand/react/shallow";
 import DirectMessageCard from "./DirectMessageCard";
 
 const DirectMessageList = () => {
-  const { conversations } = useChatStore();
-
-  if (!conversations) return null;
-
-  const directConversations = conversations.filter(
-    (convo) => convo.type === "PRIVATE"
+  const directConversations = useChatStore(
+    useShallow((state) =>
+      state.conversations.filter((convo) => convo.type === "PRIVATE"),
+    ),
   );
 
   return (

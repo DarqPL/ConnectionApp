@@ -1,13 +1,12 @@
 import { useChatStore } from "@/stores/useChatStore";
+import { useShallow } from "zustand/react/shallow";
 import GroupChatCard from "./GroupChatCard";
 
 const GroupChatList = () => {
-  const { conversations } = useChatStore();
-
-  if (!conversations) return null;
-
-  const groupConversations = conversations.filter(
-    (convo) => convo.type === "GROUP"
+  const groupConversations = useChatStore(
+    useShallow((state) =>
+      state.conversations.filter((convo) => convo.type === "GROUP"),
+    ),
   );
 
   return (

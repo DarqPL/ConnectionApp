@@ -308,38 +308,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // 2. Update conversation list
     setConversations((prev) => {
-      const index = prev.findIndex(
-        (c) => c.id === incomingMessage.conversationId,
+      const conversationMap = new Map(prev.map((c) => [c.id, c]));
+      const existingConversation = conversationMap.get(
+        incomingMessage.conversationId,
       );
 
-      if (index === -1) {
-        // Conversation not in list yet → refetch (new conv or first message)
-        console.log("[ChatContext] Unknown conversation, refetching list...");
-        chatService
-          .getConversations()
-          .then((data) => setConversations(sortConversations(data)))
-          .catch(console.error);
+      if (!existingConversation) {
         return prev;
       }
 
-      const next = [...prev];
       const isOpen =
         currentConversationRef.current === incomingMessage.conversationId;
       const isOwn = incomingMessage.senderInfo?.senderId === userIdRef.current;
 
-      next[index] = {
-        ...next[index],
+      const updatedConversation: Conversation = {
+        ...existingConversation,
         lastMessageContent: buildMessagePreview(
           incomingMessage.content,
           incomingMessage.attachments,
         ),
         lastMessageAt: incomingMessage.createdAt,
-        unreadCount: isOpen || isOwn ? 0 : (next[index].unreadCount || 0) + 1,
+        unreadCount:
+          isOpen || isOwn ? 0 : (existingConversation.unreadCount || 0) + 1,
       };
 
-      // Move to top
-      const updated = next.splice(index, 1)[0];
-      return [updated, ...next];
+      conversationMap.set(incomingMessage.conversationId, updatedConversation);
+
+      return [
+        updatedConversation,
+        ...prev.filter((c) => c.id !== incomingMessage.conversationId),
+      ];
     });
   }, []); // ← empty deps: state is accessed via refs/functional setters
 
