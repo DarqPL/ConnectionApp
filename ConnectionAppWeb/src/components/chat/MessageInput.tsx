@@ -230,7 +230,9 @@ const MessageInput = ({
 
   const handleSendMessage = async () => {
     const currValue = value.trim();
-    if (!currValue && pendingFiles.length === 0) return;
+    const filesToUpload = [...pendingFiles];
+    const replyId = replyTo?.id ?? null;
+    if (!currValue && filesToUpload.length === 0) return;
     if (isUploading) return;
 
     if (typingStateRef.current) {
@@ -244,28 +246,27 @@ const MessageInput = ({
     }
 
     setIsUploading(true);
+    setValue("");
+    clearPendingFiles();
+    onCancelReply();
 
     try {
       const uploadedAttachments =
-        pendingFiles.length === 0
+        filesToUpload.length === 0
           ? []
           : await Promise.all(
-            pendingFiles.map((item) =>
-              chatService.uploadAttachment(item.file),
-            ),
-          );
+              filesToUpload.map((item) =>
+                chatService.uploadAttachment(item.file),
+              ),
+            );
 
       await sendMessage(
         selectedConvo.id,
         currValue,
-        replyTo?.id ?? null,
+        replyId,
         uploadedAttachments,
         null, // poll
       );
-
-      setValue("");
-      clearPendingFiles();
-      onCancelReply(); // Clear reply after sending
 
       setDeliveryState("SENT");
       if (deliveryTimeoutRef.current) {

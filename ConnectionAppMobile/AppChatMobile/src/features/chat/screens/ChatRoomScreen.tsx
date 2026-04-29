@@ -179,6 +179,7 @@ const ChatRoomScreen = ({ route }: any) => {
     activeCall,
     fetchMessages,
     sendMessage,
+    retrySendMessage,
     recallMessage,
     deleteMessage,
     reactMessage,
@@ -223,21 +224,29 @@ const ChatRoomScreen = ({ route }: any) => {
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [pollToVote, setPollToVote] = React.useState<Message | null>(null);
   const [isPollCreatorOpen, setIsPollCreatorOpen] = React.useState(false);
-  const [isReminderCreatorOpen, setIsReminderCreatorOpen] = React.useState(false);
-  const [reminderToEdit, setReminderToEdit] = React.useState<Message | null>(null);
+  const [isReminderCreatorOpen, setIsReminderCreatorOpen] =
+    React.useState(false);
+  const [reminderToEdit, setReminderToEdit] = React.useState<Message | null>(
+    null,
+  );
   const [pinnedMessages, setPinnedMessages] = React.useState<Message[]>([]);
 
   // Call setup state
-  const [zegoCallModule, setZegoCallModule] = React.useState<ZegoCallModule | null>(null);
-  const [callSetupError, setCallSetupError] = React.useState<string | null>(null);
+  const [zegoCallModule, setZegoCallModule] =
+    React.useState<ZegoCallModule | null>(null);
+  const [callSetupError, setCallSetupError] = React.useState<string | null>(
+    null,
+  );
   const [isPreparingCallRoom, setIsPreparingCallRoom] = React.useState(false);
   const callEndGuardRef = useRef<number | null>(null);
   const zegoAppId = Number.parseInt(getExpoEnv("EXPO_PUBLIC_ZEGO_APP_ID"), 10);
   const zegoAppSign = getExpoEnv("EXPO_PUBLIC_ZEGO_APP_SIGN");
-  const devRuntimeConnectionWarning = authService.getDevRuntimeConnectionWarning();
+  const devRuntimeConnectionWarning =
+    authService.getDevRuntimeConnectionWarning();
   const isGroupCall = type === "GROUP";
 
-  const [actionSheetMessage, setActionSheetMessage] = React.useState<Message | null>(null);
+  const [actionSheetMessage, setActionSheetMessage] =
+    React.useState<Message | null>(null);
 
   const currentConversation = conversations.find(
     (c) => Number(c.id) === Number(conversationId),
@@ -880,7 +889,12 @@ const ChatRoomScreen = ({ route }: any) => {
       useSpeakerWhenJoining: true,
       onCallEnd: handleSdkCallEnd,
     };
-  }, [activeForConversation?.mediaType, handleSdkCallEnd, isGroupCall, zegoCallModule]);
+  }, [
+    activeForConversation?.mediaType,
+    handleSdkCallEnd,
+    isGroupCall,
+    zegoCallModule,
+  ]);
 
   const handleRecallMessage = (msgId: string, isOwnMessage: boolean) => {
     const options: any[] = [
@@ -1154,9 +1168,7 @@ const ChatRoomScreen = ({ route }: any) => {
               <View style={styles.callRoomLoading}>
                 <Text style={styles.callRoomLoadingText}>{callSetupError}</Text>
                 {devRuntimeConnectionWarning ? (
-                  <Text
-                    style={[styles.callRoomLoadingText, { marginTop: 10 }]}
-                  >
+                  <Text style={[styles.callRoomLoadingText, { marginTop: 10 }]}>
                     {devRuntimeConnectionWarning}
                   </Text>
                 ) : null}
@@ -1253,6 +1265,20 @@ const ChatRoomScreen = ({ route }: any) => {
                 poll={item.poll}
                 reminder={item.reminder}
                 messageId={item.id}
+                status={item.status}
+                onRetrySend={() =>
+                  retrySendMessage(
+                    conversationId,
+                    item.tempId ?? item.id,
+                  ).catch((err) => {
+                    Alert.alert(
+                      "Lỗi",
+                      err instanceof Error
+                        ? err.message
+                        : "Không thể gửi lại tin nhắn",
+                    );
+                  })
+                }
                 reactions={item.reactions || []}
                 currentUserId={user?.id}
                 onReact={(reactionCode) => {

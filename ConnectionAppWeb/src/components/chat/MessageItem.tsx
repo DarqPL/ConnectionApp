@@ -9,9 +9,11 @@ import type { User } from "@/types/user";
 import UserAvatar from "./UserAvatar";
 import { Card } from "../ui/card";
 import {
+  AlertTriangle,
   CornerUpLeft,
   Download,
   FileText,
+  Loader2,
   PlayCircle,
   Undo2,
   Forward,
@@ -101,8 +103,13 @@ const MessageItemBase = ({
   isHighlighted = false,
 }: MessageItemProps) => {
   const { user: currentUser } = useAuthStore();
-  const { recallMessage, deleteMessage, pinMessage, reactMessage } =
-    useChatStore();
+  const {
+    recallMessage,
+    deleteMessage,
+    pinMessage,
+    reactMessage,
+    retrySendMessage,
+  } = useChatStore();
 
   type ActionType = "recall" | "delete" | "pin";
 
@@ -547,19 +554,23 @@ const MessageItemBase = ({
         </span>
       )}
 
-      {(message.reminder || (message.content && message.content.startsWith("[Nhắc hẹn] "))) ? (
+      {message.reminder ||
+      (message.content && message.content.startsWith("[Nhắc hẹn] ")) ? (
         <div className="flex justify-center w-full my-4 px-4">
           <ReminderMessage
             messageId={message.id}
             conversationId={message.conversationId}
-            reminder={message.reminder || {
-              title: message.content?.replace("[Nhắc hẹn] ", "") || "Nhắc hẹn",
-              content: "Nhắc hẹn từ tin nhắn cũ",
-              reminderTime: message.createdAt,
-              isNotified: true,
-              creatorId: message.senderInfo.senderId,
-              creatorName: message.senderInfo.displayName
-            }}
+            reminder={
+              message.reminder || {
+                title:
+                  message.content?.replace("[Nhắc hẹn] ", "") || "Nhắc hẹn",
+                content: "Nhắc hẹn từ tin nhắn cũ",
+                reminderTime: message.createdAt,
+                isNotified: true,
+                creatorId: message.senderInfo.senderId,
+                creatorName: message.senderInfo.displayName,
+              }
+            }
           />
         </div>
       ) : message.poll ? (
@@ -841,6 +852,40 @@ const MessageItemBase = ({
                   </div>
                 )}
               </div>
+
+              {message.isOwn &&
+                (message.status === "SENDING" || message.status === "ERROR") &&
+                !isRecalled && (
+                  <div
+                    className={cn(
+                      "mt-1 flex items-center",
+                      message.isOwn ? "justify-end" : "justify-start",
+                    )}
+                  >
+                    {message.status === "SENDING" && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Loader2 className="size-3 animate-spin" />
+                        <span>Dang gui...</span>
+                      </div>
+                    )}
+                    {message.status === "ERROR" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          retrySendMessage(
+                            message.conversationId,
+                            message.tempId ?? message.id,
+                          )
+                        }
+                        className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
+                        title="Gui lai"
+                      >
+                        <AlertTriangle className="size-3" />
+                        <span>Gui that bai. Thu lai</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
               {reactionSummary.length > 0 && (
                 <div

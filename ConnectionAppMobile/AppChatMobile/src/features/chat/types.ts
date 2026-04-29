@@ -110,6 +110,8 @@ export interface Message {
   poll?: Poll | null;
   reminder?: Reminder | null;
   reactions?: MessageReaction[];
+  status?: "SENDING" | "SENT" | "RECEIVED" | "ERROR";
+  tempId?: string;
 }
 
 export interface PageResponse<T> {
