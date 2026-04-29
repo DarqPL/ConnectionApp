@@ -66,6 +66,8 @@ export interface Message {
   reminder?: Reminder | null;
   reactions?: MessageReaction[];
   isOwn?: boolean; // computed on frontend
+  status?: "SENDING" | "SENT" | "RECEIVED" | "ERROR";
+  tempId?: string;
 }
 
 export interface MessageReaction {

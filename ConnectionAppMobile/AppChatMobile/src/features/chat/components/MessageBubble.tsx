@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
   Animated,
   Modal,
   Alert,
@@ -18,7 +19,14 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import { COLORS } from "../../../theme";
 import PollMessage from "./PollMessage";
 import ReminderMessage from "./ReminderMessage";
-import type { Attachment, ReplyInfo, Poll, MessageReaction, Reminder, Participant } from "../types";
+import type {
+  Attachment,
+  ReplyInfo,
+  Poll,
+  MessageReaction,
+  Reminder,
+  Participant,
+} from "../types";
 import {
   detectEmailInMessage,
   isValidEmailFormat,
@@ -53,6 +61,8 @@ interface Props {
   participants?: Participant[];
   onReact?: (reactionCode: string | null) => void;
   onReminderEdit?: () => void;
+  status?: "SENDING" | "SENT" | "RECEIVED" | "ERROR";
+  onRetrySend?: () => void;
 }
 
 const formatTime = (dateStr: string) => {
@@ -140,6 +150,8 @@ const MessageBubbleBase: React.FC<Props> = ({
   participants = [],
   onReact,
   onReminderEdit,
+  status,
+  onRetrySend,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
@@ -542,7 +554,11 @@ const MessageBubbleBase: React.FC<Props> = ({
     <View
       style={[
         styles.row,
-        poll || reminder ? styles.rowCenter : isMe ? styles.rowRight : styles.rowLeft,
+        poll || reminder
+          ? styles.rowCenter
+          : isMe
+            ? styles.rowRight
+            : styles.rowLeft,
       ]}
     >
       {/* Avatar for received messages in groups */}
@@ -739,7 +755,6 @@ const MessageBubbleBase: React.FC<Props> = ({
                   />
                 )}
 
-
                 {/* Business card — shown when message contains a known email */}
                 {!isRecalled && emailUser && detectedEmail && (
                   <BusinessCard
@@ -753,6 +768,44 @@ const MessageBubbleBase: React.FC<Props> = ({
             )}
           </TouchableOpacity>
         </View>
+
+        {status === "SENDING" && !isRecalled && (
+          <View
+            style={[
+              styles.statusRow,
+              isMe ? styles.statusRowRight : styles.statusRowLeft,
+            ]}
+          >
+            <ActivityIndicator
+              size="small"
+              color={isMe ? "rgba(255,255,255,0.75)" : COLORS.textMuted}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                isMe ? styles.statusTextSent : styles.statusTextReceived,
+              ]}
+            >
+              Dang gui...
+            </Text>
+          </View>
+        )}
+
+        {status === "ERROR" && !isRecalled && (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={onRetrySend}
+            style={[
+              styles.statusRow,
+              isMe ? styles.statusRowRight : styles.statusRowLeft,
+            ]}
+          >
+            <Ionicons name="alert-circle" size={14} color="#dc2626" />
+            <Text style={[styles.statusText, styles.statusTextError]}>
+              Gui that bai. Thu lai
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {createdAt && !isRecalled && (
           <Text
@@ -1193,6 +1246,32 @@ const styles = StyleSheet.create({
   },
   timeRight: {
     alignSelf: "flex-end",
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    marginHorizontal: 4,
+  },
+  statusRowLeft: {
+    alignSelf: "flex-start",
+  },
+  statusRowRight: {
+    alignSelf: "flex-end",
+  },
+  statusText: {
+    fontSize: 11,
+  },
+  statusTextSent: {
+    color: "rgba(255,255,255,0.8)",
+  },
+  statusTextReceived: {
+    color: COLORS.textMuted,
+  },
+  statusTextError: {
+    color: "#dc2626",
+    fontWeight: "600",
   },
   reactionWrap: {
     flexDirection: "row",

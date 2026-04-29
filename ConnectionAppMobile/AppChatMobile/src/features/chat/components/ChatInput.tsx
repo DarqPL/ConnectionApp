@@ -208,21 +208,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
     stopTyping(conversationId);
 
+    const filesToSend = selectedFiles.map((file) => ({
+      uri: file.uri,
+      name: file.name,
+      mimeType: file.mimeType,
+      size: file.size,
+    }));
+
     setIsSending(true);
+    setText("");
+    setSelectedFiles([]);
+    onCancelReply?.();
     try {
-      await onSend(
-        trimmed,
-        selectedFiles.map((file) => ({
-          uri: file.uri,
-          name: file.name,
-          mimeType: file.mimeType,
-          size: file.size,
-        })),
-        replyTo?.id ?? null,
-      );
-      setText("");
-      setSelectedFiles([]);
-      onCancelReply?.();
+      await onSend(trimmed, filesToSend, replyTo?.id ?? null);
 
       setDeliveryState("SENT");
       if (deliveryTimeoutRef.current) {

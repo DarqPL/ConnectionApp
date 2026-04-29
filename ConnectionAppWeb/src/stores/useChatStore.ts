@@ -56,6 +56,63 @@ const buildMessagePreview = (message: Message): string => {
   return "";
 };
 
+const normalizeContent = (content: string | null | undefined): string =>
+  (content ?? "").trim();
+
+const buildAttachmentKey = (attachments: Message["attachments"]): string =>
+  (attachments ?? [])
+    .map((attachment) =>
+      [
+        attachment.type,
+        attachment.fileUrl,
+        attachment.originalFileName ?? "",
+      ].join("::"),
+    )
+    .sort()
+    .join("||");
+
+const findOptimisticMatchIndex = (
+  items: Message[],
+  incoming: Message,
+  currentUserId?: number,
+): number => {
+  const incomingSenderId = incoming.senderInfo?.senderId;
+  if (!incomingSenderId || incomingSenderId !== currentUserId) {
+    return -1;
+  }
+
+  const incomingContent = normalizeContent(incoming.content);
+  const incomingAttachmentsKey = buildAttachmentKey(incoming.attachments);
+  const incomingParentId = incoming.parentId ?? null;
+  const incomingCreatedAt = new Date(incoming.createdAt).getTime();
+
+  return items.findIndex((item) => {
+    if (item.status !== "SENDING" && item.status !== "ERROR") {
+      return false;
+    }
+    if (!item.isOwn || item.senderInfo?.senderId !== incomingSenderId) {
+      return false;
+    }
+
+    const itemContent = normalizeContent(item.content);
+    const itemAttachmentsKey = buildAttachmentKey(item.attachments);
+    const itemParentId = item.parentId ?? null;
+    const itemCreatedAt = new Date(item.createdAt).getTime();
+
+    if (itemContent !== incomingContent) {
+      return false;
+    }
+    if (itemAttachmentsKey !== incomingAttachmentsKey) {
+      return false;
+    }
+    if (itemParentId !== incomingParentId) {
+      return false;
+    }
+
+    return Math.abs(itemCreatedAt - incomingCreatedAt) <= 90_000;
+  });
+};
+
 const applyReactionForUser = (
   message: Message,
   userId: number,
@@ -210,6 +267,68 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     attachments = [],
     poll = null,
   ) => {
+    const user = useAuthStore.getState().user;
+    const tempId = `temp_${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      tempId,
+      conversationId,
+      senderInfo: {
+        senderId: user?.id ?? 0,
+        displayName: user?.displayName || user?.username || "You",
+        avatarUrl: user?.avatarUrl ?? null,
+      },
+      content,
+      attachments,
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+      parentId: parentId ?? null,
+      isDeleted: false,
+      recalledAt: null,
+      replyInfo: null,
+      poll,
+      reminder: null,
+      reactions: [],
+      isOwn: true,
+      status: "SENDING",
+    };
+
+    const tempPreview = buildMessagePreview(tempMessage);
+    set((state) => {
+      const prevItems = state.messages[conversationId]?.items ?? [];
+      const updatedConversations = state.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              lastMessageContent: tempPreview,
+              lastMessageAt: tempMessage.createdAt,
+            }
+          : c,
+      );
+
+      const targetConvo = updatedConversations.find(
+        (c) => c.id === conversationId,
+      );
+      const otherConvos = updatedConversations.filter(
+        (c) => c.id !== conversationId,
+      );
+      const finalConversations = targetConvo
+        ? [targetConvo, ...otherConvos]
+        : updatedConversations;
+
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: {
+            items: [...prevItems, tempMessage],
+            hasMore: state.messages[conversationId]?.hasMore ?? false,
+            page: state.messages[conversationId]?.page ?? 0,
+          },
+        },
+        conversations: finalConversations,
+      };
+    });
+
     try {
       const response = await chatService.sendMessage(
         conversationId,
@@ -219,16 +338,27 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         poll,
       );
 
-      const user = useAuthStore.getState().user;
       const messageWithOwn: Message = {
         ...response,
         isOwn: user ? response.senderInfo.senderId === user.id : false,
+        status: "SENT",
+        tempId,
       };
       const preview = buildMessagePreview(messageWithOwn);
 
-      // Add message to the conversation
       set((state) => {
         const prevItems = state.messages[conversationId]?.items ?? [];
+        const hasTemp = prevItems.some(
+          (m) => m.id === tempId || m.tempId === tempId,
+        );
+        const withoutServerDup = prevItems.filter(
+          (m) => m.id !== messageWithOwn.id,
+        );
+        const nextItems = hasTemp
+          ? withoutServerDup.map((m) =>
+              m.id === tempId || m.tempId === tempId ? messageWithOwn : m,
+            )
+          : [...withoutServerDup, messageWithOwn];
 
         const updatedConversations = state.conversations.map((c) =>
           c.id === conversationId
@@ -250,28 +380,150 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           ? [targetConvo, ...otherConvos]
           : updatedConversations;
 
-        if (prevItems.some((m) => m.id === messageWithOwn.id)) {
-          // Update conversation's last message info anyway
-          return {
-            conversations: finalConversations,
-          };
-        }
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: {
+              items: nextItems,
+              hasMore: state.messages[conversationId]?.hasMore ?? false,
+              page: state.messages[conversationId]?.page ?? 0,
+            },
+          },
+          conversations: finalConversations,
+        };
+      });
+    } catch (error) {
+      set((state) => {
+        const prevItems = state.messages[conversationId]?.items ?? [];
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: {
+              ...state.messages[conversationId],
+              items: prevItems.map((m) =>
+                m.id === tempId || m.tempId === tempId
+                  ? { ...m, status: "ERROR" }
+                  : m,
+              ),
+            },
+          },
+        };
+      });
+      console.error("Error sending message:", error);
+      throw error;
+    }
+  },
+
+  retrySendMessage: async (conversationId, tempMessageId) => {
+    const target =
+      get().messages[conversationId]?.items.find(
+        (item) => item.id === tempMessageId || item.tempId === tempMessageId,
+      ) ?? null;
+
+    if (!target) {
+      return;
+    }
+
+    const tempId = target.tempId ?? target.id;
+    const content = target.content ?? "";
+    const attachments = target.attachments ?? [];
+    const parentId = target.parentId ?? null;
+    const poll = target.poll ?? null;
+    const user = useAuthStore.getState().user;
+
+    set((state) => {
+      const prevItems = state.messages[conversationId]?.items ?? [];
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: {
+            ...state.messages[conversationId],
+            items: prevItems.map((m) =>
+              m.id === tempId || m.tempId === tempId
+                ? { ...m, status: "SENDING" }
+                : m,
+            ),
+          },
+        },
+      };
+    });
+
+    try {
+      const response = await chatService.sendMessage(
+        conversationId,
+        content,
+        parentId,
+        attachments,
+        poll,
+      );
+
+      const messageWithOwn: Message = {
+        ...response,
+        isOwn: user ? response.senderInfo.senderId === user.id : false,
+        status: "SENT",
+        tempId,
+      };
+      const preview = buildMessagePreview(messageWithOwn);
+
+      set((state) => {
+        const prevItems = state.messages[conversationId]?.items ?? [];
+        const withoutServerDup = prevItems.filter(
+          (m) => m.id !== messageWithOwn.id,
+        );
+        const nextItems = withoutServerDup.map((m) =>
+          m.id === tempId || m.tempId === tempId ? messageWithOwn : m,
+        );
+
+        const updatedConversations = state.conversations.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                lastMessageContent: preview,
+                lastMessageAt: messageWithOwn.createdAt,
+              }
+            : c,
+        );
+
+        const targetConvo = updatedConversations.find(
+          (c) => c.id === conversationId,
+        );
+        const otherConvos = updatedConversations.filter(
+          (c) => c.id !== conversationId,
+        );
+        const finalConversations = targetConvo
+          ? [targetConvo, ...otherConvos]
+          : updatedConversations;
 
         return {
           messages: {
             ...state.messages,
             [conversationId]: {
-              items: [...prevItems, messageWithOwn],
+              items: nextItems,
               hasMore: state.messages[conversationId]?.hasMore ?? false,
               page: state.messages[conversationId]?.page ?? 0,
             },
           },
-          // Update conversation's last message info
           conversations: finalConversations,
         };
       });
     } catch (error) {
-      console.error("Error sending message:", error);
+      set((state) => {
+        const prevItems = state.messages[conversationId]?.items ?? [];
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: {
+              ...state.messages[conversationId],
+              items: prevItems.map((m) =>
+                m.id === tempId || m.tempId === tempId
+                  ? { ...m, status: "ERROR" }
+                  : m,
+              ),
+            },
+          },
+        };
+      });
+      console.error("Error retrying message:", error);
       throw error;
     }
   },
@@ -294,6 +546,63 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (exists) {
       get().updateMessage(messageWithOwn);
       return; // Stop here - do NOT append to bottom
+    }
+
+    const optimisticIndex = findOptimisticMatchIndex(
+      prevItems,
+      messageWithOwn,
+      user?.id,
+    );
+
+    if (optimisticIndex !== -1) {
+      const nextItems = prevItems.map((item, index) =>
+        index === optimisticIndex
+          ? { ...messageWithOwn, status: "SENT" }
+          : item,
+      );
+
+      set((state) => {
+        const updatedConversations = state.conversations.map((c) => {
+          if (c.id !== convoId) {
+            return c;
+          }
+
+          const isOwn = messageWithOwn.isOwn;
+          const nextUnreadCount =
+            state.activeConversationId === convoId || isOwn
+              ? 0
+              : (c.unreadCount || 0) + 1;
+
+          return {
+            ...c,
+            lastMessageContent: preview,
+            lastMessageAt: messageWithOwn.createdAt,
+            unreadCount: nextUnreadCount,
+          };
+        });
+
+        const targetConvo = updatedConversations.find((c) => c.id === convoId);
+        const otherConvos = updatedConversations.filter(
+          (c) => c.id !== convoId,
+        );
+        const finalConversations = targetConvo
+          ? [targetConvo, ...otherConvos]
+          : updatedConversations;
+
+        return {
+          messages: {
+            ...state.messages,
+            [convoId]: {
+              items: nextItems,
+              hasMore: state.messages[convoId]?.hasMore ?? false,
+              page: state.messages[convoId]?.page ?? 0,
+            },
+          },
+          conversations: finalConversations,
+        };
+      });
+
+      return;
     }
 
     const updatedItems = prevItems;
@@ -738,28 +1047,28 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       console.error("Error fetching conversation by id:", error);
     }
   },
-  
+
   createReminder: async (request: ReminderRequest) => {
     try {
       const { activeConversationId } = get();
       const targetConvoId = request.conversationId || activeConversationId;
       if (!targetConvoId) return;
-      
+
       await chatService.createReminder({
         ...request,
-        conversationId: targetConvoId
+        conversationId: targetConvoId,
       });
-      
-      // The socket will eventually broadcast the new message, 
-      // but we can optimistic add it or wait. 
+
+      // The socket will eventually broadcast the new message,
+      // but we can optimistic add it or wait.
       // ReminderService.createReminder sends a WS to /reminders topic.
-      // But it also saves a Message. 
+      // But it also saves a Message.
       // Let's rely on the Message broadcast from backend if any.
       // Actually ReminderService doesn't seem to broadcast to /topic/conversation/{id}.
-      // It only sends to /reminders. 
+      // It only sends to /reminders.
       // I should probably manually fetch messages or wait for the Message response.
-      
-      // Update: I'll manually add the reminder message if it's returned as a ReminderResponse 
+
+      // Update: I'll manually add the reminder message if it's returned as a ReminderResponse
       // but wait, createReminder returns ReminderResponse which has the messageId.
       // I'll fetch the messages again to be sure.
       await get().fetchMessages(targetConvoId);
@@ -773,9 +1082,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     try {
       const { activeConversationId } = get();
       if (!activeConversationId) return;
-      
+
       await chatService.deleteReminder(messageId);
-      
+
       // Update local state by removing the message
       set((state) => {
         const prevItems = state.messages[activeConversationId]?.items ?? [];

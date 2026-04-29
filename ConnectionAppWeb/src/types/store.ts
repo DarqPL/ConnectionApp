@@ -65,6 +65,10 @@ export interface ChatState {
     attachments?: Attachment[],
     poll?: PollRequest | null,
   ) => Promise<void>;
+  retrySendMessage: (
+    conversationId: number,
+    tempMessageId: string,
+  ) => Promise<void>;
   votePoll: (messageId: string, optionIds: string[]) => Promise<void>;
   closePoll: (messageId: string) => Promise<void>;
   reactMessage: (

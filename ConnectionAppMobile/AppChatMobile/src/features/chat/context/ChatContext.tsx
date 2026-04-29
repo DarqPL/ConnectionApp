@@ -39,6 +39,10 @@ interface ChatContextType {
     parentId?: string | null,
     poll?: any,
   ) => Promise<void>;
+  retrySendMessage: (
+    conversationId: number,
+    tempMessageId: string,
+  ) => Promise<void>;
   updateMessage: (updatedMsg: Message) => void;
   recallMessage: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
@@ -204,6 +208,140 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     return "";
   };
 
+  const normalizeContent = (content: string | null | undefined): string =>
+    (content ?? "").trim();
+
+  const buildAttachmentKey = (attachments: Attachment[] | undefined): string =>
+    (attachments ?? [])
+      .map((attachment) =>
+        [
+          attachment.type,
+          attachment.originalFileName ?? attachment.fileUrl,
+        ].join("::"),
+      )
+      .sort()
+      .join("||");
+
+  const findOptimisticMatchIndex = (
+    items: Message[],
+    incoming: Message,
+    currentUserId?: number,
+  ): number => {
+    const incomingSenderId = incoming.senderInfo?.senderId;
+    if (!incomingSenderId || incomingSenderId !== currentUserId) {
+      return -1;
+    }
+
+    const incomingContent = normalizeContent(incoming.content);
+    const incomingAttachmentsKey = buildAttachmentKey(incoming.attachments);
+    const incomingParentId = incoming.parentId ?? null;
+    const incomingCreatedAt = new Date(incoming.createdAt).getTime();
+
+    return items.findIndex((item) => {
+      if (item.status !== "SENDING" && item.status !== "ERROR") {
+        return false;
+      }
+      if (item.senderInfo?.senderId !== incomingSenderId) {
+        return false;
+      }
+
+      const itemContent = normalizeContent(item.content);
+      const itemAttachmentsKey = buildAttachmentKey(item.attachments);
+      const itemParentId = item.parentId ?? null;
+      const itemCreatedAt = new Date(item.createdAt).getTime();
+
+      if (itemContent !== incomingContent) {
+        return false;
+      }
+      if (itemAttachmentsKey !== incomingAttachmentsKey) {
+        return false;
+      }
+      if (itemParentId !== incomingParentId) {
+        return false;
+      }
+
+      return Math.abs(itemCreatedAt - incomingCreatedAt) <= 90_000;
+    });
+  };
+
+  const isOptimisticServerMatch = (
+    optimistic: Message,
+    serverMessage: Message,
+  ): boolean => {
+    if (!optimistic.senderInfo?.senderId) {
+      return false;
+    }
+    if (optimistic.senderInfo.senderId !== serverMessage.senderInfo?.senderId) {
+      return false;
+    }
+
+    const optimisticContent = normalizeContent(optimistic.content);
+    const serverContent = normalizeContent(serverMessage.content);
+    if (optimisticContent !== serverContent) {
+      return false;
+    }
+
+    const optimisticAttachmentsKey = buildAttachmentKey(optimistic.attachments);
+    const serverAttachmentsKey = buildAttachmentKey(serverMessage.attachments);
+    if (optimisticAttachmentsKey !== serverAttachmentsKey) {
+      return false;
+    }
+
+    const optimisticParentId = optimistic.parentId ?? null;
+    const serverParentId = serverMessage.parentId ?? null;
+    if (optimisticParentId !== serverParentId) {
+      return false;
+    }
+
+    const optimisticCreatedAt = new Date(optimistic.createdAt).getTime();
+    const serverCreatedAt = new Date(serverMessage.createdAt).getTime();
+    return Math.abs(optimisticCreatedAt - serverCreatedAt) <= 90_000;
+  };
+
+  const resolveAttachmentType = (
+    file: PendingAttachment,
+  ): Attachment["type"] => {
+    const mime = (file.mimeType ?? "").toLowerCase();
+    const name = (file.name ?? "").toLowerCase();
+
+    if (
+      mime.startsWith("image/") ||
+      /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)
+    ) {
+      return "IMAGE";
+    }
+    if (
+      mime.startsWith("video/") ||
+      /\.(mp4|webm|mov|m4v|ogv|mkv)$/.test(name)
+    ) {
+      return "VIDEO";
+    }
+    if (
+      mime.startsWith("audio/") ||
+      /\.(mp3|wav|m4a|aac|flac|ogg)$/.test(name)
+    ) {
+      return "AUDIO";
+    }
+    if (
+      mime.includes("pdf") ||
+      mime.includes("word") ||
+      mime.includes("officedocument") ||
+      mime.includes("text") ||
+      /\.(pdf|docx?|xlsx?|pptx?|txt|rtf|csv)$/.test(name)
+    ) {
+      return "DOCUMENT";
+    }
+    return "FILE";
+  };
+
+  const isLocalAttachmentUrl = (url: string): boolean => {
+    return (
+      url.startsWith("file:") ||
+      url.startsWith("content:") ||
+      url.startsWith("asset:")
+    );
+  };
+
   const upsertConversation = useCallback((conversation: Conversation) => {
     setConversations((prev) =>
       sortConversations([
@@ -303,7 +441,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // 1. Add to current chat room if it's open
     if (incomingMessage.conversationId === currentConversationRef.current) {
-      setCurrentMessages((prev) => upsertMessage(prev, incomingMessage));
+      setCurrentMessages((prev) => {
+        const optimisticIndex = findOptimisticMatchIndex(
+          prev,
+          incomingMessage,
+          userIdRef.current ?? undefined,
+        );
+
+        if (optimisticIndex !== -1) {
+          const optimistic = prev[optimisticIndex];
+          return prev.map((item, index) =>
+            index === optimisticIndex
+              ? {
+                  ...incomingMessage,
+                  status: "SENT",
+                  tempId: optimistic.tempId ?? optimistic.id,
+                }
+              : item,
+          );
+        }
+
+        return upsertMessage(prev, incomingMessage);
+      });
     }
 
     // 2. Update conversation list
@@ -652,7 +811,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const onReminderTriggered = useCallback((payload: any) => {
     console.log("[ChatContext] Reminder triggered:", payload);
-    Alert.alert("ĐẾN GIỜ: " + payload.title, payload.content || "Bạn có một lịch hẹn ngay bây giờ!");
+    Alert.alert(
+      "ĐẾN GIỜ: " + payload.title,
+      payload.content || "Bạn có một lịch hẹn ngay bây giờ!",
+    );
   }, []);
 
   const onSecurityNotification = useCallback(
@@ -819,7 +981,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        setCurrentMessages(data);
+        setCurrentMessages((prev) => {
+          const pending = prev.filter(
+            (message) =>
+              message.status === "SENDING" ||
+              message.status === "ERROR" ||
+              Boolean(message.tempId),
+          );
+
+          const serverIds = new Set(data.map((message) => message.id));
+          const merged = [...data];
+
+          pending.forEach((message) => {
+            if (serverIds.has(message.id)) {
+              return;
+            }
+
+            const hasMatch = data.some((serverMessage) =>
+              isOptimisticServerMatch(message, serverMessage),
+            );
+
+            if (!hasMatch) {
+              merged.push(message);
+            }
+          });
+
+          return merged.sort(
+            (a, b) =>
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          );
+        });
         setCurrentConversationId(conversationId);
         // Mark as read
         chatService.markAsRead(conversationId).catch(() => {});
@@ -985,6 +1176,55 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       poll?: any,
     ) => {
       setError(null);
+      const tempId = `temp_${Date.now()}`;
+      const normalizedContent = content.trim();
+      const localAttachments: Attachment[] = files.map((file) => ({
+        fileUrl: file.uri,
+        type: resolveAttachmentType(file),
+        originalFileName: file.name,
+      }));
+
+      const tempMessage: Message = {
+        id: tempId,
+        tempId,
+        conversationId,
+        senderInfo: {
+          senderId: user?.id ?? 0,
+          displayName: user?.displayName || user?.username || "You",
+          avatarUrl: user?.avatarUrl ?? null,
+        },
+        content: normalizedContent,
+        attachments: localAttachments,
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+        parentId: parentId ?? null,
+        isDeleted: false,
+        recalledAt: null,
+        replyInfo: null,
+        poll: poll ?? null,
+        reminder: null,
+        reactions: [],
+        status: "SENDING",
+      };
+
+      const tempPreview = buildMessagePreview(
+        tempMessage.content,
+        tempMessage.attachments,
+      );
+
+      setCurrentMessages((prev) => upsertMessage(prev, tempMessage));
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                lastMessageContent: tempPreview,
+                lastMessageAt: tempMessage.createdAt,
+                unreadCount: 0,
+              }
+            : c,
+        ),
+      );
       try {
         const attachments =
           files.length === 0
@@ -999,7 +1239,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
                 ),
               );
 
-        const normalizedContent = content.trim();
+        if (attachments.length > 0) {
+          setCurrentMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId || m.tempId === tempId
+                ? { ...m, attachments }
+                : m,
+            ),
+          );
+        }
+
         const newMsg = await chatService.sendMessage(
           conversationId,
           normalizedContent,
@@ -1007,10 +1256,32 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           attachments,
           poll,
         );
+        const messageWithStatus: Message = {
+          ...newMsg,
+          status: "SENT",
+          tempId,
+        };
         const preview = buildMessagePreview(newMsg.content, newMsg.attachments);
 
-        // Optimistically add to current messages
-        setCurrentMessages((prev) => upsertMessage(prev, newMsg));
+        setCurrentMessages((prev) => {
+          const indexByTemp = prev.findIndex(
+            (m) => m.id === tempId || m.tempId === tempId,
+          );
+          if (indexByTemp !== -1) {
+            return prev.map((m) =>
+              m.id === tempId || m.tempId === tempId ? messageWithStatus : m,
+            );
+          }
+
+          const indexById = prev.findIndex((m) => m.id === newMsg.id);
+          if (indexById !== -1) {
+            return prev.map((m) =>
+              m.id === newMsg.id ? messageWithStatus : m,
+            );
+          }
+
+          return [...prev, messageWithStatus];
+        });
         // Update conversation list
         setConversations((prev) =>
           prev.map((c) =>
@@ -1018,20 +1289,152 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               ? {
                   ...c,
                   lastMessageContent: preview,
-                  lastMessageAt: new Date().toISOString(),
+                  lastMessageAt: newMsg.createdAt,
                   unreadCount: 0,
                 }
               : c,
           ),
         );
       } catch (err) {
+        setCurrentMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId || m.tempId === tempId
+              ? { ...m, status: "ERROR" }
+              : m,
+          ),
+        );
         const msg =
           err instanceof Error ? err.message : "Gửi tin nhắn thất bại";
         setError(msg);
         throw err;
       }
     },
-    [],
+    [user?.avatarUrl, user?.displayName, user?.id, user?.username],
+  );
+
+  const retrySendMessage = useCallback(
+    async (conversationId: number, tempMessageId: string) => {
+      setError(null);
+      const target = currentMessages.find(
+        (item) => item.id === tempMessageId || item.tempId === tempMessageId,
+      );
+
+      if (!target) {
+        return;
+      }
+
+      const tempId = target.tempId ?? target.id;
+      const content = target.content ?? "";
+      const parentId = target.parentId ?? null;
+      const poll = target.poll ?? null;
+      const existingAttachments = target.attachments ?? [];
+      const localAttachments = existingAttachments.filter((attachment) =>
+        isLocalAttachmentUrl(attachment.fileUrl),
+      );
+      const remoteAttachments = existingAttachments.filter(
+        (attachment) => !isLocalAttachmentUrl(attachment.fileUrl),
+      );
+
+      setCurrentMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId || m.tempId === tempId
+            ? { ...m, status: "SENDING" }
+            : m,
+        ),
+      );
+
+      try {
+        const uploadedAttachments =
+          localAttachments.length === 0
+            ? []
+            : await Promise.all(
+                localAttachments.map((attachment) =>
+                  chatService.uploadAttachment({
+                    uri: attachment.fileUrl,
+                    name: attachment.originalFileName ?? "attachment",
+                    mimeType: null,
+                  }),
+                ),
+              );
+
+        const attachmentsToSend = [
+          ...remoteAttachments,
+          ...uploadedAttachments,
+        ];
+
+        if (uploadedAttachments.length > 0) {
+          setCurrentMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId || m.tempId === tempId
+                ? { ...m, attachments: attachmentsToSend }
+                : m,
+            ),
+          );
+        }
+
+        const newMsg = await chatService.sendMessage(
+          conversationId,
+          content.trim(),
+          parentId,
+          attachmentsToSend,
+          poll,
+        );
+
+        const messageWithStatus: Message = {
+          ...newMsg,
+          status: "SENT",
+          tempId,
+        };
+        const preview = buildMessagePreview(newMsg.content, newMsg.attachments);
+
+        setCurrentMessages((prev) => {
+          const indexByTemp = prev.findIndex(
+            (m) => m.id === tempId || m.tempId === tempId,
+          );
+          if (indexByTemp !== -1) {
+            return prev.map((m) =>
+              m.id === tempId || m.tempId === tempId ? messageWithStatus : m,
+            );
+          }
+
+          const indexById = prev.findIndex((m) => m.id === newMsg.id);
+          if (indexById !== -1) {
+            return prev.map((m) =>
+              m.id === newMsg.id ? messageWithStatus : m,
+            );
+          }
+
+          return [...prev, messageWithStatus];
+        });
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  lastMessageContent: preview,
+                  lastMessageAt: newMsg.createdAt,
+                  unreadCount: 0,
+                }
+              : c,
+          ),
+        );
+      } catch (err) {
+        setCurrentMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId || m.tempId === tempId
+              ? { ...m, status: "ERROR" }
+              : m,
+          ),
+        );
+
+        const msg =
+          err instanceof Error ? err.message : "Gửi tin nhắn thất bại";
+        setError(msg);
+        throw err;
+      }
+    },
+    [currentMessages],
   );
 
   const recallMessage = useCallback(async (messageId: string) => {
@@ -1061,19 +1464,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const deleteReminder = useCallback(async (messageId: string) => {
-    setError(null);
-    try {
-      // Optimistic delete: trigger the group deletion logic locally
-      onReminderDeleted(messageId);
-      await chatService.deleteReminder(messageId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Xóa nhắc hẹn thất bại";
-      setError(msg);
-      // Optional: we could refetch messages here to restore the card if delete failed
-      throw err;
-    }
-  }, [onReminderDeleted]);
+  const deleteReminder = useCallback(
+    async (messageId: string) => {
+      setError(null);
+      try {
+        // Optimistic delete: trigger the group deletion logic locally
+        onReminderDeleted(messageId);
+        await chatService.deleteReminder(messageId);
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Xóa nhắc hẹn thất bại";
+        setError(msg);
+        // Optional: we could refetch messages here to restore the card if delete failed
+        throw err;
+      }
+    },
+    [onReminderDeleted],
+  );
 
   const setCurrentConversation = useCallback(
     (conversationId: number | null, sourceConversationId?: number) => {
@@ -1205,7 +1612,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const joinGroupByInviteToken = useCallback(
     async (inviteToken: string) => {
       try {
-        const conversation = await chatService.joinGroupByInviteToken(inviteToken);
+        const conversation =
+          await chatService.joinGroupByInviteToken(inviteToken);
         upsertConversation(conversation);
         return conversation;
       } catch (err) {
@@ -1265,9 +1673,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         });
       } catch (err) {
         const msg =
-          err instanceof Error
-            ? err.message
-            : "Khong the cap nhat anh nhom";
+          err instanceof Error ? err.message : "Khong the cap nhat anh nhom";
         setError(msg);
         throw err;
       }
@@ -1349,6 +1755,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     fetchConversations,
     fetchMessages,
     sendMessage,
+    retrySendMessage,
     updateMessage,
     recallMessage,
     deleteMessage,
