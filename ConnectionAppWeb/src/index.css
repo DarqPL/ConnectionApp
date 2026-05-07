@@ -43,10 +43,6 @@
     --chat-bubble-received: 0 0% 96%;
     --chat-bubble-received-foreground: 240 15% 15%;
 
-    /* Status colors */
-    --online: 140 100% 50%;
-    --offline: 0 0% 70%;
-
     /* Warning */
     --warning: 37.7 92.1% 50.2%;
     --warning-foreground: 0 0% 100%;
@@ -154,11 +150,6 @@
     --chat-bubble-received: 240 15% 18%;
     --chat-bubble-received-foreground: 250 100% 90%;
 
-    /* Status colors */
-    --online: 140 100% 60%;
-    --away: 45 100% 65%;
-    --offline: 0 0% 50%;
-
     --destructive: 0 80% 47%;
     --destructive-foreground: 0 0% 100%;
 
@@ -243,15 +234,6 @@
 
   .success-message {
     @apply text-sm text-emerald-500;
-  }
-
-  /* Status indicators */
-  .status-online {
-    @apply bg-[hsl(var(--online))] shadow-[0_0_8px_hsl(var(--online)/0.5)];
-  }
-
-  .status-offline {
-    @apply bg-[hsl(var(--offline))];
   }
 
   /* Gradient backgrounds */

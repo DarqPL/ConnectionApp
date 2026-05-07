@@ -68,10 +68,6 @@ export default {
           "bubble-received": "hsl(var(--chat-bubble-received))",
           "bubble-received-fg": "hsl(var(--chat-bubble-received-foreground))",
         },
-        status: {
-          online: "hsl(var(--online))",
-          offline: "hsl(var(--offline))",
-        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

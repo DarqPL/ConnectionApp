@@ -40,15 +40,6 @@ export const userService = {
   },
 
   /**
-   * PUT /api/users/status?status=ONLINE
-   */
-  async updateStatus(status: string): Promise<void> {
-    await api.put("/users/status", null, {
-      params: { status },
-    });
-  },
-
-  /**
    * POST /api/users/change-password?oldPassword=X&newPassword=Y
    * Returns: string message
    */

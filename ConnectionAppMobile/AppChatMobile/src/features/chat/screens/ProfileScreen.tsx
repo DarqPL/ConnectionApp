@@ -261,7 +261,6 @@ const ProfileScreen = () => {
             <View style={styles.cameraIconBadge}>
               <Ionicons name="camera" size={14} color="#fff" />
             </View>
-            <View style={styles.onlineDot} />
           </TouchableOpacity>
           <Text style={styles.userName}>
             {isEditing ? "" : user?.displayName || "User"}
@@ -576,17 +575,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "rgba(255,255,255,0.8)",
     backgroundColor: "rgba(255,255,255,0.3)",
-  },
-  onlineDot: {
-    position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: COLORS.online,
-    borderWidth: 2.5,
-    borderColor: "#fff",
   },
   cameraIconBadge: {
     position: "absolute",

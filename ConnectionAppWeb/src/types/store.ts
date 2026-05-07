@@ -115,7 +115,6 @@ export interface TypingUser {
 
 export interface SocketState {
   client: unknown | null;
-  onlineUsers: string[];
   connectSocket: (userId: number) => void;
   disconnectSocket: () => void;
   notifyTyping: (conversationId: number) => void;

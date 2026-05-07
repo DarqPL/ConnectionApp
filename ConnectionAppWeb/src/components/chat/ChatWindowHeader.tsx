@@ -4,9 +4,7 @@ import { SidebarTrigger } from "../ui/sidebar";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { Separator } from "../ui/separator";
 import UserAvatar from "./UserAvatar";
-import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
-import { useSocketStore } from "@/stores/useSocketStore";
 import { useCallStore } from "@/stores/useCallStore";
 import {
   DropdownMenu,
@@ -50,7 +48,6 @@ const ChatWindowHeader = ({
 }: ChatWindowHeaderProps) => {
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
-  const { onlineUsers } = useSocketStore();
   const { startCall, activeCall } = useCallStore();
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
@@ -160,13 +157,6 @@ const ChatWindowHeader = ({
                   type={"sidebar"}
                   name={otherUser?.displayName || "Moji"}
                   avatarUrl={otherUser?.avatarUrl || undefined}
-                />
-                <StatusBadge
-                  status={
-                    onlineUsers.includes(String(otherUser?.userId ?? ""))
-                      ? "online"
-                      : "offline"
-                  }
                 />
               </>
             ) : (
