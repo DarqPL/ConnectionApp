@@ -1,5 +1,4 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -150,7 +149,6 @@ const ProfilePage = () => {
                     className="hidden"
                     accept="image/*"
                   />
-                  <div className={`absolute bottom-2 right-2 h-6 w-6 rounded-full border-4 border-background ${user.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-400'}`} />
                 </div>
 
                 <div className="flex-1 sm:mb-4">
@@ -159,10 +157,6 @@ const ProfilePage = () => {
                       <h1 className="text-3xl font-bold">{user.displayName}</h1>
                       <p className="text-muted-foreground">@{user.username}</p>
                     </div>
-                    <Badge variant="outline" className="w-fit">
-                      <span className={`inline-block h-2 w-2 rounded-full mr-2 ${user.status === 'ONLINE' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      {user.status}
-                    </Badge>
                   </div>
                 </div>
               </div>

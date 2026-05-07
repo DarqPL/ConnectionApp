@@ -1,15 +1,15 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  Mail, 
-  Phone, 
-  UserIcon, 
-  UserPlus, 
-  UserCheck, 
-  Clock, 
+import {
+  Mail,
+  Phone,
+  UserIcon,
+  UserPlus,
+  UserCheck,
+  Clock,
   Ban,
-  X 
+  X,
 } from "lucide-react";
 import type { User } from "@/types/user";
 import { cn } from "@/lib/utils";
@@ -45,31 +45,10 @@ const BusinessCard = ({
 }: BusinessCardProps) => {
   const getStatusBadge = () => {
     switch (user.status) {
-      case "ONLINE":
-      case "ACTIVE":
-        return (
-          <Badge variant="default" className="bg-green-600">
-            Hoạt động
-          </Badge>
-        );
-      case "OFFLINE":
-        return (
-          <Badge variant="secondary">
-            Ngoại tuyến
-          </Badge>
-        );
       case "LOCKED":
-        return (
-          <Badge variant="destructive">
-            Bị khóa
-          </Badge>
-        );
+        return <Badge variant="destructive">Bi khoa</Badge>;
       case "DELETED":
-        return (
-          <Badge variant="secondary">
-            Đã xóa
-          </Badge>
-        );
+        return <Badge variant="secondary">Da xoa</Badge>;
       default:
         return null;
     }
@@ -86,7 +65,7 @@ const BusinessCard = ({
             disabled={isLoading}
           >
             <UserCheck className="size-4 mr-2" />
-            Bạn bè
+            Ban be
           </Button>
         );
       case "SENDING":
@@ -98,7 +77,7 @@ const BusinessCard = ({
             disabled={isLoading}
           >
             <Clock className="size-4 mr-2" />
-            Đã gửi lời mời
+            Da gui loi moi
           </Button>
         );
       case "RECEIVED":
@@ -110,7 +89,7 @@ const BusinessCard = ({
               disabled={isLoading}
             >
               <UserCheck className="size-4 mr-2" />
-              Chấp nhận
+              Chap nhan
             </Button>
             <Button
               variant="outline"
@@ -119,7 +98,7 @@ const BusinessCard = ({
               disabled={isLoading}
             >
               <Ban className="size-4 mr-2" />
-              Từ chối
+              Tu choi
             </Button>
           </div>
         );
@@ -131,7 +110,7 @@ const BusinessCard = ({
             disabled={isLoading || user.status === "LOCKED" || user.status === "DELETED"}
           >
             <UserPlus className="size-4 mr-2" />
-            Kết bạn
+            Ket ban
           </Button>
         );
     }
@@ -152,14 +131,10 @@ const BusinessCard = ({
             <span className="text-xs text-muted-foreground truncate">@{user.username}</span>
           </div>
         </div>
-        {!hideActions && !isDisabled && (
-          <div className="w-full mt-1">
-            {getRelationshipButton()}
-          </div>
-        )}
+        {!hideActions && !isDisabled && <div className="w-full mt-1">{getRelationshipButton()}</div>}
         {!hideActions && isDisabled && (
           <div className="text-xs text-center text-muted-foreground p-1.5 bg-accent rounded w-full mt-1">
-            Tài khoản không khả dụng
+            Tai khoan khong kha dung
           </div>
         )}
       </div>
@@ -167,46 +142,31 @@ const BusinessCard = ({
   }
 
   return (
-    <div className={cn(
-      "rounded-lg border border-border bg-linear-to-br from-background to-accent/50",
-      isModal ? "w-full max-w-sm shadow-lg p-6" : "p-4"
-    )}>
-      {/* Close button for modal */}
+    <div
+      className={cn(
+        "rounded-lg border border-border bg-linear-to-br from-background to-accent/50",
+        isModal ? "w-full max-w-sm shadow-lg p-6" : "p-4",
+      )}
+    >
       {isModal && onClose && (
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 p-1 hover:bg-accent rounded-md"
-        >
+        <button onClick={onClose} className="absolute right-4 top-4 p-1 hover:bg-accent rounded-md">
           <X className="size-4" />
         </button>
       )}
 
-      {/* Header */}
       <div className="flex flex-col items-center text-center mb-6">
         <Avatar className="size-24 mb-3 border-4 border-primary/10">
           <AvatarImage src={user.avatarUrl} alt={user.displayName} />
-          <AvatarFallback className="text-lg">
-            {user.displayName.charAt(0).toUpperCase()}
-          </AvatarFallback>
+          <AvatarFallback className="text-lg">{user.displayName.charAt(0).toUpperCase()}</AvatarFallback>
         </Avatar>
-
         <h2 className="text-xl font-bold text-foreground">{user.displayName}</h2>
         <p className="text-sm text-muted-foreground mb-3">@{user.username}</p>
-
         {getStatusBadge()}
       </div>
 
-      {/* Bio */}
-      {user.bio && (
-        <p className="text-sm text-muted-foreground text-center mb-6 italic">
-          "{user.bio}"
-        </p>
-      )}
-
-      {/* Divider */}
+      {user.bio && <p className="text-sm text-muted-foreground text-center mb-6 italic">"{user.bio}"</p>}
       <div className="w-12 h-1 bg-gradient-chat rounded-full mx-auto mb-6"></div>
 
-      {/* Information */}
       <div className="space-y-3 mb-6">
         {user.email && (
           <div className="flex items-center gap-3 text-sm">
@@ -224,7 +184,7 @@ const BusinessCard = ({
           <div className="flex items-center gap-3 text-sm">
             <Phone className="size-4 text-primary shrink-0" />
             <div className="flex-1">
-              <p className="text-muted-foreground">Điện thoại</p>
+              <p className="text-muted-foreground">Dien thoai</p>
               <p className="text-foreground">{user.phone}</p>
             </div>
           </div>
@@ -234,29 +194,22 @@ const BusinessCard = ({
           <div className="flex items-center gap-3 text-sm">
             <UserIcon className="size-4 text-primary shrink-0" />
             <div className="flex-1">
-              <p className="text-muted-foreground">Giới tính</p>
+              <p className="text-muted-foreground">Gioi tinh</p>
               <p className="text-foreground">
-                {user.gender === "MALE" ? "Nam" : user.gender === "FEMALE" ? "Nữ" : "Khác"}
+                {user.gender === "MALE" ? "Nam" : user.gender === "FEMALE" ? "Nu" : "Khac"}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Action Buttons */}
-      {!hideActions && !isDisabled && (
-        <div>
-          {getRelationshipButton()}
-        </div>
-      )}
-
+      {!hideActions && !isDisabled && <div>{getRelationshipButton()}</div>}
       {!hideActions && isDisabled && (
         <div className="text-center text-sm text-muted-foreground p-3 bg-accent rounded-lg">
-          Không thể kết bạn với tài khoản này
+          Khong the ket ban voi tai khoan nay
         </div>
       )}
 
-      {/* Footer */}
       {isModal && (
         <div className="mt-6 pt-6 border-t border-border text-center text-xs text-muted-foreground">
           ID: {user.id}

@@ -27,7 +27,6 @@ interface SecurityNotification {
 
 interface SocketState {
   client: Client | null;
-  onlineUsers: string[];
   connectSocket: (userId: number) => void;
   disconnectSocket: () => void;
   notifyTyping: (conversationId: number) => void;
@@ -54,7 +53,6 @@ const resolveSocketUrl = (): string => {
 
 export const useSocketStore = create<SocketState>((set, get) => ({
   client: null,
-  onlineUsers: [],
 
   connectSocket: (userId) => {
     const token = useAuthStore.getState().accessToken;
@@ -314,11 +312,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           },
         );
 
-        // Subscribe to online users
-        client.subscribe("/topic/online-users", (message) => {
-          const users = JSON.parse(message.body);
-          set({ onlineUsers: users });
-        });
       },
 
       onStompError: (frame) => {
