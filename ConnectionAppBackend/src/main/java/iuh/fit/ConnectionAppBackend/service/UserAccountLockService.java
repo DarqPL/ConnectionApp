@@ -2,6 +2,7 @@ package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
+import iuh.fit.ConnectionAppBackend.exception.AccountManualLockedException;
 import iuh.fit.ConnectionAppBackend.exception.AccountTemporarilyLockedException;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
@@ -15,6 +16,8 @@ import java.time.LocalDateTime;
 @Service
 public class UserAccountLockService {
 
+    private static final String MANUAL_LOCK_REASON = "MANUAL_LOCK";
+
     @Autowired
     private UserRepository userRepository;
 
@@ -24,8 +27,14 @@ public class UserAccountLockService {
         LocalDateTime now = LocalDateTime.now();
 
         if (lockUntil != null && lockUntil.isAfter(now)) {
+            if (MANUAL_LOCK_REASON.equalsIgnoreCase(user.getLockReason())) {
+                throw new AccountManualLockedException(
+                        "Tài khoản của bạn đã bị khóa do yêu cầu của người dùng."
+                );
+            }
+
             throw new AccountTemporarilyLockedException(
-                    "Bạn bị khóa tài khoản tạm thời do vi phạm chính sách",
+                    "Tài khoản của bạn đã bị khóa tạm thời do vi phạm chính sách",
                     calculateRemainingMinutes(lockUntil),
                     lockUntil
             );
@@ -36,7 +45,7 @@ public class UserAccountLockService {
         }
 
         if (lockUntil == null) {
-            throw new UnauthorizedException("Tài khoản đã bị khóa");
+            throw new UnauthorizedException("Tài khoản của bạn đã bị khóa");
         }
 
         user.setStatus(UserStatus.OFFLINE);

@@ -289,7 +289,9 @@ public class UserService {
         user.setStatus(UserStatus.OFFLINE);
         user.setLockUntil(now.plusYears(100));
         user.setLockReason("MANUAL_LOCK");
+        bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
+        refreshTokenService.revokeAllByUser(user);
 
         return "Account locked successfully";
     }
@@ -317,6 +319,43 @@ public class UserService {
         userRepository.save(user);
 
         return "Account unlocked successfully";
+    }
+
+    public void requestManualUnlockOtp(String usernameOrEmail, String email) {
+        User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getLockUntil() == null || !user.getLockUntil().isAfter(now) || !"MANUAL_LOCK".equalsIgnoreCase(user.getLockReason())) {
+            throw new BadRequestException("Tài khoản không ở trạng thái tự khóa.");
+        }
+
+        if (email == null || !email.trim().equalsIgnoreCase(user.getEmail())) {
+            throw new BadRequestException("Đây không phải email bạn đăng ký");
+        }
+
+        String otp = otpService.generateOtp(user.getEmail());
+        emailService.sendOtpEmail(user.getEmail(), otp);
+    }
+
+    @Transactional
+    public void verifyManualUnlockOtp(String usernameOrEmail, String email, String otp) {
+        User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (email == null || !email.trim().equalsIgnoreCase(user.getEmail())) {
+            throw new BadRequestException("Đây không phải email bạn đăng ký");
+        }
+
+        if (!otpService.verifyOtp(user.getEmail(), otp)) {
+            throw new BadRequestException("Mã OTP không chính xác hoặc đã hết hạn");
+        }
+
+        user.setStatus(UserStatus.OFFLINE);
+        user.setLockUntil(null);
+        user.setLockReason(null);
+        userRepository.save(user);
+        otpService.invalidateOtp(user.getEmail());
     }
 
     /**

@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { resolveApiBaseUrl } from "@/lib/apiConfig";
 
 export const authService = {
   /**
@@ -23,7 +24,6 @@ export const authService = {
     });
     return res.data;
   },
-
 
   /**
    * POST /api/auth/signup/send-otp
@@ -112,5 +112,53 @@ export const authService = {
       newPassword,
     });
     return res.data;
+  },
+
+  requestManualUnlockOtp: async (usernameOrEmail: string, email: string) => {
+    const res = await fetch(
+      `${resolveApiBaseUrl()}/auth/manual-lock/request-otp`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ usernameOrEmail, email }),
+      },
+    );
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      const message = errorBody?.message ?? "Không thể gửi mã OTP";
+      throw {
+        response: { data: { ...errorBody, message }, status: res.status },
+      };
+    }
+    return res.json();
+  },
+
+  verifyManualUnlockOtp: async (
+    usernameOrEmail: string,
+    email: string,
+    otp: string,
+  ) => {
+    const res = await fetch(
+      `${resolveApiBaseUrl()}/auth/manual-lock/verify-otp`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ usernameOrEmail, email, otp }),
+      },
+    );
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      const message = errorBody?.message ?? "Mã OTP không hợp lệ";
+      throw {
+        response: { data: { ...errorBody, message }, status: res.status },
+      };
+    }
+    return res.json();
   },
 };

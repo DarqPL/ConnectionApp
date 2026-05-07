@@ -231,6 +231,35 @@ public class AuthController {
                 .body(Map.of("message", "Logged out"));
     }
 
+    @PostMapping("/manual-lock/request-otp")
+    public ResponseEntity<?> requestManualLockOtp(@RequestBody Map<String, String> req) {
+        String usernameOrEmail = req.get("usernameOrEmail");
+        String email = req.get("email");
+
+        if (usernameOrEmail == null || usernameOrEmail.isBlank() || email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Thiếu thông tin xác thực", "code", "BAD_REQUEST"));
+        }
+
+        userService.requestManualUnlockOtp(usernameOrEmail.trim(), email.trim());
+        return ResponseEntity.ok(Map.of("message", "Mã OTP đã được gửi đến email của bạn"));
+    }
+
+    @PostMapping("/manual-lock/verify-otp")
+    public ResponseEntity<?> verifyManualLockOtp(@RequestBody Map<String, String> req) {
+        String usernameOrEmail = req.get("usernameOrEmail");
+        String email = req.get("email");
+        String otp = req.get("otp");
+
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()
+                || email == null || email.isBlank()
+                || otp == null || otp.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Thiếu thông tin xác thực", "code", "BAD_REQUEST"));
+        }
+
+        userService.verifyManualUnlockOtp(usernameOrEmail.trim(), email.trim(), otp.trim());
+        return ResponseEntity.ok(Map.of("message", "Mở khóa tài khoản thành công"));
+    }
+
     private String extractClientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {

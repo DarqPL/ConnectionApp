@@ -34,6 +34,7 @@ const ProfileScreen = () => {
     requestDeleteOtp,
     confirmDeleteAccount,
     deleteAccount,
+    lockAccount,
   } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -191,6 +192,28 @@ const ProfileScreen = () => {
             } catch (err) {
               setDeleteLoading(false);
               Alert.alert("Lỗi", "Không thể gửi mã OTP. Thử lại sau.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleLockAccount = () => {
+    Alert.alert(
+      "Khoá tài khoản",
+      "Sau khi khoa tài khoản, bạn sẽ bị đăng xuất ngay. Bạn có muốn tiếp tục?",
+      [
+        { text: "Bỏ qua", style: "cancel" },
+        {
+          text: "Khoá tài khoản",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await lockAccount();
+              Alert.alert("Thành công", "Tài khoản đã được khoá.");
+            } catch (err) {
+              Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể khoá tài khoản");
             }
           },
         },
@@ -475,6 +498,11 @@ const ProfileScreen = () => {
             ) : (
               <Text style={styles.deleteAccountText}>Xóa tài khoản</Text>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleLockAccount}>
+            <Ionicons name="lock-closed-outline" size={20} color={COLORS.destructive} />
+            <Text style={styles.deleteAccountText}>Khoá tài khoản</Text>
           </TouchableOpacity>
 
           {/* Sign out */}

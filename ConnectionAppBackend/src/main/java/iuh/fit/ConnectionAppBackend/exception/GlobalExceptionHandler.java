@@ -150,6 +150,22 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(AccountManualLockedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountManualLockedException(
+            AccountManualLockedException ex, WebRequest request) {
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status(HttpStatus.FORBIDDEN.value())
+                .code("ACCOUNT_MANUAL_LOCKED")
+                .message(ex.getMessage())
+                .error("Forbidden")
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(StorageException.class)
     public ResponseEntity<ErrorResponse> handleStorageException(
             StorageException ex, WebRequest request) {

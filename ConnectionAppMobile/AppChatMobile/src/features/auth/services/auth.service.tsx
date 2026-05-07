@@ -93,7 +93,8 @@ const getConfiguredLanApiBaseUrl = (): string | null => {
   }
 };
 
-const migrateLegacyPort = (url: string): string => url.replace(":8082", ":8080");
+const migrateLegacyPort = (url: string): string =>
+  url.replace(":8082", ":8080");
 
 const isLocalhostHost = (host: string): boolean => {
   const normalized = host.trim().toLowerCase();
@@ -503,7 +504,10 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Khong the gui yeu cau quen mat khau");
+      throw await this.parseError(
+        response,
+        "Khong the gui yeu cau quen mat khau",
+      );
     }
   }
 
@@ -581,7 +585,10 @@ export class AuthService {
     );
 
     if (!response.ok) {
-      throw await this.parseError(response, "Ma OTP khong chinh xac hoac da het han");
+      throw await this.parseError(
+        response,
+        "Ma OTP khong chinh xac hoac da het han",
+      );
     }
   }
 
@@ -591,7 +598,58 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw await this.parseError(response, "Xoa tai khoan that bai");
+      throw await this.parseError(response, "Xoá tài khoản thất bại");
+    }
+  }
+
+  async lockAccount(userId: number): Promise<void> {
+    const response = await this.authFetch(`/users/${userId}/lock`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Khoá tài khoản thất bại");
+    }
+  }
+
+  async requestManualUnlockOtp(
+    usernameOrEmail: string,
+    email: string,
+  ): Promise<void> {
+    const response = await this.safeFetch(
+      this.buildUrl("/auth/manual-lock/request-otp"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ usernameOrEmail, email }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Không thể gửi mã OTP");
+    }
+  }
+
+  async verifyManualUnlockOtp(
+    usernameOrEmail: string,
+    email: string,
+    otp: string,
+  ): Promise<void> {
+    const response = await this.safeFetch(
+      this.buildUrl("/auth/manual-lock/verify-otp"),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ usernameOrEmail, email, otp }),
+      },
+    );
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Mã OTP không hợp lệ");
     }
   }
 

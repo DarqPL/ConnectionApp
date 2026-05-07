@@ -1,5 +1,4 @@
-import { Bell, Shield, ShieldBan, Unlock, ShieldCheck, Loader2 } from "lucide-react";
-
+import { Bell, Shield, ShieldBan, ShieldCheck, Loader2 } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -8,7 +7,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { userService } from "@/services/userService";
 import type { User } from "@/types/user";
 import {
@@ -30,11 +29,8 @@ type Props = {
 
 const PrivacySettings = ({ user }: Props) => {
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState(user?.status);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [otp, setOtp] = useState("");
-
-  // Password change states
   const [isPasswordOpen, setIsPasswordOpen] = useState(false);
   const [passLoading, setPassLoading] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -42,6 +38,8 @@ const PrivacySettings = ({ user }: Props) => {
     newPassword: "",
     confirmPassword: "",
   });
+
+  if (!user) return null;
 
   const handlePasswordChange = async () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -57,56 +55,54 @@ const PrivacySettings = ({ user }: Props) => {
     try {
       await userService.changePassword(
         passwordForm.oldPassword,
-        passwordForm.newPassword
+        passwordForm.newPassword,
       );
       toast.success("Thay đổi mật khẩu thành công");
       setIsPasswordOpen(false);
-      setPasswordForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      setPasswordForm({
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
     } catch (err: any) {
-      const msg = err.response?.data || "Mật khẩu cũ không chính xác";
-      toast.error(msg);
+      toast.error(err.response?.data || "Mật khẩu cũ không chính xác");
     } finally {
       setPassLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (user?.status) {
-      setStatus(user.status);
+  const handleLockAccount = async () => {
+    const confirmed = window.confirm("Bạn có chắc muốn khoá tài khoản?");
+    if (!confirmed) {
+      return;
     }
-  }, [user]);
 
-  if (!user) return null;
-
-  const handleLockToggle = async () => {
     try {
       setLoading(true);
-
-      if (status === "LOCKED") {
-        await userService.unlockAccount(user.id);
-        setStatus("OFFLINE");
-      } else {
-        await userService.lockAccount(user.id);
-        setStatus("LOCKED");
-      }
-    } catch (err) {
-      console.error(err);
+      await userService.lockAccount(user.id);
+      localStorage.removeItem("accessToken");
+      window.location.href = "/signin";
+    } catch {
+      toast.error("Không thể khoá tài khoản. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Tài khoản của bạn sẽ bị xóa vĩnh viễn và không thể khôi phục. Bạn có chắc muốn tiếp tục?")) return;
-
+    if (
+      !window.confirm(
+        "Tài khoản của bạn sẽ bị xóa vĩnh viễn và không thể khôi phục. Bạn có chắc muốn tiếp tục?",
+      )
+    )
+      return;
     try {
       setLoading(true);
       await userService.requestDeleteOtp();
       setShowOtpInput(true);
-      alert("Mã OTP đã được gửi đến email của bạn.");
-    } catch (err) {
-      console.error(err);
-      alert("Không thể gửi mã OTP. Vui lòng thử lại sau.");
+      toast.success("Mã OTP đã được gửi đến email của bạn.");
+    } catch {
+      toast.error("Không thể gửi mã OTP. Vui lòng thử lại sau.");
     } finally {
       setLoading(false);
     }
@@ -114,32 +110,29 @@ const PrivacySettings = ({ user }: Props) => {
 
   const handleConfirmDelete = async () => {
     if (!otp || otp.length < 6) {
-      alert("Vui lòng nhập mã OTP 6 chữ số.");
+      toast.error("Vui lòng nhập mã OTP 6 chữ số.");
       return;
     }
 
     try {
       setLoading(true);
       await userService.confirmDeleteAccount(otp);
-      alert("Tài khoản đã được xóa vĩnh viễn.");
-      localStorage.clear(); // Clear all auth data
+      toast.success("Tài khoản đã được xóa vĩnh viễn.");
+      localStorage.clear();
       window.location.href = "/signin";
-    } catch (err) {
-      console.error(err);
-      alert("Mã OTP không xác thực hoặc đã hết hạn.");
+    } catch {
+      toast.error("Mã OTP không xác thực hoặc đã hết hạn.");
     } finally {
       setLoading(false);
     }
   };
-
-  const isLocked = status === "LOCKED";
 
   return (
     <Card className="glass-strong border-border/30">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-primary" />
-          Quyền riêng tư & Bảo mật
+          Quyền riêng tư và bảo mật
         </CardTitle>
         <CardDescription>
           Quản lý cài đặt quyền riêng tư cho tài khoản của bạn
@@ -148,73 +141,106 @@ const PrivacySettings = ({ user }: Props) => {
 
       <CardContent className="space-y-6">
         <div className="space-y-4">
-      <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
-        <DialogTrigger asChild>
-          <Button
-            variant="outline"
-            className="w-full justify-start glass-light border-border/30 hover:text-warning"
-          >
-            <Shield className="h-4 w-4 mr-2" />
-            Đổi mật khẩu
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px] rounded-3xl backdrop-blur-xl bg-background/95 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <ShieldCheck className="h-6 w-6 text-primary" />
-              Thay đổi mật khẩu
-            </DialogTitle>
-            <DialogDescription>
-              Nhập mật khẩu hiện tại và mật khẩu mới để bảo mật tài khoản.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-5 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="priv-old" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Mật khẩu hiện tại</Label>
-              <Input
-                id="priv-old"
-                type="password"
-                placeholder="Nhập mật khẩu cũ"
-                value={passwordForm.oldPassword}
-                onChange={(e) => setPasswordForm(prev => ({ ...prev, oldPassword: e.target.value }))}
-                className="rounded-xl h-11 bg-muted/20"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="priv-new" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Mật khẩu mới</Label>
-              <Input
-                id="priv-new"
-                type="password"
-                placeholder="Tối thiểu 6 ký tự"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
-                className="rounded-xl h-11 bg-muted/20"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="priv-confirm" className="ml-1 text-xs font-bold text-muted-foreground uppercase">Xác nhận mật khẩu</Label>
-              <Input
-                id="priv-confirm"
-                type="password"
-                placeholder="Nhập lại mật khẩu mới"
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                className="rounded-xl h-11 bg-muted/20"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-                className="w-full h-11 rounded-xl shadow-lg shadow-primary/20" 
-                onClick={handlePasswordChange}
-                disabled={passLoading || !passwordForm.oldPassword || !passwordForm.newPassword}
-            >
-              {passLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Xác nhận thay đổi
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start glass-light border-border/30 hover:text-warning"
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                Thay đổi mật khẩu
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] rounded-3xl backdrop-blur-xl bg-background/95 shadow-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <ShieldCheck className="h-6 w-6 text-primary" />
+                  Thay đổi mật khẩu
+                </DialogTitle>
+                <DialogDescription>
+                  Nhập mật khẩu hiện tại và mật khẩu mới để bảo mật tài khoản.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-5 py-4">
+                <div className="grid gap-2">
+                  <Label
+                    htmlFor="priv-old"
+                    className="ml-1 text-xs font-bold text-muted-foreground uppercase"
+                  >
+                    Mật khẩu hiện tại
+                  </Label>
+                  <Input
+                    id="priv-old"
+                    type="password"
+                    value={passwordForm.oldPassword}
+                    onChange={(e) =>
+                      setPasswordForm((p) => ({
+                        ...p,
+                        oldPassword: e.target.value,
+                      }))
+                    }
+                    className="rounded-xl h-11 bg-muted/20"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label
+                    htmlFor="priv-new"
+                    className="ml-1 text-xs font-bold text-muted-foreground uppercase"
+                  >
+                    Mật khẩu mới
+                  </Label>
+                  <Input
+                    id="priv-new"
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) =>
+                      setPasswordForm((p) => ({
+                        ...p,
+                        newPassword: e.target.value,
+                      }))
+                    }
+                    className="rounded-xl h-11 bg-muted/20"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label
+                    htmlFor="priv-confirm"
+                    className="ml-1 text-xs font-bold text-muted-foreground uppercase"
+                  >
+                    Xác nhận mật khẩu
+                  </Label>
+                  <Input
+                    id="priv-confirm"
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) =>
+                      setPasswordForm((p) => ({
+                        ...p,
+                        confirmPassword: e.target.value,
+                      }))
+                    }
+                    className="rounded-xl h-11 bg-muted/20"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  className="w-full h-11 rounded-xl shadow-lg shadow-primary/20"
+                  onClick={handlePasswordChange}
+                  disabled={
+                    passLoading ||
+                    !passwordForm.oldPassword ||
+                    !passwordForm.newPassword
+                  }
+                >
+                  {passLoading && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Xác nhận thay đổi
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Button
             variant="outline"
@@ -229,25 +255,16 @@ const PrivacySettings = ({ user }: Props) => {
             className="w-full justify-start glass-light border-border/30 hover:text-destructive"
           >
             <ShieldBan className="size-4 mr-2" />
-            Chặn & Báo cáo
+            Chặn & báo cáo
           </Button>
 
           <Button
-            onClick={handleLockToggle}
+            onClick={handleLockAccount}
             disabled={loading}
             className="w-full justify-start"
           >
-            {isLocked ? (
-              <>
-                <Unlock className="size-4 mr-2" />
-                Mở khóa tài khoản
-              </>
-            ) : (
-              <>
-                <ShieldBan className="size-4 mr-2" />
-                Khóa tài khoản
-              </>
-            )}
+            <ShieldBan className="size-4 mr-2" />
+            Khóa tài khoản
           </Button>
         </div>
 
@@ -259,18 +276,27 @@ const PrivacySettings = ({ user }: Props) => {
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Nhập mã OTP 6 số"
+                placeholder="Nhap ma OTP 6 so"
                 className="w-full p-2 rounded-md border bg-background text-center text-lg font-bold tracking-widest"
                 maxLength={6}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
               />
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setShowOtpInput(false)}>
-                  Hủy
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowOtpInput(false)}
+                >
+                  Huỷ
                 </Button>
-                <Button variant="destructive" className="flex-1" onClick={handleConfirmDelete} disabled={loading}>
-                  {loading ? "Đang xử lý..." : "Xác nhận xóa vĩnh viễn"}
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={handleConfirmDelete}
+                  disabled={loading}
+                >
+                  {loading ? "Dang xu ly..." : "Xac nhan xoa vinh vien"}
                 </Button>
               </div>
             </div>
