@@ -46,9 +46,9 @@ const BusinessCard = ({
   const getStatusBadge = () => {
     switch (user.status) {
       case "LOCKED":
-        return <Badge variant="destructive">Bi khoa</Badge>;
+        return <Badge variant="destructive">Bị khoá</Badge>;
       case "DELETED":
-        return <Badge variant="secondary">Da xoa</Badge>;
+        return <Badge variant="secondary">Đã xoá</Badge>;
       default:
         return null;
     }
@@ -65,7 +65,7 @@ const BusinessCard = ({
             disabled={isLoading}
           >
             <UserCheck className="size-4 mr-2" />
-            Ban be
+            Bạn bè
           </Button>
         );
       case "SENDING":
@@ -107,7 +107,9 @@ const BusinessCard = ({
           <Button
             className="w-full bg-gradient-chat text-white"
             onClick={onAddFriend}
-            disabled={isLoading || user.status === "LOCKED" || user.status === "DELETED"}
+            disabled={
+              isLoading || user.status === "LOCKED" || user.status === "DELETED"
+            }
           >
             <UserPlus className="size-4 mr-2" />
             Ket ban
@@ -124,17 +126,25 @@ const BusinessCard = ({
         <div className="flex items-center gap-3">
           <Avatar className="size-12 border">
             <AvatarImage src={user.avatarUrl} alt={user.displayName} />
-            <AvatarFallback>{user.displayName.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>
+              {user.displayName.charAt(0).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
           <div className="flex flex-col overflow-hidden">
-            <span className="font-semibold text-sm text-foreground truncate">{user.displayName}</span>
-            <span className="text-xs text-muted-foreground truncate">@{user.username}</span>
+            <span className="font-semibold text-sm text-foreground truncate">
+              {user.displayName}
+            </span>
+            <span className="text-xs text-muted-foreground truncate">
+              @{user.username}
+            </span>
           </div>
         </div>
-        {!hideActions && !isDisabled && <div className="w-full mt-1">{getRelationshipButton()}</div>}
+        {!hideActions && !isDisabled && (
+          <div className="w-full mt-1">{getRelationshipButton()}</div>
+        )}
         {!hideActions && isDisabled && (
           <div className="text-xs text-center text-muted-foreground p-1.5 bg-accent rounded w-full mt-1">
-            Tai khoan khong kha dung
+            Tài khoản không khả dụng
           </div>
         )}
       </div>
@@ -149,7 +159,10 @@ const BusinessCard = ({
       )}
     >
       {isModal && onClose && (
-        <button onClick={onClose} className="absolute right-4 top-4 p-1 hover:bg-accent rounded-md">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 p-1 hover:bg-accent rounded-md"
+        >
           <X className="size-4" />
         </button>
       )}
@@ -157,14 +170,22 @@ const BusinessCard = ({
       <div className="flex flex-col items-center text-center mb-6">
         <Avatar className="size-24 mb-3 border-4 border-primary/10">
           <AvatarImage src={user.avatarUrl} alt={user.displayName} />
-          <AvatarFallback className="text-lg">{user.displayName.charAt(0).toUpperCase()}</AvatarFallback>
+          <AvatarFallback className="text-lg">
+            {user.displayName.charAt(0).toUpperCase()}
+          </AvatarFallback>
         </Avatar>
-        <h2 className="text-xl font-bold text-foreground">{user.displayName}</h2>
+        <h2 className="text-xl font-bold text-foreground">
+          {user.displayName}
+        </h2>
         <p className="text-sm text-muted-foreground mb-3">@{user.username}</p>
         {getStatusBadge()}
       </div>
 
-      {user.bio && <p className="text-sm text-muted-foreground text-center mb-6 italic">"{user.bio}"</p>}
+      {user.bio && (
+        <p className="text-sm text-muted-foreground text-center mb-6 italic">
+          "{user.bio}"
+        </p>
+      )}
       <div className="w-12 h-1 bg-gradient-chat rounded-full mx-auto mb-6"></div>
 
       <div className="space-y-3 mb-6">
@@ -196,7 +217,11 @@ const BusinessCard = ({
             <div className="flex-1">
               <p className="text-muted-foreground">Gioi tinh</p>
               <p className="text-foreground">
-                {user.gender === "MALE" ? "Nam" : user.gender === "FEMALE" ? "Nu" : "Khac"}
+                {user.gender === "MALE"
+                  ? "Nam"
+                  : user.gender === "FEMALE"
+                    ? "Nu"
+                    : "Khac"}
               </p>
             </div>
           </div>

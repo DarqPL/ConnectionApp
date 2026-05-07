@@ -18,19 +18,21 @@ const PreferencesForm = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sun className="h-5 w-5 text-primary" />
-          Tuy chinh ung dung
+          Tuỳ chỉnh ứng dụng
         </CardTitle>
-        <CardDescription>Ca nhan hoa trai nghiem tro chuyen cua ban</CardDescription>
+        <CardDescription>
+          Cá nhân hoá trải nghiệm trò chuyện của bạn
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <Label htmlFor="theme-toggle" className="text-base font-medium">
-              Che do toi
+              Chế độ tối
             </Label>
             <p className="text-sm text-muted-foreground">
-              Chuyen doi giua giao dien sang va toi
+              Chuyển đổi giữa giao diện sáng và tối
             </p>
           </div>
           <div className="flex items-center gap-2">
