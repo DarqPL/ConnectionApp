@@ -35,6 +35,9 @@ interface AuthContextType {
   requestDeleteOtp: () => Promise<void>;
   confirmDeleteAccount: (otp: string) => Promise<void>;
   deleteAccount: (otp: string) => Promise<void>;
+  lockAccount: () => Promise<void>;
+  requestManualUnlockOtp: (usernameOrEmail: string, email: string) => Promise<void>;
+  verifyManualUnlockOtp: (usernameOrEmail: string, email: string, otp: string) => Promise<void>;
   setApiBaseUrl: (url: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (data: Partial<User>) => Promise<void>;
@@ -264,6 +267,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [confirmDeleteAccount],
   );
 
+  const lockAccount = useCallback(async () => {
+    if (!user?.id) {
+      throw new Error("Không tìm thấy tài khoản người dùng");
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      await authService.lockAccount(user.id);
+      await authService.signOut();
+      setUser(null);
+      setAccessToken(null);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Khoá tài khoản thất bại";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const requestManualUnlockOtp = useCallback(
+    async (usernameOrEmail: string, email: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.requestManualUnlockOtp(usernameOrEmail, email);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Gửi OTP thất bại";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
+
+  const verifyManualUnlockOtp = useCallback(
+    async (usernameOrEmail: string, email: string, otp: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.verifyManualUnlockOtp(usernameOrEmail, email, otp);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Xác minh OTP thất bại";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
+
   const updateUserProfile = useCallback(async (data: Partial<User>) => {
     const { userService } = await import("../../chat/services/user.service");
     const updatedUser = await userService.updateProfile(data);
@@ -332,6 +392,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     requestDeleteOtp,
     confirmDeleteAccount,
     deleteAccount,
+    lockAccount,
+    requestManualUnlockOtp,
+    verifyManualUnlockOtp,
     setApiBaseUrl,
     signOut,
     updateUserProfile,

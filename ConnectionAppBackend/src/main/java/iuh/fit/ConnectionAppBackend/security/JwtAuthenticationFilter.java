@@ -2,6 +2,7 @@ package iuh.fit.ConnectionAppBackend.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
+import iuh.fit.ConnectionAppBackend.exception.AccountManualLockedException;
 import iuh.fit.ConnectionAppBackend.exception.AccountTemporarilyLockedException;
 import iuh.fit.ConnectionAppBackend.exception.ErrorResponse;
 import iuh.fit.ConnectionAppBackend.service.CustomUserDetailsService;
@@ -44,6 +45,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
+        String requestUri = request.getRequestURI();
+        if ("/api/auth/manual-lock/request-otp".equals(requestUri)
+                || "/api/auth/manual-lock/verify-otp".equals(requestUri)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String authHeader = request.getHeader("Authorization");
         String username = null;
@@ -70,6 +77,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                         User user = customerUserDetails.getUser();
                                         try {
                                                 userAccountLockService.assertAccountIsActive(user);
+                                        } catch (AccountManualLockedException ex) {
+                                                writeManualLockResponse(response, request, ex);
+                                                return;
                                         } catch (AccountTemporarilyLockedException ex) {
                                                 writeTemporaryLockResponse(response, request, ex);
                                                 return;
@@ -121,6 +131,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .timestamp(LocalDateTime.now())
                         .remainingMinutes(ex.getRemainingMinutes())
                         .lockUntil(ex.getLockUntil())
+                        .build();
+
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                response.getWriter().write(objectMapper.writeValueAsString(payload));
+        }
+
+        private void writeManualLockResponse(HttpServletResponse response,
+                                             HttpServletRequest request,
+                                             AccountManualLockedException ex) throws IOException {
+                ErrorResponse payload = ErrorResponse.builder()
+                        .status(HttpServletResponse.SC_FORBIDDEN)
+                        .code("ACCOUNT_MANUAL_LOCKED")
+                        .message(ex.getMessage())
+                        .error("Forbidden")
+                        .path(request.getRequestURI())
+                        .timestamp(LocalDateTime.now())
                         .build();
 
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);

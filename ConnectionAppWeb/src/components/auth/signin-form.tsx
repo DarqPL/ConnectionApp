@@ -14,9 +14,7 @@ import { consumePostLoginRedirect } from "@/lib/authRedirect";
 const LOCK_NOTICE_KEY = "auth_lock_notice";
 
 const signInSchema = z.object({
-  username: z
-    .string()
-    .min(3, "Tên đăng nhập hoặc email phải có ít nhất 3 ký tự"),
+  username: z.string().min(3, "Tên đăng nhập hoặc email phải có ít nhất 3 ký tự"),
   password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
 });
 
@@ -39,9 +37,7 @@ export function SigninForm({
 
   useEffect(() => {
     const lockNotice = sessionStorage.getItem(LOCK_NOTICE_KEY);
-    if (!lockNotice) {
-      return;
-    }
+    if (!lockNotice) return;
 
     setError("root", { message: lockNotice });
     sessionStorage.removeItem(LOCK_NOTICE_KEY);
@@ -53,15 +49,20 @@ export function SigninForm({
       await signIn(username, password);
       navigate(consumePostLoginRedirect() || "/");
     } catch (error: any) {
-      console.error("Login failed:", error);
       const code = error.response?.data?.code;
       const remainingMinutes = error.response?.data?.remainingMinutes;
+
+      if (code === "ACCOUNT_MANUAL_LOCKED") {
+        navigate("/unlock-account", { state: { usernameOrEmail: username } });
+        return;
+      }
+
       let message =
         error.response?.data?.message ||
         "Tên đăng nhập hoặc mật khẩu không chính xác";
 
       if (code === "ACCOUNT_TEMP_LOCKED" && Number(remainingMinutes) > 0) {
-        message = `${message}. Còn ${remainingMinutes} phút để gỡ khóa.`;
+        message = `${message}. Còn ${remainingMinutes} phút để mở khóa.`;
       }
 
       setError("root", { message });
@@ -74,7 +75,6 @@ export function SigninForm({
         <CardContent className="grid p-0 md:grid-cols-2">
           <form className="p-8 md:p-12" onSubmit={handleSubmit(onSubmit)}>
             <div className="flex flex-col gap-8">
-              {/* Header */}
               <div className="flex flex-col gap-2">
                 <div className="mb-4">
                   <img src="/logo.svg" alt="logo" className="size-10" />
@@ -82,18 +82,11 @@ export function SigninForm({
                 <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
                   Chào mừng trở lại
                 </h1>
-                <p className="text-muted-foreground text-sm">
-                  Đăng nhập để kết nối với cộng đồng Connection ngay bây giờ.
-                </p>
               </div>
 
               <div className="grid gap-5">
-                {/* Username/Email */}
                 <div className="grid gap-2">
-                  <Label
-                    htmlFor="username"
-                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1"
-                  >
+                  <Label htmlFor="username" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1">
                     Tên đăng nhập hoặc Email
                   </Label>
                   <Input
@@ -104,39 +97,28 @@ export function SigninForm({
                     {...register("username")}
                   />
                   {errors.username && (
-                    <p className="text-destructive text-xs ml-1 font-medium italic">
-                      {errors.username.message}
-                    </p>
+                    <p className="text-destructive text-xs ml-1 font-medium italic">{errors.username.message}</p>
                   )}
                 </div>
 
-                {/* Password */}
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label
-                      htmlFor="password"
-                      className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1"
-                    >
+                    <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 ml-1">
                       Mật khẩu
                     </Label>
-                    <a
-                      href="/forgot-password"
-                      className="text-xs font-medium text-primary hover:underline underline-offset-4"
-                    >
+                    <a href="/forgot-password" className="text-xs font-medium text-primary hover:underline underline-offset-4">
                       Quên mật khẩu?
                     </a>
                   </div>
                   <Input
                     type="password"
                     id="password"
-                    placeholder="••••••••"
+                    placeholder="********"
                     className="h-12 bg-background/50 border-border/50 focus:ring-primary/20 transition-all rounded-xl placeholder:text-muted-foreground/50"
                     {...register("password")}
                   />
                   {errors.password && (
-                    <p className="text-destructive text-xs ml-1 font-medium italic">
-                      {errors.password.message}
-                    </p>
+                    <p className="text-destructive text-xs ml-1 font-medium italic">{errors.password.message}</p>
                   )}
                 </div>
 
@@ -157,65 +139,21 @@ export function SigninForm({
 
               <div className="text-center text-sm text-muted-foreground">
                 Chưa có tài khoản?{" "}
-                <a
-                  href="/signup"
-                  className="font-bold text-primary hover:underline underline-offset-4"
-                >
+                <a href="/signup" className="font-bold text-primary hover:underline underline-offset-4">
                   Đăng ký miễn phí
                 </a>
               </div>
             </div>
           </form>
 
-          {/* Side Illustration */}
           <div className="relative hidden md:flex items-center justify-center p-8 bg-muted/30 overflow-hidden">
             <div className="absolute inset-0 z-0">
-              <img
-                src="placeholder.png"
-                alt="Illustration"
-                className="w-full h-full object-cover"
-              />
+              <img src="placeholder.png" alt="Illustration" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent" />
-            </div>
-
-            <div className="relative z-10 text-center space-y-4 max-w-[280px]">
-              <div className="p-5 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl">
-                <p className="text-white text-lg font-medium italic leading-relaxed">
-                  "Connection là nơi khoảng cách không còn là rào cản giữa chúng
-                  ta."
-                </p>
-                <div className="mt-6 flex items-center justify-center gap-3">
-                  <div className="flex -space-x-2">
-                    {["bg-blue-400", "bg-violet-400", "bg-indigo-400"].map(
-                      (color, i) => (
-                        <div
-                          key={i}
-                          className={`size-7 rounded-full border-2 border-white/30 ${color} shadow-sm`}
-                        />
-                      ),
-                    )}
-                  </div>
-                  <span className="text-white/90 text-xs font-semibold tracking-wide">
-                    +10k active users
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      <div className="text-xs text-center text-muted-foreground/50 max-w-sm mx-auto">
-        Bằng cách tiếp tục, bạn đồng ý với{" "}
-        <a href="#" className="underline hover:text-primary transition-colors">
-          Điều khoản
-        </a>{" "}
-        và{" "}
-        <a href="#" className="underline hover:text-primary transition-colors">
-          Bảo mật
-        </a>{" "}
-        của chúng tôi.
-      </div>
     </div>
   );
 }

@@ -70,6 +70,8 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password",
                                 "/api/auth/verify-otp",
                                 "/api/auth/reset-password",
+                                "/api/auth/manual-lock/request-otp",
+                                "/api/auth/manual-lock/verify-otp",
                                 "/ws-native/**",
                                 "/ws-native",
                                 "/ws/**",

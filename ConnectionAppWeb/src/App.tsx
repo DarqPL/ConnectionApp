@@ -4,6 +4,7 @@ import SignUpPage from './pages/SignUpPage'
 import ChatAppPage from './pages/ChatAppPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import GroupInvitePage from './pages/GroupInvitePage'
+import ManualUnlockPage from './pages/ManualUnlockPage'
 import { Toaster } from 'sonner'
 function App() {
 
@@ -16,6 +17,7 @@ function App() {
           <Route path='/signin' element={<SignInPage />} />
           <Route path='/signup' element={<SignUpPage />} />
           <Route path='/forgot-password' element={<ForgotPasswordPage />} />
+          <Route path='/unlock-account' element={<ManualUnlockPage />} />
           <Route path='/groups/join/:inviteToken' element={<GroupInvitePage />} />
 
           {/* private routes go here */}

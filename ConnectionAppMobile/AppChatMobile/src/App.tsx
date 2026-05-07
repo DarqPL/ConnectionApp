@@ -12,6 +12,7 @@ import QrScannerScreen from "./features/chat/screens/QrScannerScreen";
 import SignInScreen from "./features/auth/screens/SignInScreen";
 import SignUpScreen from "./features/auth/screens/SignUpScreen";
 import ForgotPasswordScreen from "./features/auth/screens/ForgotPasswordScreen";
+import ManualUnlockScreen from "./features/auth/screens/ManualUnlockScreen";
 import { AuthProvider, useAuth } from "./features/auth/context/AuthContext";
 import { ChatProvider } from "./features/chat/context/ChatContext";
 
@@ -19,6 +20,7 @@ export type RootStackParamList = {
   SignIn: undefined;
   SignUp: undefined;
   ForgotPassword: undefined;
+  ManualUnlock: { usernameOrEmail: string };
   ChatList: undefined;
   ChatRoom: { conversationId: number; name: string; avatarUrl?: string | null };
   Profile: undefined;
@@ -62,6 +64,11 @@ function AppNavigator() {
             <Stack.Screen
               name="ForgotPassword"
               component={ForgotPasswordScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ManualUnlock"
+              component={ManualUnlockScreen}
               options={{ headerShown: false }}
             />
           </>
