@@ -77,7 +77,7 @@ const BusinessCard = ({
             disabled={isLoading}
           >
             <Clock className="size-4 mr-2" />
-            Da gui loi moi
+            Đã gửi lời mời
           </Button>
         );
       case "RECEIVED":
@@ -89,7 +89,7 @@ const BusinessCard = ({
               disabled={isLoading}
             >
               <UserCheck className="size-4 mr-2" />
-              Chap nhan
+              Chấp nhận
             </Button>
             <Button
               variant="outline"
@@ -98,7 +98,7 @@ const BusinessCard = ({
               disabled={isLoading}
             >
               <Ban className="size-4 mr-2" />
-              Tu choi
+              Từ chối
             </Button>
           </div>
         );
@@ -112,7 +112,7 @@ const BusinessCard = ({
             }
           >
             <UserPlus className="size-4 mr-2" />
-            Ket ban
+            Kết bạn
           </Button>
         );
     }
@@ -205,7 +205,7 @@ const BusinessCard = ({
           <div className="flex items-center gap-3 text-sm">
             <Phone className="size-4 text-primary shrink-0" />
             <div className="flex-1">
-              <p className="text-muted-foreground">Dien thoai</p>
+              <p className="text-muted-foreground">Điện thoại</p>
               <p className="text-foreground">{user.phone}</p>
             </div>
           </div>
@@ -215,13 +215,13 @@ const BusinessCard = ({
           <div className="flex items-center gap-3 text-sm">
             <UserIcon className="size-4 text-primary shrink-0" />
             <div className="flex-1">
-              <p className="text-muted-foreground">Gioi tinh</p>
+              <p className="text-muted-foreground">Giới tính</p>
               <p className="text-foreground">
                 {user.gender === "MALE"
                   ? "Nam"
                   : user.gender === "FEMALE"
-                    ? "Nu"
-                    : "Khac"}
+                    ? "Nữ"
+                    : "Khác"}
               </p>
             </div>
           </div>
@@ -231,7 +231,7 @@ const BusinessCard = ({
       {!hideActions && !isDisabled && <div>{getRelationshipButton()}</div>}
       {!hideActions && isDisabled && (
         <div className="text-center text-sm text-muted-foreground p-3 bg-accent rounded-lg">
-          Khong the ket ban voi tai khoan nay
+          Không thể kết bạn với tài khoản này
         </div>
       )}
 
