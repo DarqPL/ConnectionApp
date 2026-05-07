@@ -276,7 +276,7 @@ const PrivacySettings = ({ user }: Props) => {
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Nhap ma OTP 6 so"
+                placeholder="Nhập mã OTP 6 chữ số"
                 className="w-full p-2 rounded-md border bg-background text-center text-lg font-bold tracking-widest"
                 maxLength={6}
                 value={otp}
@@ -296,7 +296,7 @@ const PrivacySettings = ({ user }: Props) => {
                   onClick={handleConfirmDelete}
                   disabled={loading}
                 >
-                  {loading ? "Dang xu ly..." : "Xac nhan xoa vinh vien"}
+                  {loading ? "Đang xử lý..." : "Xác nhận xoá vĩnh viễn"}
                 </Button>
               </div>
             </div>

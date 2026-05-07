@@ -343,6 +343,13 @@ public class UserService {
         User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getLockUntil() == null
+                || !user.getLockUntil().isAfter(now)
+                || !"MANUAL_LOCK".equalsIgnoreCase(user.getLockReason())) {
+            throw new BadRequestException("Tai khoan khong o trang thai tu khoa.");
+        }
+
         if (email == null || !email.trim().equalsIgnoreCase(user.getEmail())) {
             throw new BadRequestException("Đây không phải email bạn đăng ký");
         }
@@ -444,3 +451,4 @@ public class UserService {
         user.setTokenVersion(commonVersion + 1);
     }
 }
+

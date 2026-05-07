@@ -202,7 +202,7 @@ const ProfileScreen = () => {
   const handleLockAccount = () => {
     Alert.alert(
       "Khoá tài khoản",
-      "Sau khi khoa tài khoản, bạn sẽ bị đăng xuất ngay. Bạn có muốn tiếp tục?",
+      "Sau khi khóa tài khoản, bạn sẽ bị đăng xuất ngay. Bạn có muốn tiếp tục?",
       [
         { text: "Bỏ qua", style: "cancel" },
         {
