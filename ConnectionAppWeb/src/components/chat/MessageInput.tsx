@@ -596,7 +596,7 @@ const MessageInput = ({
           className="hover:bg-primary/10 transition-smooth"
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading || pendingFiles.length >= MAX_FILES}
+          disabled={isUploading || pendingFiles.length >= MAX_FILES || !canSendMessage}
         >
           <ImagePlus className="size-4" />
         </Button>
@@ -607,7 +607,7 @@ const MessageInput = ({
           className="hover:bg-primary/10 transition-smooth"
           type="button"
           onClick={() => setIsPollCreatorOpen(true)}
-          disabled={isUploading}
+          disabled={isUploading || !canSendMessage}
         >
           <ListTodo className="size-4" />
         </Button>
@@ -618,7 +618,7 @@ const MessageInput = ({
           className="hover:bg-primary/10 transition-smooth"
           type="button"
           onClick={() => setIsReminderCreatorOpen(true)}
-          disabled={isUploading}
+          disabled={isUploading || !canSendMessage}
         >
           <Bell className="size-4" />
         </Button>
@@ -632,14 +632,14 @@ const MessageInput = ({
             className="pr-28 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none"
           ></Input>
           <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-            <Popover open={isAiMenuOpen} onOpenChange={setIsAiMenuOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 hover:bg-primary/10 transition-smooth"
-                  disabled={isUploading || isAiProcessing}
-                >
+                <Popover open={isAiMenuOpen} onOpenChange={setIsAiMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 hover:bg-primary/10 transition-smooth"
+                      disabled={isUploading || isAiProcessing || !canSendMessage}
+                    >
                   {isAiProcessing ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
@@ -694,6 +694,7 @@ const MessageInput = ({
               variant="ghost"
               size="icon"
               className="size-8 hover:bg-primary/10 transition-smooth"
+              disabled={!canSendMessage}
             >
               <div>
                 <EmojiPicker
@@ -713,7 +714,7 @@ const MessageInput = ({
         <Button
           onClick={handleSendMessage}
           className="bg-gradient-chat hover:shadow-glow transition-smooth hover:scale-105"
-          disabled={isUploading || (!value.trim() && pendingFiles.length === 0)}
+          disabled={isUploading || (!value.trim() && pendingFiles.length === 0) || !canSendMessage}
         >
           {isUploading ? (
             <Loader2 className="size-4 text-white animate-spin" />

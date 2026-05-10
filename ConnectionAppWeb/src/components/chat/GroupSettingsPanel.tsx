@@ -4,20 +4,15 @@ import { Switch } from "@/components/ui/switch";
 import {
   ArrowLeft,
   Key,
-  Users,
   Ban,
   Trash2,
   RefreshCw,
   Copy,
   Share2,
-  Shield,
   Lock,
-  HelpCircle,
   Check,
-  X,
-  UserPlus,
 } from "lucide-react";
-import type { Conversation, Participant } from "@/types/chat";
+import type { Conversation } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -80,6 +75,10 @@ const GroupSettingsPanel = ({
 }: GroupSettingsPanelProps) => {
   const { user } = useAuthStore();
   const fetchConversationById = useChatStore((s) => s.fetchConversationById);
+
+  const handleSettingsUpdated = async () => {
+    await fetchConversationById(chat.id);
+  };
 
   const [settings, setSettings] = useState({
     allowMemberEditInfo: chat.allowMemberEditInfo ?? true,
@@ -435,6 +434,7 @@ const GroupSettingsPanel = ({
         isOpen={showBlockedDialog}
         onClose={() => setShowBlockedDialog(false)}
         conversation={chat}
+        onSettingsUpdated={handleSettingsUpdated}
       />
     </div>
   );

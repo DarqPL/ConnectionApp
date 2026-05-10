@@ -119,9 +119,8 @@ public class MessageService {
         }
 
         // Check if sender can send messages (group settings)
-        Conversation conversationForPermission = conversationRepository.findById(request.getConversationId()).orElse(null);
-        if (conversationForPermission != null && conversationForPermission.getType() == ConversationType.GROUP) {
-            if (!conversationForPermission.isAllowMemberSendMessage()) {
+        if (conversation.getType() == ConversationType.GROUP) {
+            if (!conversation.isAllowMemberSendMessage()) {
                 ConversationUser senderRole = conversationUserRepository.findByConversationIdAndUserId(
                         request.getConversationId(), senderId).orElse(null);
                 if (senderRole != null && senderRole.getRole() != ConversationRole.OWNER && senderRole.getRole() != ConversationRole.CO_OWNER) {

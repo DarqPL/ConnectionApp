@@ -9,8 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, X } from "lucide-react";
-import type { Conversation, Participant } from "@/types/chat";
+import { Search } from "lucide-react";
+import type { Conversation } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chatService";
@@ -197,7 +197,13 @@ export function CoOwnerManagerDialog({
                 >
                   <Checkbox
                     checked={selectedIds.includes(member.userId)}
-                    onCheckedChange={() => toggleSelect(member.userId)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedIds((prev) => [...prev, member.userId]);
+                      } else {
+                        setSelectedIds((prev) => prev.filter((id) => id !== member.userId));
+                      }
+                    }}
                   />
                   <UserAvatar
                     type="chat"

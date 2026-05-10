@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Modal,
   View,
@@ -6,23 +6,68 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../theme";
 import type { Conversation } from "../types";
+import { chatService } from "../services/chat.service";
 
 interface BlockedMembersModalProps {
   visible: boolean;
   onClose: () => void;
   conversation: Conversation | null;
+  onSettingsUpdated?: () => void;
 }
 
 export function BlockedMembersModal({
   visible,
   onClose,
   conversation,
+  onSettingsUpdated,
 }: BlockedMembersModalProps) {
-  const blockedMembers = conversation?.blockedMembers || [];
+  const [blockedMembers, setBlockedMembers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !conversation) return;
+    fetchBlockedMembers();
+  }, [visible, conversation?.id]);
+
+  const fetchBlockedMembers = async () => {
+    if (!conversation) return;
+    setIsLoading(true);
+    try {
+      const data = await chatService.getBlockedMembers(conversation.id);
+      setBlockedMembers(data || []);
+    } catch {
+      setBlockedMembers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnblock = async (memberId: number) => {
+    if (!conversation) return;
+    Alert.alert("Xác nhận", "Bạn có chắc muốn bỏ chặn thành viên này?", [
+      { text: "Huỷ", style: "cancel" },
+      {
+        text: "Bỏ chặn",
+        style: "default",
+        onPress: async () => {
+          try {
+            await chatService.unblockMember(conversation.id, memberId);
+            setBlockedMembers((prev) => prev.filter((m) => m.userId !== memberId));
+            onSettingsUpdated?.();
+            Alert.alert("Thành công", "Đã bỏ chặn thành viên");
+          } catch (e: any) {
+            Alert.alert("Lỗi", e.message || "Không thể bỏ chặn");
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -46,22 +91,31 @@ export function BlockedMembersModal({
             </Text>
           </View>
 
-          {blockedMembers.length > 0 && (
+          {isLoading ? (
+            <ActivityIndicator size="small" color={COLORS.textMuted} style={{ paddingVertical: 24 }} />
+          ) : blockedMembers.length > 0 ? (
             <ScrollView style={styles.blockedList}>
               {blockedMembers.map((member) => (
                 <View key={member.userId} style={styles.blockedRow}>
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.avatarText}>
-                      {member.displayName.charAt(0).toUpperCase()}
+                      {member.displayName?.charAt(0).toUpperCase() || "?"}
                     </Text>
                   </View>
                   <Text style={styles.blockedName}>{member.displayName}</Text>
-                  <TouchableOpacity style={styles.unblockBtn}>
+                  <TouchableOpacity
+                    style={styles.unblockBtn}
+                    onPress={() => handleUnblock(member.userId)}
+                  >
                     <Text style={styles.unblockText}>Bỏ chặn</Text>
                   </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
+          ) : (
+            <Text style={[styles.infoText, { paddingVertical: 24 }]}>
+              Không có thành viên nào bị chặn
+            </Text>
           )}
 
           <TouchableOpacity style={styles.addBlockBtn} disabled>
@@ -152,11 +206,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.primary,
   },
   unblockText: {
     fontSize: 12,
-    color: COLORS.textMuted,
+    color: COLORS.primary,
+    fontWeight: "600",
   },
   addBlockBtn: {
     marginHorizontal: 16,

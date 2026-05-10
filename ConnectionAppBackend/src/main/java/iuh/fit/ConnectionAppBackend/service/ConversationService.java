@@ -8,7 +8,6 @@ import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsResponse;
-import iuh.fit.ConnectionAppBackend.domain.dto.BlockMemberRequest;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationBlockedUser;
@@ -639,6 +638,8 @@ public class ConversationService {
                 .markAdminMessages(conversation.isMarkAdminMessages())
                 .allowNewMembersReadHistory(conversation.isAllowNewMembersReadHistory())
                 .allowLinkJoin(conversation.isAllowLinkJoin())
+                .blockedMembers(new ArrayList<>())
+                .pendingMembers(new ArrayList<>())
                 .build();
     }
 
@@ -944,6 +945,10 @@ public class ConversationService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
 
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("Blocking members is only available for group conversations");
+        }
+
         ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
 
@@ -1027,6 +1032,14 @@ public class ConversationService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
 
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("This action is only available for group conversations");
+        }
+
+        if (!conversation.isApprovalMode()) {
+            throw new BadRequestException("Approval mode is not enabled for this group");
+        }
+
         ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
 
@@ -1064,6 +1077,17 @@ public class ConversationService {
      */
     @Transactional
     public void rejectPendingMember(Long conversationId, Long userId, Long memberId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("This action is only available for group conversations");
+        }
+
+        if (!conversation.isApprovalMode()) {
+            throw new BadRequestException("Approval mode is not enabled for this group");
+        }
+
         ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
 

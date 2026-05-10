@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { UserCog, Ban } from "lucide-react";
-import type { Conversation, Participant } from "@/types/chat";
+import type { Conversation } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 import { chatService } from "@/services/chatService";
 import { toast } from "sonner";
@@ -17,18 +17,42 @@ interface BlockedMembersDialogProps {
   isOpen: boolean;
   onClose: () => void;
   conversation: Conversation;
+  onSettingsUpdated?: () => void;
 }
 
 export function BlockedMembersDialog({
   isOpen,
   onClose,
   conversation,
+  onSettingsUpdated,
 }: BlockedMembersDialogProps) {
-  const blockedMembers = conversation.blockedMembers || [];
+  const [blockedMembers, setBlockedMembers] = useState<
+    { userId: number; displayName: string; avatarUrl: string | null; username: string }[]
+  >([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchBlockedMembers();
+  }, [isOpen, conversation.id]);
+
+  const fetchBlockedMembers = async () => {
+    setIsLoading(true);
+    try {
+      const data = await chatService.getBlockedMembers(conversation.id);
+      setBlockedMembers(data || []);
+    } catch {
+      setBlockedMembers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleUnblock = async (memberId: number) => {
     try {
       await chatService.unblockMember(conversation.id, memberId);
+      setBlockedMembers((prev) => prev.filter((m) => m.userId !== memberId));
+      onSettingsUpdated?.();
       toast.success("Đã bỏ chặn thành viên");
     } catch {
       toast.error("Không thể bỏ chặn");
@@ -53,7 +77,9 @@ export function BlockedMembersDialog({
           </p>
         </div>
 
-        {blockedMembers.length > 0 && (
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-4">Đang tải...</p>
+        ) : blockedMembers.length > 0 ? (
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {blockedMembers.map((member) => (
               <div
@@ -80,6 +106,10 @@ export function BlockedMembersDialog({
               </div>
             ))}
           </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4 italic">
+            Không có thành viên nào bị chặn
+          </p>
         )}
 
         <DialogFooter>

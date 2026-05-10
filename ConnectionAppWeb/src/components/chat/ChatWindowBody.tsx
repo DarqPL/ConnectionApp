@@ -71,8 +71,28 @@ const ChatWindowBody = ({
       (msg) => new Date(msg.createdAt).getTime() >= joinedAt
     );
   }, [reversedMessages, selectedConvo, user?.id]);
+
+  // Stop fetching older messages when allowNewMembersReadHistory is false
+  // and we've reached messages older than the user's join date
+  const shouldFetchMore = useMemo(() => {
+    if (!selectedConvo || selectedConvo.allowNewMembersReadHistory !== false) {
+      return true;
+    }
+
+    const currentUserParticipant = selectedConvo.participants.find(
+      (p) => p.userId === user?.id
+    );
+    if (!currentUserParticipant) return true;
+
+    const joinedAt = new Date(currentUserParticipant.joinedAt).getTime();
+    const oldestMessage = reversedMessages[reversedMessages.length - 1];
+    if (!oldestMessage) return true;
+
+    return new Date(oldestMessage.createdAt).getTime() >= joinedAt;
+  }, [reversedMessages, selectedConvo, user?.id]);
+
   const hasMore = selectedConvo
-    ? (allMessages[selectedConvo.id]?.hasMore ?? false)
+    ? (allMessages[selectedConvo.id]?.hasMore ?? false) && shouldFetchMore
     : false;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);

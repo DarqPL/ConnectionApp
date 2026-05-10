@@ -425,6 +425,7 @@ export function GroupSettingsScreen({
         visible={showBlockedModal}
         onClose={() => setShowBlockedModal(false)}
         conversation={conversation}
+        onSettingsUpdated={onSettingsUpdated}
       />
     </View>
   );
