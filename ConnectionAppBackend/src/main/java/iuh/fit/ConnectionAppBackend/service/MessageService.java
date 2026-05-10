@@ -1,6 +1,7 @@
 package iuh.fit.ConnectionAppBackend.service;
 
 import iuh.fit.ConnectionAppBackend.domain.common.AttachmentType;
+import iuh.fit.ConnectionAppBackend.domain.common.ConversationRole;
 import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
 import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.AiRewriteResponse;
@@ -27,6 +28,7 @@ import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
 import iuh.fit.ConnectionAppBackend.repo.ConversationRepository;
 import iuh.fit.ConnectionAppBackend.repo.ConversationUserRepository;
+import iuh.fit.ConnectionAppBackend.repo.ConversationBlockedUserRepository;
 import iuh.fit.ConnectionAppBackend.repo.FriendRepository;
 import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
@@ -70,6 +72,9 @@ public class MessageService {
     private ConversationUserRepository conversationUserRepository;
 
     @Autowired
+    private ConversationBlockedUserRepository conversationBlockedUserRepository;
+
+    @Autowired
     private ConversationRepository conversationRepository;
 
     @Autowired
@@ -106,6 +111,23 @@ public class MessageService {
         boolean isMember = conversationUserRepository.isMember(request.getConversationId(), senderId);
         if (!isMember) {
             throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        // Check if sender is blocked
+        if (conversationBlockedUserRepository.existsByConversationIdAndUserId(request.getConversationId(), senderId)) {
+            throw new UnauthorizedException("You have been blocked from this group");
+        }
+
+        // Check if sender can send messages (group settings)
+        Conversation conversationForPermission = conversationRepository.findById(request.getConversationId()).orElse(null);
+        if (conversationForPermission != null && conversationForPermission.getType() == ConversationType.GROUP) {
+            if (!conversationForPermission.isAllowMemberSendMessage()) {
+                ConversationUser senderRole = conversationUserRepository.findByConversationIdAndUserId(
+                        request.getConversationId(), senderId).orElse(null);
+                if (senderRole != null && senderRole.getRole() != ConversationRole.OWNER && senderRole.getRole() != ConversationRole.CO_OWNER) {
+                    throw new UnauthorizedException("Only owner and co-owners can send messages in this group");
+                }
+            }
         }
 
         validatePrivateConversationBlock(conversation, senderId);

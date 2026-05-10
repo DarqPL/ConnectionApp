@@ -6,14 +6,21 @@ import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.BlockMemberRequest;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.Conversation;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationBlockedUser;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationPendingMember;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
 import iuh.fit.ConnectionAppBackend.repo.ConversationRepository;
 import iuh.fit.ConnectionAppBackend.repo.ConversationUserRepository;
+import iuh.fit.ConnectionAppBackend.repo.ConversationBlockedUserRepository;
+import iuh.fit.ConnectionAppBackend.repo.ConversationPendingMemberRepository;
 import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +72,12 @@ public class ConversationService {
     @Autowired
     private S3StorageService s3StorageService;
 
+    @Autowired
+    private ConversationBlockedUserRepository conversationBlockedUserRepository;
+
+    @Autowired
+    private ConversationPendingMemberRepository conversationPendingMemberRepository;
+
     /**
      * Get all conversations for a user with pagination
      */
@@ -103,12 +116,55 @@ public class ConversationService {
 
         validateGroupInviteConversation(conversation);
 
+        if (!conversation.isAllowLinkJoin()) {
+            throw new BadRequestException("This group does not allow joining via invite link");
+        }
+
         if (conversationUserRepository.findByConversationIdAndUserId(conversation.getId(), userId).isPresent()) {
             return mapToConversationResponse(conversation);
         }
 
+        // Check if user is blocked
+        if (conversationBlockedUserRepository.existsByConversationIdAndUserId(conversation.getId(), userId)) {
+            throw new BadRequestException("You have been blocked from this group");
+        }
+
         User joiningUser = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        // If approval mode is on, add to pending instead of joining directly
+        if (conversation.isApprovalMode()) {
+            if (conversationPendingMemberRepository.existsByConversationIdAndUserId(conversation.getId(), userId)) {
+                throw new BadRequestException("Your join request is already pending approval");
+            }
+
+            ConversationPendingMember pendingMember = ConversationPendingMember.builder()
+                    .conversation(conversation)
+                    .user(joiningUser)
+                    .requestedAt(LocalDateTime.now())
+                    .build();
+            conversationPendingMemberRepository.save(pendingMember);
+
+            // Notify owner and co-owners about pending request
+            List<ConversationUser> admins = conversationUserRepository.findByConversationId(conversation.getId()).stream()
+                    .filter(cu -> cu.getRole() == ConversationRole.OWNER || cu.getRole() == ConversationRole.CO_OWNER)
+                    .collect(Collectors.toList());
+
+            for (ConversationUser admin : admins) {
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + admin.getUser().getId() + "/pending-approval",
+                        Map.of(
+                                "conversationId", conversation.getId(),
+                                "type", "PENDING_REQUEST",
+                                "userId", userId,
+                                "displayName", joiningUser.getDisplayName(),
+                                "avatarUrl", joiningUser.getAvatarUrl()
+                        )
+                );
+            }
+
+            return mapToConversationResponse(conversation);
+        }
 
         ConversationUser joiningMember = ConversationUser.builder()
                 .conversation(conversation)
@@ -295,17 +351,57 @@ public class ConversationService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
 
-        // Check if user has permission
         ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
                 .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
 
-        // Check if new member is already in conversation
+        boolean isInvitedByAdmin = conversationUser.getRole().equals(ConversationRole.OWNER) ||
+                                   conversationUser.getRole().equals(ConversationRole.CO_OWNER);
+
         if (conversationUserRepository.findByConversationIdAndUserId(conversationId, newMemberId).isPresent()) {
             throw new BadRequestException("User is already a member of this conversation");
         }
 
+        // Check if new member is blocked
+        if (conversationBlockedUserRepository.existsByConversationIdAndUserId(conversationId, newMemberId)) {
+            throw new BadRequestException("User is blocked from this group");
+        }
+
         User newMember = userRepository.findById(newMemberId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + newMemberId));
+
+        // If approval mode is on and not invited by admin, add to pending
+        if (conversation.isApprovalMode() && !isInvitedByAdmin) {
+            if (conversationPendingMemberRepository.existsByConversationIdAndUserId(conversationId, newMemberId)) {
+                throw new BadRequestException("User's join request is already pending approval");
+            }
+
+            ConversationPendingMember pendingMember = ConversationPendingMember.builder()
+                    .conversation(conversation)
+                    .user(newMember)
+                    .requestedBy(userRepository.findById(userId).orElse(null))
+                    .requestedAt(LocalDateTime.now())
+                    .build();
+            conversationPendingMemberRepository.save(pendingMember);
+
+            // Notify admins
+            List<ConversationUser> admins = conversationUserRepository.findByConversationId(conversationId).stream()
+                    .filter(cu -> cu.getRole() == ConversationRole.OWNER || cu.getRole() == ConversationRole.CO_OWNER)
+                    .collect(Collectors.toList());
+
+            for (ConversationUser admin : admins) {
+                messagingTemplate.convertAndSend(
+                        "/topic/user." + admin.getUser().getId() + "/pending-approval",
+                        Map.of(
+                                "conversationId", conversationId,
+                                "type", "PENDING_REQUEST",
+                                "userId", newMemberId,
+                                "displayName", newMember.getDisplayName(),
+                                "avatarUrl", newMember.getAvatarUrl()
+                        )
+                );
+            }
+            return;
+        }
 
         ConversationUser newConversationUser = ConversationUser.builder()
                 .conversation(conversation)
@@ -317,7 +413,6 @@ public class ConversationService {
 
         conversationUserRepository.save(newConversationUser);
 
-        // 🔥 Send real-time notification to all members (including new one)
         List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
         if (!allMembers.isEmpty()) {
             List<ConversationUserResponse> updatedParticipants = allMembers.stream()
@@ -328,19 +423,16 @@ public class ConversationService {
             update.put("conversationId", conversationId);
             update.put("type", "MEMBER_JOINED");
             update.put("participants", updatedParticipants);
-            update.put("joinedUserId", newMemberId); // ID of user who joined
+            update.put("joinedUserId", newMemberId);
 
-            // Notify existing members about the update, and send full conversation to the new member
             ConversationResponse fullConvo = mapToConversationResponse(conversation);
             for (ConversationUser member : allMembers) {
                 Long mUserId = member.getUser().getId();
-                
-                // If this is the new member, send the full conversation object so it appears in their list
+
                 if (mUserId.equals(newMemberId)) {
                     messagingTemplate.convertAndSend("/topic/user." + mUserId + "/conversations", fullConvo);
                 }
-                
-                // Always send the update notification (for participants list, etc.)
+
                 messagingTemplate.convertAndSend(
                         "/topic/user." + mUserId + "/conversation-updates",
                         update
@@ -539,6 +631,14 @@ public class ConversationService {
                 .updatedAt(conversation.getUpdateAt())
                 .participants(participants)
                 .pinnedMessages(pinnedMessages)
+                .allowMemberEditInfo(conversation.isAllowMemberEditInfo())
+                .allowMemberCreateNotes(conversation.isAllowMemberCreateNotes())
+                .allowMemberCreatePolls(conversation.isAllowMemberCreatePolls())
+                .allowMemberSendMessage(conversation.isAllowMemberSendMessage())
+                .approvalMode(conversation.isApprovalMode())
+                .markAdminMessages(conversation.isMarkAdminMessages())
+                .allowNewMembersReadHistory(conversation.isAllowNewMembersReadHistory())
+                .allowLinkJoin(conversation.isAllowLinkJoin())
                 .build();
     }
 
@@ -662,5 +762,470 @@ public class ConversationService {
         }
 
         return response;
+    }
+
+    /**
+     * Get group settings
+     */
+    public GroupSettingsResponse getGroupSettings(Long conversationId, Long userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("Settings are only available for group conversations");
+        }
+
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        List<ConversationBlockedUser> blockedUsers = conversationBlockedUserRepository.findByConversationId(conversationId);
+        List<ConversationUserResponse> blockedMembers = blockedUsers.stream()
+                .map(cbu -> ConversationUserResponse.builder()
+                        .userId(cbu.getUser().getId())
+                        .username(cbu.getUser().getUsername())
+                        .displayName(cbu.getUser().getDisplayName())
+                        .avatarUrl(cbu.getUser().getAvatarUrl())
+                        .role("BLOCKED")
+                        .joinedAt(cbu.getBlockedAt())
+                        .unreadCounts(0L)
+                        .build())
+                .collect(Collectors.toList());
+
+        List<ConversationPendingMember> pendingMembers = conversationPendingMemberRepository.findByConversationId(conversationId);
+        List<ConversationUserResponse> pendingMemberResponses = pendingMembers.stream()
+                .map(cpm -> ConversationUserResponse.builder()
+                        .userId(cpm.getUser().getId())
+                        .username(cpm.getUser().getUsername())
+                        .displayName(cpm.getUser().getDisplayName())
+                        .avatarUrl(cpm.getUser().getAvatarUrl())
+                        .role("PENDING")
+                        .joinedAt(cpm.getRequestedAt())
+                        .unreadCounts(0L)
+                        .build())
+                .collect(Collectors.toList());
+
+        return GroupSettingsResponse.builder()
+                .conversationId(conversationId)
+                .allowMemberEditInfo(conversation.isAllowMemberEditInfo())
+                .allowMemberCreateNotes(conversation.isAllowMemberCreateNotes())
+                .allowMemberCreatePolls(conversation.isAllowMemberCreatePolls())
+                .allowMemberSendMessage(conversation.isAllowMemberSendMessage())
+                .approvalMode(conversation.isApprovalMode())
+                .markAdminMessages(conversation.isMarkAdminMessages())
+                .allowNewMembersReadHistory(conversation.isAllowNewMembersReadHistory())
+                .allowLinkJoin(conversation.isAllowLinkJoin())
+                .inviteToken(conversation.getInviteToken())
+                .blockedMembers(blockedMembers)
+                .pendingMembers(pendingMemberResponses)
+                .build();
+    }
+
+    /**
+     * Update group settings (OWNER only)
+     */
+    @Transactional
+    public GroupSettingsResponse updateGroupSettings(Long conversationId, Long userId, GroupSettingsRequest request) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("Settings are only available for group conversations");
+        }
+
+        ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!conversationUser.getRole().equals(ConversationRole.OWNER)) {
+            throw new UnauthorizedException("Only owner can update group settings");
+        }
+
+        if (request.getAllowMemberEditInfo() != null) conversation.setAllowMemberEditInfo(request.getAllowMemberEditInfo());
+        if (request.getAllowMemberCreateNotes() != null) conversation.setAllowMemberCreateNotes(request.getAllowMemberCreateNotes());
+        if (request.getAllowMemberCreatePolls() != null) conversation.setAllowMemberCreatePolls(request.getAllowMemberCreatePolls());
+        if (request.getAllowMemberSendMessage() != null) conversation.setAllowMemberSendMessage(request.getAllowMemberSendMessage());
+        if (request.getApprovalMode() != null) conversation.setApprovalMode(request.getApprovalMode());
+        if (request.getMarkAdminMessages() != null) conversation.setMarkAdminMessages(request.getMarkAdminMessages());
+        if (request.getAllowNewMembersReadHistory() != null) conversation.setAllowNewMembersReadHistory(request.getAllowNewMembersReadHistory());
+        if (request.getAllowLinkJoin() != null) conversation.setAllowLinkJoin(request.getAllowLinkJoin());
+
+        conversation.setUpdateAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
+        // Broadcast settings update to all members
+        GroupSettingsResponse settingsResponse = getGroupSettings(conversationId, userId);
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : allMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + member.getUser().getId() + "/conversation-settings",
+                    settingsResponse
+            );
+        }
+
+        return settingsResponse;
+    }
+
+    /**
+     * Refresh invite token (OWNER only)
+     */
+    @Transactional
+    public String refreshInviteToken(Long conversationId, Long userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!conversationUser.getRole().equals(ConversationRole.OWNER)) {
+            throw new UnauthorizedException("Only owner can refresh invite token");
+        }
+
+        String oldToken = conversation.getInviteToken();
+        String newToken = generateUniqueInviteToken();
+        conversation.setInviteToken(newToken);
+        conversation.setUpdateAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
+        // Notify all members about token refresh
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "INVITE_TOKEN_REFRESHED");
+        update.put("newInviteToken", newToken);
+
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : allMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                    update
+            );
+        }
+
+        return newToken;
+    }
+
+    /**
+     * Disband group (OWNER only) - soft delete
+     */
+    @Transactional
+    public void disbandGroup(Long conversationId, Long userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new BadRequestException("Only group conversations can be disbanded");
+        }
+
+        ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!conversationUser.getRole().equals(ConversationRole.OWNER)) {
+            throw new UnauthorizedException("Only owner can disband the group");
+        }
+
+        conversation.setActivate(false);
+        conversationRepository.save(conversation);
+
+        // Notify all members about disband
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : allMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + member.getUser().getId() + "/conversation-disbanded",
+                    Map.of("conversationId", conversationId, "disbandedBy", userId)
+            );
+        }
+    }
+
+    /**
+     * Block a member from group (OWNER/CO_OWNER only)
+     */
+    @Transactional
+    public void blockMember(Long conversationId, Long userId, Long memberId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER) && !requester.getRole().equals(ConversationRole.CO_OWNER)) {
+            throw new UnauthorizedException("Only owner or co-owner can block members");
+        }
+
+        if (conversationBlockedUserRepository.existsByConversationIdAndUserId(conversationId, memberId)) {
+            throw new BadRequestException("User is already blocked");
+        }
+
+        User blockedUser = userRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + memberId));
+
+        User blocker = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        ConversationBlockedUser blockedEntry = ConversationBlockedUser.builder()
+                .conversation(conversation)
+                .user(blockedUser)
+                .blockedBy(blocker)
+                .blockedAt(LocalDateTime.now())
+                .build();
+        conversationBlockedUserRepository.save(blockedEntry);
+
+        // Remove from conversation if they are a member
+        if (conversationUserRepository.findByConversationIdAndUserId(conversationId, memberId).isPresent()) {
+            removeUserFromConversation(conversationId, userId, memberId);
+        }
+
+        // Notify blocked user
+        messagingTemplate.convertAndSend(
+                "/topic/user." + memberId + "/member-blocked",
+                Map.of("conversationId", conversationId, "blockedBy", userId)
+        );
+    }
+
+    /**
+     * Unblock a member (OWNER/CO_OWNER only)
+     */
+    @Transactional
+    public void unblockMember(Long conversationId, Long userId, Long memberId) {
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER) && !requester.getRole().equals(ConversationRole.CO_OWNER)) {
+            throw new UnauthorizedException("Only owner or co-owner can unblock members");
+        }
+
+        conversationBlockedUserRepository.deleteByConversationIdAndUserId(conversationId, memberId);
+    }
+
+    /**
+     * Get blocked members list
+     */
+    public List<ConversationUserResponse> getBlockedMembers(Long conversationId, Long userId) {
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        List<ConversationBlockedUser> blockedUsers = conversationBlockedUserRepository.findByConversationId(conversationId);
+        return blockedUsers.stream()
+                .map(cbu -> ConversationUserResponse.builder()
+                        .userId(cbu.getUser().getId())
+                        .username(cbu.getUser().getUsername())
+                        .displayName(cbu.getUser().getDisplayName())
+                        .avatarUrl(cbu.getUser().getAvatarUrl())
+                        .role("BLOCKED")
+                        .joinedAt(cbu.getBlockedAt())
+                        .unreadCounts(0L)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Approve pending member (OWNER/CO_OWNER only)
+     */
+    @Transactional
+    public void approvePendingMember(Long conversationId, Long userId, Long memberId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER) && !requester.getRole().equals(ConversationRole.CO_OWNER)) {
+            throw new UnauthorizedException("Only owner or co-owner can approve members");
+        }
+
+        ConversationPendingMember pending = conversationPendingMemberRepository.findByConversationIdAndUserId(conversationId, memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pending member not found"));
+
+        // Add to conversation
+        ConversationUser newMember = ConversationUser.builder()
+                .conversation(conversation)
+                .user(pending.getUser())
+                .role(ConversationRole.MEMBER)
+                .joinedAt(LocalDateTime.now())
+                .unreadCounts(0L)
+                .build();
+        conversationUserRepository.save(newMember);
+
+        // Remove from pending
+        conversationPendingMemberRepository.deleteByConversationIdAndUserId(conversationId, memberId);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Conversation refreshedConversation = conversationRepository.findByIdWithUsers(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+
+        publishMemberJoinedUpdate(refreshedConversation, memberId);
+    }
+
+    /**
+     * Reject pending member (OWNER/CO_OWNER only)
+     */
+    @Transactional
+    public void rejectPendingMember(Long conversationId, Long userId, Long memberId) {
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER) && !requester.getRole().equals(ConversationRole.CO_OWNER)) {
+            throw new UnauthorizedException("Only owner or co-owner can reject members");
+        }
+
+        conversationPendingMemberRepository.deleteByConversationIdAndUserId(conversationId, memberId);
+    }
+
+    /**
+     * Get pending members list
+     */
+    public List<ConversationUserResponse> getPendingMembers(Long conversationId, Long userId) {
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
+        List<ConversationPendingMember> pendingMembers = conversationPendingMemberRepository.findByConversationId(conversationId);
+        return pendingMembers.stream()
+                .map(cpm -> ConversationUserResponse.builder()
+                        .userId(cpm.getUser().getId())
+                        .username(cpm.getUser().getUsername())
+                        .displayName(cpm.getUser().getDisplayName())
+                        .avatarUrl(cpm.getUser().getAvatarUrl())
+                        .role("PENDING")
+                        .joinedAt(cpm.getRequestedAt())
+                        .unreadCounts(0L)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Add co-owners (OWNER only)
+     */
+    @Transactional
+    public void addCoOwners(Long conversationId, Long userId, List<Long> memberIds) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER)) {
+            throw new UnauthorizedException("Only owner can add co-owners");
+        }
+
+        for (Long memberId : memberIds) {
+            ConversationUser member = conversationUserRepository.findByConversationIdAndUserId(conversationId, memberId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User is not a member of this conversation"));
+
+            if (member.getRole().equals(ConversationRole.OWNER)) {
+                throw new BadRequestException("Cannot change the role of the owner");
+            }
+
+            member.setRole(ConversationRole.CO_OWNER);
+            conversationUserRepository.save(member);
+        }
+
+        // Notify all members
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        List<ConversationUserResponse> updatedParticipants = allMembers.stream()
+                .map(this::mapToConversationUserResponse)
+                .collect(Collectors.toList());
+
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "CO_OWNERS_ADDED");
+        update.put("participants", updatedParticipants);
+
+        for (ConversationUser member : allMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + member.getUser().getId() + "/conversation-updates",
+                    update
+            );
+        }
+    }
+
+    /**
+     * Remove co-owner (OWNER only)
+     */
+    @Transactional
+    public void removeCoOwner(Long conversationId, Long userId, Long memberId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        ConversationUser requester = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new UnauthorizedException("User is not a member of this conversation"));
+
+        if (!requester.getRole().equals(ConversationRole.OWNER)) {
+            throw new UnauthorizedException("Only owner can remove co-owners");
+        }
+
+        ConversationUser member = conversationUserRepository.findByConversationIdAndUserId(conversationId, memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("User is not a member of this conversation"));
+
+        if (member.getRole().equals(ConversationRole.OWNER)) {
+            throw new BadRequestException("Cannot change the role of the owner");
+        }
+
+        member.setRole(ConversationRole.MEMBER);
+        conversationUserRepository.save(member);
+
+        // Notify all members
+        List<ConversationUser> allMembers = conversationUserRepository.findByConversationId(conversationId);
+        List<ConversationUserResponse> updatedParticipants = allMembers.stream()
+                .map(this::mapToConversationUserResponse)
+                .collect(Collectors.toList());
+
+        Map<String, Object> update = new java.util.HashMap<>();
+        update.put("conversationId", conversationId);
+        update.put("type", "CO_OWNER_REMOVED");
+        update.put("participants", updatedParticipants);
+
+        for (ConversationUser m : allMembers) {
+            messagingTemplate.convertAndSend(
+                    "/topic/user." + m.getUser().getId() + "/conversation-updates",
+                    update
+            );
+        }
+    }
+
+    /**
+     * Check if user can send messages in conversation
+     */
+    public boolean canSendMessage(Long conversationId, Long userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + conversationId));
+
+        if (conversation.getType() != ConversationType.GROUP) {
+            return true; // Private chats always allow messaging
+        }
+
+        if (conversation.isAllowMemberSendMessage()) {
+            return true;
+        }
+
+        ConversationUser conversationUser = conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .orElse(null);
+
+        if (conversationUser == null) {
+            return false;
+        }
+
+        return conversationUser.getRole().equals(ConversationRole.OWNER) ||
+               conversationUser.getRole().equals(ConversationRole.CO_OWNER);
+    }
+
+    /**
+     * Check if user is blocked from conversation
+     */
+    public boolean isUserBlocked(Long conversationId, Long userId) {
+        return conversationBlockedUserRepository.existsByConversationIdAndUserId(conversationId, userId);
+    }
+
+    /**
+     * Get the joined date of a user in a conversation
+     */
+    public LocalDateTime getUserJoinedAt(Long conversationId, Long userId) {
+        return conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
+                .map(ConversationUser::getJoinedAt)
+                .orElse(null);
     }
 }

@@ -24,6 +24,7 @@ import {
   Trash2,
   Pin,
   ThumbsUp,
+  Key,
 } from "lucide-react";
 import {
   Dialog,
@@ -161,6 +162,12 @@ const MessageItemBase = ({
   const participant = selectedConvo.participants.find(
     (p: Participant) => p.userId === message.senderInfo.senderId,
   );
+
+  const isAdmin = participant?.role === "OWNER" || participant?.role === "CO_OWNER";
+  const isOwner = participant?.role === "OWNER";
+  const isCoOwner = participant?.role === "CO_OWNER";
+  const markAdminMessages = selectedConvo.markAdminMessages ?? false;
+  const showKeyIcon = markAdminMessages && isAdmin && !message.isOwn;
 
   // Detect email in message and load user info
   // Trigger for all messages so both sender and receiver can see the business card
@@ -592,21 +599,33 @@ const MessageItemBase = ({
         >
           {/* avatar */}
           {!message.isOwn && (
-            <div className="w-8 shrink-0">
+            <div className="w-8 shrink-0 relative">
               {isGroupBreak && (
-                <UserAvatar
-                  type="chat"
-                  name={
-                    participant?.displayName ??
-                    message.senderInfo.displayName ??
-                    "User"
-                  }
-                  avatarUrl={
-                    participant?.avatarUrl ??
-                    message.senderInfo.avatarUrl ??
-                    undefined
-                  }
-                />
+                <>
+                  <UserAvatar
+                    type="chat"
+                    name={
+                      participant?.displayName ??
+                      message.senderInfo.displayName ??
+                      "User"
+                    }
+                    avatarUrl={
+                      participant?.avatarUrl ??
+                      message.senderInfo.avatarUrl ??
+                      undefined
+                    }
+                  />
+                  {showKeyIcon && (
+                    <div className="absolute -bottom-0.5 -right-0.5 size-4 bg-background rounded-full flex items-center justify-center">
+                      <Key
+                        className={cn(
+                          "size-3",
+                          isOwner ? "text-amber-500" : "text-blue-500"
+                        )}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -674,7 +693,11 @@ const MessageItemBase = ({
                       ? "bg-muted/30 border-dashed border-muted-foreground/30"
                       : message.isOwn
                         ? "chat-bubble-sent border-0"
-                        : "chat-bubble-received",
+                        : showKeyIcon
+                          ? isOwner
+                            ? "chat-bubble-received border-2 border-amber-400/60"
+                            : "chat-bubble-received border-2 border-blue-400/60"
+                          : "chat-bubble-received",
                     message.replyInfo && !isRecalled ? "rounded-t-none" : "",
                   )}
                 >

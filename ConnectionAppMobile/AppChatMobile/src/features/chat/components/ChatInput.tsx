@@ -33,12 +33,15 @@ interface ChatInputProps {
     files: PendingAttachment[],
     parentId?: string | null,
   ) => Promise<void>;
-  conversationId: number; // NEW
+  conversationId: number;
   disabled?: boolean;
   replyTo?: Message | null;
   onCancelReply?: () => void;
   onOpenPollCreator?: () => void;
   onOpenReminderCreator?: () => void;
+  allowMemberSendMessage?: boolean;
+  currentUserRole?: string | null;
+  isGroup?: boolean;
 }
 
 const MAX_FILES = 5;
@@ -86,8 +89,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onCancelReply,
   onOpenPollCreator,
   onOpenReminderCreator,
+  allowMemberSendMessage = true,
+  currentUserRole = null,
+  isGroup = false,
 }) => {
   const { notifyTyping, notifyStoppedTyping } = useChat();
+  const isAdmin = currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+  const canSendMessage = !isGroup || allowMemberSendMessage || isAdmin;
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
@@ -418,6 +426,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </View>
         )}
 
+        {!canSendMessage && (
+          <View style={styles.disabledBanner}>
+            <Ionicons name="lock-closed-outline" size={16} color={COLORS.textMuted} />
+            <Text style={styles.disabledText}>
+              Chỉ trưởng nhóm và phó nhóm được nhắn tin
+            </Text>
+          </View>
+        )}
+
         {selectedFiles.length > 0 && (
           <ScrollView
             horizontal
@@ -742,6 +759,21 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
+  },
+  disabledBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginHorizontal: 8,
+    marginTop: 8,
+    paddingVertical: 10,
+    backgroundColor: COLORS.backgroundMuted,
+    borderRadius: 10,
+  },
+  disabledText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
   },
   previewRow: {
     paddingHorizontal: 8,

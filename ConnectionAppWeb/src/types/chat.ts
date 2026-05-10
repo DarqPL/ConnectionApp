@@ -21,7 +21,7 @@ export interface Conversation {
   description?: string | null;
   avatarUrl?: string | null;
   inviteToken?: string | null;
-  type: string; // PRIVATE, GROUP
+  type: string;
   lastMessageAt: string | null;
   lastMessageContent: string | null;
   activate: boolean;
@@ -32,6 +32,16 @@ export interface Conversation {
   participants: Participant[];
   pinnedMessages: Message[];
   unreadCount: number;
+  allowMemberEditInfo: boolean;
+  allowMemberCreateNotes: boolean;
+  allowMemberCreatePolls: boolean;
+  allowMemberSendMessage: boolean;
+  approvalMode: boolean;
+  markAdminMessages: boolean;
+  allowNewMembersReadHistory: boolean;
+  allowLinkJoin: boolean;
+  blockedMembers: Participant[];
+  pendingMembers: Participant[];
 }
 
 /**

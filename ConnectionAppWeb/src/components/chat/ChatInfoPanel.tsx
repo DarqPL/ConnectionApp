@@ -27,6 +27,7 @@ import {
   Phone,
   PhoneMissed,
   Video,
+  Shield,
 } from "lucide-react";
 import type { Message, Conversation, Reminder } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ import "yet-another-react-lightbox/styles.css";
 import Lightbox from "yet-another-react-lightbox";
 import { buildGroupInviteUrl } from "@/lib/apiConfig";
 import GroupQrDialog from "./GroupQrDialog";
+import GroupSettingsPanel from "./GroupSettingsPanel";
 
 interface ChatInfoPanelProps {
   chat: Conversation;
@@ -129,6 +131,7 @@ const ChatInfoPanel = ({
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showGroupQrDialog, setShowGroupQrDialog] = useState(false);
+  const [showGroupSettingsPanel, setShowGroupSettingsPanel] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoadingReminders, setIsLoadingReminders] = useState(false);
 
@@ -453,7 +456,7 @@ const ChatInfoPanel = ({
   return (
     <div
       className={cn(
-        "h-full bg-background border-l border-border transition-all duration-300 flex flex-col overflow-hidden",
+        "h-full bg-background border-l border-border transition-all duration-300 flex flex-col overflow-hidden relative",
         isOpen
           ? "w-80 opacity-100"
           : "w-0 opacity-0 pointer-events-none border-none",
@@ -522,7 +525,7 @@ const ChatInfoPanel = ({
             </h3>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 w-full pt-2">
+          <div className="grid grid-cols-4 gap-4 w-full pt-2">
             {[
               { icon: BellOff, label: "Tắt thông báo", action: "mute" },
               { icon: Pin, label: "Ghim hội thoại", action: "pin" },
@@ -531,13 +534,19 @@ const ChatInfoPanel = ({
                 label: "Thêm thành viên",
                 action: "add-member",
               },
-              { icon: Settings, label: "Quản lý", action: "settings" },
+              {
+                icon: Shield,
+                label: "Quản lý nhóm",
+                action: "group-settings",
+              },
             ].map((action, i) => (
               <button
                 key={i}
                 onClick={() => {
                   if (action.action === "add-member") {
                     setShowAddMemberDialog(true);
+                  } else if (action.action === "group-settings") {
+                    setShowGroupSettingsPanel(true);
                   }
                 }}
                 className="flex flex-col items-center gap-1.5 cursor-pointer group"
@@ -1149,6 +1158,18 @@ const ChatInfoPanel = ({
           reminderTime: editingReminder.reminderTime
         } : undefined}
       />
+
+      {/* Group Settings Panel - overlays the info panel */}
+      {showGroupSettingsPanel && (
+        <div className="absolute inset-0 z-20 bg-background">
+          <GroupSettingsPanel
+            chat={chat}
+            isOpen={showGroupSettingsPanel}
+            onClose={() => setShowGroupSettingsPanel(false)}
+            onBack={() => setShowGroupSettingsPanel(false)}
+          />
+        </div>
+      )}
     </div>
   );
 };

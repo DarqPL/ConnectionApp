@@ -1,4 +1,5 @@
 import { useChatStore } from "@/stores/useChatStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import { ChevronDown } from "lucide-react";
@@ -27,6 +28,7 @@ const ChatWindowBody = ({
     fetchMessages,
     messageLoading,
   } = useChatStore();
+  const { user } = useAuthStore();
 
   const [lastMessageStatus] = useState<
     "delivered" | "seen"
@@ -52,6 +54,23 @@ const ChatWindowBody = ({
     nextMessages.reverse();
     return nextMessages;
   }, [messages]);
+
+  // Filter messages based on allowNewMembersReadHistory setting
+  const filteredMessages = useMemo(() => {
+    if (!selectedConvo || selectedConvo.allowNewMembersReadHistory !== false) {
+      return reversedMessages;
+    }
+
+    const currentUserParticipant = selectedConvo.participants.find(
+      (p) => p.userId === user?.id
+    );
+    if (!currentUserParticipant) return reversedMessages;
+
+    const joinedAt = new Date(currentUserParticipant.joinedAt).getTime();
+    return reversedMessages.filter(
+      (msg) => new Date(msg.createdAt).getTime() >= joinedAt
+    );
+  }, [reversedMessages, selectedConvo, user?.id]);
   const hasMore = selectedConvo
     ? (allMessages[selectedConvo.id]?.hasMore ?? false)
     : false;
@@ -220,7 +239,7 @@ const ChatWindowBody = ({
         <div ref={messagesEndRef}></div>
 
         <InfiniteScroll
-          dataLength={messages.length}
+          dataLength={filteredMessages.length}
           next={fetchMoreMessages}
           hasMore={hasMore}
           scrollableTarget="scrollableDiv"
@@ -232,12 +251,12 @@ const ChatWindowBody = ({
             overflow: "visible",
           }}
         >
-          {reversedMessages.map((message, index) => (
+          {filteredMessages.map((message, index) => (
             <MessageItem
               key={message.id ?? index}
               message={message}
               index={index}
-              messages={reversedMessages}
+              messages={filteredMessages}
               selectedConvo={selectedConvo}
               lastMessageStatus={lastMessageStatus}
               onReply={onReply}

@@ -2,6 +2,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import type { Conversation, Message } from "@/types/chat";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 import {
   FileText,
   ImagePlus,
@@ -156,6 +157,15 @@ const MessageInput = ({
   }, [notifyStoppedTyping, selectedConvo.id]);
 
   if (!user) return null;
+
+  const currentUserRole = selectedConvo.participants.find(
+    (p) => p.userId === user.id
+  )?.role || null;
+  const isAdmin = currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+  const canSendMessage =
+    selectedConvo.type !== "GROUP" ||
+    selectedConvo.allowMemberSendMessage ||
+    isAdmin;
 
   const clearPendingFiles = () => {
     pendingFiles.forEach((item) => {
@@ -504,6 +514,15 @@ const MessageInput = ({
         </div>
       )}
 
+      {/* Disabled message for non-admin when allowMemberSendMessage is false */}
+      {!canSendMessage && (
+        <div className="flex items-center justify-center px-4 py-3 bg-muted/30 border-t border-border">
+          <p className="text-sm text-muted-foreground text-center">
+            Chỉ trưởng nhóm và phó nhóm được nhắn tin
+          </p>
+        </div>
+      )}
+
       {pendingFiles.length > 0 && (
         <div className="px-3 pt-2 border-t border-border/40">
           <div className="flex flex-wrap gap-2">
@@ -562,7 +581,7 @@ const MessageInput = ({
         </div>
       )}
 
-      <div className="flex items-center gap-2 p-3 min-h-14">
+      <div className={cn("flex items-center gap-2 p-3 min-h-14", !canSendMessage && "opacity-50 pointer-events-none")}>
         <input
           ref={fileInputRef}
           type="file"

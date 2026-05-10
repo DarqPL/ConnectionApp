@@ -67,6 +67,37 @@ public class Conversation {
     @Column(columnDefinition = "TEXT")
     private String pinnedMessageIds;
 
-    @OneToMany(mappedBy = "conversation",cascade = CascadeType.ALL, orphanRemoval = true)
+    // Group settings - permissions
+    @Builder.Default
+    private boolean allowMemberEditInfo = true;
+
+    @Builder.Default
+    private boolean allowMemberCreateNotes = true;
+
+    @Builder.Default
+    private boolean allowMemberCreatePolls = true;
+
+    @Builder.Default
+    private boolean allowMemberSendMessage = true;
+
+    @Builder.Default
+    private boolean approvalMode = false;
+
+    @Builder.Default
+    private boolean markAdminMessages = false;
+
+    @Builder.Default
+    private boolean allowNewMembersReadHistory = true;
+
+    @Builder.Default
+    private boolean allowLinkJoin = true;
+
+    @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ConversationUser> conversationUsers = new ArrayList<>();
+
+    @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ConversationBlockedUser> blockedUsers = new ArrayList<>();
+
+    @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ConversationPendingMember> pendingMembers = new ArrayList<>();
 }

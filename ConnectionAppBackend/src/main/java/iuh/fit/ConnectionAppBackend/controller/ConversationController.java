@@ -2,9 +2,13 @@ package iuh.fit.ConnectionAppBackend.controller;
 
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PaginationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.RoleUpdateRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsRequest;
+import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.BlockMemberRequest;
 import iuh.fit.ConnectionAppBackend.service.ConversationService;
 import iuh.fit.ConnectionAppBackend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +20,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/conversations")
@@ -230,5 +237,204 @@ public class ConversationController {
 
         ConversationResponse response = conversationService.upsertConversationAvatar(conversationId, userId, avatarFile);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get group settings
+     */
+    @GetMapping("/{conversationId}/settings")
+    public ResponseEntity<GroupSettingsResponse> getGroupSettings(
+            Authentication authentication,
+            @PathVariable Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        GroupSettingsResponse settings = conversationService.getGroupSettings(conversationId, userId);
+        return ResponseEntity.ok(settings);
+    }
+
+    /**
+     * Update group settings (OWNER only)
+     */
+    @PutMapping("/{conversationId}/settings")
+    public ResponseEntity<GroupSettingsResponse> updateGroupSettings(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @RequestBody GroupSettingsRequest request) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        GroupSettingsResponse settings = conversationService.updateGroupSettings(conversationId, userId, request);
+        return ResponseEntity.ok(settings);
+    }
+
+    /**
+     * Refresh invite token (OWNER only)
+     */
+    @PostMapping("/{conversationId}/invite-token/refresh")
+    public ResponseEntity<Map<String, String>> refreshInviteToken(
+            Authentication authentication,
+            @PathVariable Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        String newToken = conversationService.refreshInviteToken(conversationId, userId);
+        return ResponseEntity.ok(Map.of("inviteToken", newToken));
+    }
+
+    /**
+     * Disband group (OWNER only)
+     */
+    @PostMapping("/{conversationId}/disband")
+    public ResponseEntity<Void> disbandGroup(
+            Authentication authentication,
+            @PathVariable Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.disbandGroup(conversationId, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Block a member (OWNER/CO_OWNER only)
+     */
+    @PostMapping("/{conversationId}/blocked-members")
+    public ResponseEntity<Void> blockMember(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @RequestBody BlockMemberRequest request) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.blockMember(conversationId, userId, request.getMemberId());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Unblock a member (OWNER/CO_OWNER only)
+     */
+    @DeleteMapping("/{conversationId}/blocked-members/{memberId}")
+    public ResponseEntity<Void> unblockMember(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @PathVariable Long memberId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.unblockMember(conversationId, userId, memberId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Get blocked members
+     */
+    @GetMapping("/{conversationId}/blocked-members")
+    public ResponseEntity<List<ConversationUserResponse>> getBlockedMembers(
+            Authentication authentication,
+            @PathVariable Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        List<ConversationUserResponse> blockedMembers = conversationService.getBlockedMembers(conversationId, userId);
+        return ResponseEntity.ok(blockedMembers);
+    }
+
+    /**
+     * Approve pending member (OWNER/CO_OWNER only)
+     */
+    @PostMapping("/{conversationId}/pending-members/{memberId}/approve")
+    public ResponseEntity<Void> approvePendingMember(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @PathVariable Long memberId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.approvePendingMember(conversationId, userId, memberId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Reject pending member (OWNER/CO_OWNER only)
+     */
+    @PostMapping("/{conversationId}/pending-members/{memberId}/reject")
+    public ResponseEntity<Void> rejectPendingMember(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @PathVariable Long memberId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.rejectPendingMember(conversationId, userId, memberId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Get pending members
+     */
+    @GetMapping("/{conversationId}/pending-members")
+    public ResponseEntity<List<ConversationUserResponse>> getPendingMembers(
+            Authentication authentication,
+            @PathVariable Long conversationId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        List<ConversationUserResponse> pendingMembers = conversationService.getPendingMembers(conversationId, userId);
+        return ResponseEntity.ok(pendingMembers);
+    }
+
+    /**
+     * Add co-owners (OWNER only)
+     */
+    @PostMapping("/{conversationId}/co-owners")
+    public ResponseEntity<Void> addCoOwners(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @RequestBody List<Long> memberIds) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.addCoOwners(conversationId, userId, memberIds);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Remove co-owner (OWNER only)
+     */
+    @DeleteMapping("/{conversationId}/co-owners/{memberId}")
+    public ResponseEntity<Void> removeCoOwner(
+            Authentication authentication,
+            @PathVariable Long conversationId,
+            @PathVariable Long memberId) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        conversationService.removeCoOwner(conversationId, userId, memberId);
+        return ResponseEntity.noContent().build();
     }
 }
