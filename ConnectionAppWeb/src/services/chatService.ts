@@ -347,4 +347,56 @@ export const chatService = {
     const res = await api.post(`/reminders/${reminderId}/decline`);
     return res.data;
   },
+
+  // Group settings
+  async getGroupSettings(conversationId: number) {
+    const res = await api.get(`/conversations/${conversationId}/settings`);
+    return res.data;
+  },
+  async updateGroupSettings(conversationId: number, settings: {
+    allowMemberEditInfo?: boolean;
+    allowMemberCreateNotes?: boolean;
+    allowMemberCreatePolls?: boolean;
+    allowMemberSendMessage?: boolean;
+    approvalMode?: boolean;
+    markAdminMessages?: boolean;
+    allowNewMembersReadHistory?: boolean;
+    allowLinkJoin?: boolean;
+  }) {
+    const res = await api.put(`/conversations/${conversationId}/settings`, settings);
+    return res.data;
+  },
+  async refreshInviteToken(conversationId: number) {
+    const res = await api.post(`/conversations/${conversationId}/invite-token/refresh`);
+    return res.data;
+  },
+  async disbandGroup(conversationId: number) {
+    await api.post(`/conversations/${conversationId}/disband`);
+  },
+  async getBlockedMembers(conversationId: number) {
+    const res = await api.get(`/conversations/${conversationId}/blocked-members`);
+    return res.data;
+  },
+  async blockMember(conversationId: number, memberId: number) {
+    await api.post(`/conversations/${conversationId}/blocked-members`, { memberId });
+  },
+  async unblockMember(conversationId: number, memberId: number) {
+    await api.delete(`/conversations/${conversationId}/blocked-members/${memberId}`);
+  },
+  async getPendingMembers(conversationId: number) {
+    const res = await api.get(`/conversations/${conversationId}/pending-members`);
+    return res.data;
+  },
+  async approvePendingMember(conversationId: number, memberId: number) {
+    await api.post(`/conversations/${conversationId}/pending-members/${memberId}/approve`);
+  },
+  async rejectPendingMember(conversationId: number, memberId: number) {
+    await api.post(`/conversations/${conversationId}/pending-members/${memberId}/reject`);
+  },
+  async addCoOwners(conversationId: number, memberIds: number[]) {
+    await api.post(`/conversations/${conversationId}/co-owners`, memberIds);
+  },
+  async removeCoOwner(conversationId: number, memberId: number) {
+    await api.delete(`/conversations/${conversationId}/co-owners/${memberId}`);
+  },
 };

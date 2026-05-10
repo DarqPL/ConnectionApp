@@ -63,6 +63,8 @@ interface Props {
   onReminderEdit?: () => void;
   status?: "SENDING" | "SENT" | "RECEIVED" | "ERROR";
   onRetrySend?: () => void;
+  markAdminMessages?: boolean;
+  senderRole?: string;
 }
 
 const formatTime = (dateStr: string) => {
@@ -152,9 +154,14 @@ const MessageBubbleBase: React.FC<Props> = ({
   onReminderEdit,
   status,
   onRetrySend,
+  markAdminMessages = false,
+  senderRole,
 }) => {
   const isRecalled = !!recalledAt;
   const FALLBACK = "https://i.pravatar.cc/150?img=5";
+  const isAdmin = senderRole === "OWNER" || senderRole === "CO_OWNER";
+  const isOwner = senderRole === "OWNER";
+  const showKeyIcon = markAdminMessages && isAdmin && !isMe;
   const { user: currentUser } = useAuth();
 
   const groupedReactions = reactions.reduce((acc, reaction) => {
@@ -563,7 +570,21 @@ const MessageBubbleBase: React.FC<Props> = ({
     >
       {/* Avatar for received messages in groups */}
       {!isMe && isGroup && (
-        <Image source={{ uri: avatarUrl || FALLBACK }} style={styles.avatar} />
+        <View style={styles.avatarWrap}>
+          <Image source={{ uri: avatarUrl || FALLBACK }} style={styles.avatar} />
+          {showKeyIcon && (
+            <View style={[
+              styles.keyIconBadge,
+              isOwner ? styles.keyIconOwner : styles.keyIconCoOwner
+            ]}>
+              <Ionicons
+                name="key"
+                size={10}
+                color={isOwner ? "#f59e0b" : "#3b82f6"}
+              />
+            </View>
+          )}
+        </View>
       )}
 
       <View style={[styles.col, isMe ? styles.colRight : styles.colLeft]}>
@@ -586,6 +607,9 @@ const MessageBubbleBase: React.FC<Props> = ({
               isRecalled && styles.bubbleRecalled,
               replyInfo && !isRecalled && styles.bubbleWithReply,
               isHighlighted && styles.bubbleHighlighted,
+              showKeyIcon && !isRecalled && !isMe && (
+                isOwner ? styles.bubbleAdminOwner : styles.bubbleAdminCoOwner
+              ),
             ]}
           >
             {isRecalled ? (
@@ -998,6 +1022,38 @@ const styles = StyleSheet.create({
     marginRight: 6,
     marginBottom: 4,
     backgroundColor: COLORS.backgroundMuted,
+  },
+  avatarWrap: {
+    position: "relative",
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  keyIconBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  keyIconOwner: {
+    borderColor: "#f59e0b40",
+  },
+  keyIconCoOwner: {
+    borderColor: "#3b82f640",
+  },
+  bubbleAdminOwner: {
+    borderWidth: 2,
+    borderColor: "#f59e0b60",
+  },
+  bubbleAdminCoOwner: {
+    borderWidth: 2,
+    borderColor: "#3b82f660",
   },
   senderName: {
     fontSize: 11,

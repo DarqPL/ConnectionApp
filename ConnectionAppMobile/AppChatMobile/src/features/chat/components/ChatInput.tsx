@@ -33,12 +33,15 @@ interface ChatInputProps {
     files: PendingAttachment[],
     parentId?: string | null,
   ) => Promise<void>;
-  conversationId: number; // NEW
+  conversationId: number;
   disabled?: boolean;
   replyTo?: Message | null;
   onCancelReply?: () => void;
   onOpenPollCreator?: () => void;
   onOpenReminderCreator?: () => void;
+  allowMemberSendMessage?: boolean;
+  currentUserRole?: string | null;
+  isGroup?: boolean;
 }
 
 const MAX_FILES = 5;
@@ -86,8 +89,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onCancelReply,
   onOpenPollCreator,
   onOpenReminderCreator,
+  allowMemberSendMessage = true,
+  currentUserRole = null,
+  isGroup = false,
 }) => {
   const { notifyTyping, notifyStoppedTyping } = useChat();
+  const isAdmin = currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+  const canSendMessage = !isGroup || allowMemberSendMessage || isAdmin;
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
@@ -418,6 +426,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </View>
         )}
 
+        {!canSendMessage && (
+          <View style={styles.disabledBanner}>
+            <Ionicons name="lock-closed-outline" size={16} color={COLORS.textMuted} />
+            <Text style={styles.disabledText}>
+              Chỉ trưởng nhóm và phó nhóm được nhắn tin
+            </Text>
+          </View>
+        )}
+
         {selectedFiles.length > 0 && (
           <ScrollView
             horizontal
@@ -461,57 +478,66 @@ const ChatInput: React.FC<ChatInputProps> = ({
         )}
 
         <View style={styles.container}>
-          <TouchableOpacity style={styles.iconBtn} onPress={pickImages}>
-            <Ionicons name="image-outline" size={24} color={COLORS.textMuted} />
+          <TouchableOpacity
+            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
+            onPress={pickImages}
+            disabled={!canSendMessage}
+          >
+            <Ionicons name="image-outline" size={24} color={canSendMessage ? COLORS.textMuted : COLORS.textLight} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.iconBtn} onPress={pickDocuments}>
+          <TouchableOpacity
+            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
+            onPress={pickDocuments}
+            disabled={!canSendMessage}
+          >
             <Ionicons
               name="attach-outline"
               size={24}
-              color={COLORS.textMuted}
+              color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.iconBtn}
+            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
             onPress={handleOpenEmojiPicker}
+            disabled={!canSendMessage}
           >
-            <Ionicons name="happy-outline" size={24} color={COLORS.textMuted} />
+            <Ionicons name="happy-outline" size={24} color={canSendMessage ? COLORS.textMuted : COLORS.textLight} />
           </TouchableOpacity>
 
           {onOpenPollCreator && (
             <TouchableOpacity
-              style={styles.iconBtn}
+              style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
               onPress={onOpenPollCreator}
-              disabled={isSending || disabled}
+              disabled={isSending || disabled || !canSendMessage}
             >
               <Ionicons
                 name="stats-chart-outline"
                 size={22}
-                color={COLORS.textMuted}
+                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
               />
             </TouchableOpacity>
           )}
 
           {onOpenReminderCreator && (
             <TouchableOpacity
-              style={styles.iconBtn}
+              style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
               onPress={onOpenReminderCreator}
-              disabled={isSending || disabled}
+              disabled={isSending || disabled || !canSendMessage}
             >
               <Ionicons
                 name="alarm-outline"
                 size={22}
-                color={COLORS.textMuted}
+                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
               />
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={styles.iconBtn}
+            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
             onPress={openAiMenu}
-            disabled={isSending || disabled || isAiProcessing}
+            disabled={isSending || disabled || isAiProcessing || !canSendMessage}
           >
             {isAiProcessing ? (
               <ActivityIndicator size="small" color={COLORS.textMuted} />
@@ -519,7 +545,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <Ionicons
                 name="sparkles-outline"
                 size={22}
-                color={COLORS.textMuted}
+                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
               />
             )}
           </TouchableOpacity>
@@ -743,6 +769,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  disabledBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginHorizontal: 8,
+    marginTop: 8,
+    paddingVertical: 10,
+    backgroundColor: COLORS.backgroundMuted,
+    borderRadius: 10,
+  },
+  disabledText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
   previewRow: {
     paddingHorizontal: 8,
     paddingTop: 8,
@@ -806,6 +847,9 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: "center",
     justifyContent: "center",
+  },
+  iconBtnDisabled: {
+    opacity: 0.4,
   },
   inputWrap: {
     flex: 1,

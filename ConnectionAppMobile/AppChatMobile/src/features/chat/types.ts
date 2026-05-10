@@ -26,6 +26,16 @@ export interface Conversation {
   participants: Participant[];
   unreadCount: number;
   pinnedMessages?: Message[];
+  allowMemberEditInfo?: boolean;
+  allowMemberCreateNotes?: boolean;
+  allowMemberCreatePolls?: boolean;
+  allowMemberSendMessage?: boolean;
+  approvalMode?: boolean;
+  markAdminMessages?: boolean;
+  allowNewMembersReadHistory?: boolean;
+  allowLinkJoin?: boolean;
+  blockedMembers?: Participant[];
+  pendingMembers?: Participant[];
 }
 
 export interface SenderInfo {

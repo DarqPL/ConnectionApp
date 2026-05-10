@@ -24,6 +24,7 @@ import { SuccessorPromotionModal } from "./SuccessorPromotionModal";
 import { RenameGroupModal } from "./RenameGroupModal";
 import AddMemberModal from "./AddMemberModal";
 import GroupQrModal from "./GroupQrModal";
+import { GroupSettingsScreen } from "../screens/GroupSettingsScreen";
 import type {
   Message,
   Attachment,
@@ -118,6 +119,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showGroupQrModal, setShowGroupQrModal] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
   
   // Đã gộp state của cả 2 nhánh ở đây
   const [showPinnedModal, setShowPinnedModal] = useState(false);
@@ -397,9 +399,9 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
                   action: "wallpaper",
                 },
                 {
-                  icon: "notifications-outline" as const,
-                  label: "Tắt\nthông báo",
-                  action: "mute",
+                  icon: "shield-checkmark-outline" as const,
+                  label: "Quản lý\nnhóm",
+                  action: "group-settings",
                 },
               ].map((item) => (
                 <TouchableOpacity
@@ -408,6 +410,8 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
                   onPress={() => {
                     if (item.action === "add-member") {
                       setShowAddMemberModal(true);
+                    } else if (item.action === "group-settings") {
+                      setShowGroupSettings(true);
                     }
                   }}
                 >
@@ -736,6 +740,24 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
               </ScrollView>
             </View>
           </View>
+        </Modal>
+
+        <Modal
+          visible={showGroupSettings}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowGroupSettings(false)}
+        >
+          <GroupSettingsScreen
+            visible={showGroupSettings}
+            onClose={() => setShowGroupSettings(false)}
+            conversation={conversation}
+            currentUserId={currentUserId}
+            currentUserRole={currentUserRole}
+            onSettingsUpdated={() => {
+              // Parent should refresh conversation data
+            }}
+          />
         </Modal>
       </View>
     </Modal>

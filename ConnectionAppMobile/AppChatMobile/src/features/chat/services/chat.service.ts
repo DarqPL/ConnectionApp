@@ -635,6 +635,96 @@ export class ChatService {
 
     return (await response.json()) as any;
   }
+
+  // Group settings
+  async getGroupSettings(conversationId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/settings`);
+    if (!response.ok) throw await this.parseError(response, "Không thể tải cài đặt nhóm");
+    return response.json();
+  }
+
+  async updateGroupSettings(conversationId: number, settings: Record<string, boolean>) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể cập nhật cài đặt");
+    return response.json();
+  }
+
+  async refreshInviteToken(conversationId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/invite-token/refresh`, {
+      method: "POST",
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể tạo link mới");
+    return response.json();
+  }
+
+  async disbandGroup(conversationId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/disband`, {
+      method: "POST",
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể giải tán nhóm");
+  }
+
+  async getBlockedMembers(conversationId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/blocked-members`);
+    if (!response.ok) throw await this.parseError(response, "Không thể tải danh sách chặn");
+    return response.json();
+  }
+
+  async blockMember(conversationId: number, memberId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/blocked-members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId }),
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể chặn thành viên");
+  }
+
+  async unblockMember(conversationId: number, memberId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/blocked-members/${memberId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể bỏ chặn");
+  }
+
+  async getPendingMembers(conversationId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/pending-members`);
+    if (!response.ok) throw await this.parseError(response, "Không thể tải danh sách chờ duyệt");
+    return response.json();
+  }
+
+  async approvePendingMember(conversationId: number, memberId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/pending-members/${memberId}/approve`, {
+      method: "POST",
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể phê duyệt");
+  }
+
+  async rejectPendingMember(conversationId: number, memberId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/pending-members/${memberId}/reject`, {
+      method: "POST",
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể từ chối");
+  }
+
+  async addCoOwners(conversationId: number, memberIds: number[]) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/co-owners`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(memberIds),
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể thêm phó nhóm");
+  }
+
+  async removeCoOwner(conversationId: number, memberId: number) {
+    const response = await authService.authFetch(`/conversations/${conversationId}/co-owners/${memberId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw await this.parseError(response, "Không thể xoá phó nhóm");
+  }
 }
 
 export const chatService = new ChatService();

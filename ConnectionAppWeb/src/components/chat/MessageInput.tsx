@@ -2,6 +2,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import type { Conversation, Message } from "@/types/chat";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 import {
   FileText,
   ImagePlus,
@@ -156,6 +157,15 @@ const MessageInput = ({
   }, [notifyStoppedTyping, selectedConvo.id]);
 
   if (!user) return null;
+
+  const currentUserRole = selectedConvo.participants.find(
+    (p) => p.userId === user.id
+  )?.role || null;
+  const isAdmin = currentUserRole === "OWNER" || currentUserRole === "CO_OWNER";
+  const canSendMessage =
+    selectedConvo.type !== "GROUP" ||
+    selectedConvo.allowMemberSendMessage ||
+    isAdmin;
 
   const clearPendingFiles = () => {
     pendingFiles.forEach((item) => {
@@ -504,6 +514,15 @@ const MessageInput = ({
         </div>
       )}
 
+      {/* Disabled message for non-admin when allowMemberSendMessage is false */}
+      {!canSendMessage && (
+        <div className="flex items-center justify-center px-4 py-3 bg-muted/30 border-t border-border">
+          <p className="text-sm text-muted-foreground text-center">
+            Chỉ trưởng nhóm và phó nhóm được nhắn tin
+          </p>
+        </div>
+      )}
+
       {pendingFiles.length > 0 && (
         <div className="px-3 pt-2 border-t border-border/40">
           <div className="flex flex-wrap gap-2">
@@ -562,7 +581,7 @@ const MessageInput = ({
         </div>
       )}
 
-      <div className="flex items-center gap-2 p-3 min-h-14">
+      <div className={cn("flex items-center gap-2 p-3 min-h-14", !canSendMessage && "opacity-50 pointer-events-none")}>
         <input
           ref={fileInputRef}
           type="file"
@@ -577,7 +596,7 @@ const MessageInput = ({
           className="hover:bg-primary/10 transition-smooth"
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading || pendingFiles.length >= MAX_FILES}
+          disabled={isUploading || pendingFiles.length >= MAX_FILES || !canSendMessage}
         >
           <ImagePlus className="size-4" />
         </Button>
@@ -588,7 +607,7 @@ const MessageInput = ({
           className="hover:bg-primary/10 transition-smooth"
           type="button"
           onClick={() => setIsPollCreatorOpen(true)}
-          disabled={isUploading}
+          disabled={isUploading || !canSendMessage}
         >
           <ListTodo className="size-4" />
         </Button>
@@ -599,7 +618,7 @@ const MessageInput = ({
           className="hover:bg-primary/10 transition-smooth"
           type="button"
           onClick={() => setIsReminderCreatorOpen(true)}
-          disabled={isUploading}
+          disabled={isUploading || !canSendMessage}
         >
           <Bell className="size-4" />
         </Button>
@@ -613,14 +632,14 @@ const MessageInput = ({
             className="pr-28 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none"
           ></Input>
           <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-            <Popover open={isAiMenuOpen} onOpenChange={setIsAiMenuOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 hover:bg-primary/10 transition-smooth"
-                  disabled={isUploading || isAiProcessing}
-                >
+                <Popover open={isAiMenuOpen} onOpenChange={setIsAiMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 hover:bg-primary/10 transition-smooth"
+                      disabled={isUploading || isAiProcessing || !canSendMessage}
+                    >
                   {isAiProcessing ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
@@ -675,6 +694,7 @@ const MessageInput = ({
               variant="ghost"
               size="icon"
               className="size-8 hover:bg-primary/10 transition-smooth"
+              disabled={!canSendMessage}
             >
               <div>
                 <EmojiPicker
@@ -694,7 +714,7 @@ const MessageInput = ({
         <Button
           onClick={handleSendMessage}
           className="bg-gradient-chat hover:shadow-glow transition-smooth hover:scale-105"
-          disabled={isUploading || (!value.trim() && pendingFiles.length === 0)}
+          disabled={isUploading || (!value.trim() && pendingFiles.length === 0) || !canSendMessage}
         >
           {isUploading ? (
             <Loader2 className="size-4 text-white animate-spin" />

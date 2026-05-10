@@ -28,4 +28,17 @@ public class ConversationResponse {
     private List<ConversationUserResponse> participants;
     private List<MessageResponse> pinnedMessages;
     private long unreadCount = 0;
+
+    // Group settings
+    private boolean allowMemberEditInfo = true;
+    private boolean allowMemberCreateNotes = true;
+    private boolean allowMemberCreatePolls = true;
+    private boolean allowMemberSendMessage = true;
+    private boolean approvalMode = false;
+    private boolean markAdminMessages = false;
+    private boolean allowNewMembersReadHistory = true;
+    private boolean allowLinkJoin = true;
+
+    private List<ConversationUserResponse> blockedMembers;
+    private List<ConversationUserResponse> pendingMembers;
 }

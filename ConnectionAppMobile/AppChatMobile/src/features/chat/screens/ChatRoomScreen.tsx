@@ -482,7 +482,23 @@ const ChatRoomScreen = ({ route }: any) => {
 
   const showScrollThreshold = 120;
   const nearBottomThreshold = 24;
-  const displayMessages = currentMessages;
+
+  // Filter messages based on allowNewMembersReadHistory setting
+  const displayMessages = React.useMemo(() => {
+    if (!currentConversation || currentConversation.allowNewMembersReadHistory !== false || !user) {
+      return currentMessages;
+    }
+
+    const currentUserParticipant = currentParticipants?.find(
+      (p: Participant) => p.userId === user.id
+    );
+    if (!currentUserParticipant) return currentMessages;
+
+    const joinedAt = new Date(currentUserParticipant.joinedAt).getTime();
+    return currentMessages.filter(
+      (msg) => new Date(msg.createdAt).getTime() >= joinedAt
+    );
+  }, [currentMessages, currentConversation, currentParticipants, user]);
   const isGroup = isGroupCall;
   const isPrivateChat = !isGroup;
   const messageIndexMap = React.useMemo(
@@ -1301,6 +1317,12 @@ const ChatRoomScreen = ({ route }: any) => {
                 replyInfo={item.replyInfo}
                 isGroup={isGroup}
                 participants={currentParticipants}
+                markAdminMessages={currentConversation?.markAdminMessages}
+                senderRole={
+                  currentParticipants?.find(
+                    (p: Participant) => p.userId === item.senderInfo?.senderId
+                  )?.role
+                }
                 onLongPress={() => handleMessageLongPress(item)}
                 onReplyPreviewPress={
                   item.replyInfo?.parentId
@@ -1361,6 +1383,13 @@ const ChatRoomScreen = ({ route }: any) => {
               onCancelReply={() => setReplyTo(null)}
               onOpenPollCreator={() => setIsPollCreatorOpen(true)}
               onOpenReminderCreator={() => setIsReminderCreatorOpen(true)}
+              allowMemberSendMessage={currentConversation?.allowMemberSendMessage}
+              currentUserRole={
+                currentParticipants?.find(
+                  (p: Participant) => p.userId === user?.id,
+                )?.role || null
+              }
+              isGroup={isGroup}
             />
           </>
         ) : (
