@@ -1,0 +1,9 @@
+target/
+.git/
+.gitignore
+*.iml
+.idea/
+.vscode/
+.env.example
+test.sql
+appchat.messages.json
