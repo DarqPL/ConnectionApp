@@ -6,6 +6,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import GroupInvitePage from './pages/GroupInvitePage'
 import ManualUnlockPage from './pages/ManualUnlockPage'
 import { Toaster } from 'sonner'
+import { ProtectedRoute, PublicRoute } from './components/auth-route'
+
 function App() {
 
   return (
@@ -14,14 +16,14 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* public routes go here */}
-          <Route path='/signin' element={<SignInPage />} />
-          <Route path='/signup' element={<SignUpPage />} />
-          <Route path='/forgot-password' element={<ForgotPasswordPage />} />
-          <Route path='/unlock-account' element={<ManualUnlockPage />} />
+          <Route path='/signin' element={<PublicRoute><SignInPage /></PublicRoute>} />
+          <Route path='/signup' element={<PublicRoute><SignUpPage /></PublicRoute>} />
+          <Route path='/forgot-password' element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+          <Route path='/unlock-account' element={<PublicRoute><ManualUnlockPage /></PublicRoute>} />
           <Route path='/groups/join/:inviteToken' element={<GroupInvitePage />} />
 
           {/* private routes go here */}
-          <Route path='/' element={<ChatAppPage />} />
+          <Route path='/' element={<ProtectedRoute><ChatAppPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </>
