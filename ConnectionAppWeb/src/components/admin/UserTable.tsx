@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -25,15 +25,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MoreHorizontal, Search, Lock, Unlock, Trash2, Shield } from "lucide-react";
+import { MoreHorizontal, Search, Lock, Unlock, Trash2, Shield, AlertTriangle } from "lucide-react";
 import { useAdminStore } from "@/stores/useAdminStore";
 import type { AdminUser } from "@/types/admin";
 import { toast } from "sonner";
+import { AdminPagination } from "./AdminPagination";
 
 interface UserTableProps {
   users: AdminUser[];
   loading: boolean;
-  onRefresh: () => void;
+  total: number;
+  page: number;
+  onRefresh: (params?: { search?: string; status?: string; page?: number; limit?: number }) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -48,45 +51,112 @@ const roleColors: Record<string, string> = {
   USER: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
 };
 
-export function UserTable({ users, loading }: UserTableProps) {
-  const { updateUserStatus, updateUserRole, deleteUser } = useAdminStore();
+export function UserTable({ users, loading, total, page, onRefresh }: UserTableProps) {
+  const { updateUserRole, lockUser, unlockUser, deleteUser } = useAdminStore();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [pageSize, setPageSize] = useState(10);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     action: string;
     user: AdminUser | null;
   }>({ open: false, action: "", user: null });
+  const [roleDialog, setRoleDialog] = useState<{
+    open: boolean;
+    user: AdminUser | null;
+    newRole: string;
+    confirmText: string;
+  }>({ open: false, user: null, newRole: "", confirmText: "" });
 
-  const filtered = users.filter((u) => {
-    const matchSearch =
-      !search ||
-      u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.displayName.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !statusFilter || u.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const applyFilters = useCallback(
+    (overrides?: { search?: string; status?: string; page?: number }) => {
+      onRefresh({
+        search: overrides?.search ?? debouncedSearch,
+        status: overrides?.status ?? statusFilter,
+        page: (overrides?.page ?? page) + 1,
+        limit: pageSize,
+      });
+    },
+    [debouncedSearch, statusFilter, page, pageSize, onRefresh],
+  );
+
+  useEffect(() => {
+    applyFilters({ page: 0 });
+  }, [debouncedSearch, statusFilter]);
+
+  const handlePageChange = (newPage: number) => {
+    applyFilters({ page: newPage });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    onRefresh({ search: debouncedSearch, status: statusFilter, page: 1, limit: newSize });
+  };
 
   const handleAction = async (action: string, user: AdminUser) => {
-    if (action === "lock") {
-      await updateUserStatus(user.id, "LOCKED");
-      toast.success(`Locked ${user.displayName}`);
-    } else if (action === "unlock") {
-      await updateUserStatus(user.id, "OFFLINE");
-      toast.success(`Unlocked ${user.displayName}`);
-    } else if (action === "delete") {
-      await deleteUser(user.id);
-      toast.success(`Deleted ${user.displayName}`);
-    } else if (action === "make-admin") {
-      await updateUserRole(user.id, "ADMIN");
-      toast.success(`${user.displayName} is now admin`);
-    } else if (action === "make-user") {
-      await updateUserRole(user.id, "USER");
-      toast.success(`${user.displayName} is now user`);
+    try {
+      if (action === "lock") {
+        await lockUser(user.id);
+        toast.success(`Locked ${user.displayName}`);
+      } else if (action === "unlock") {
+        await unlockUser(user.id);
+        toast.success(`Unlocked ${user.displayName}`);
+      } else if (action === "delete") {
+        await deleteUser(user.id);
+        toast.success(`Deleted ${user.displayName}`);
+      }
+    } catch {
+      toast.error(`Failed to ${action} user`);
     }
     setConfirmDialog({ open: false, action: "", user: null });
   };
+
+  const openRoleDialog = (user: AdminUser, newRole: string) => {
+    setRoleDialog({
+      open: true,
+      user,
+      newRole,
+      confirmText: "",
+    });
+  };
+
+  const handleRoleChange = async () => {
+    if (!roleDialog.user) return;
+
+    const expectedText =
+      roleDialog.newRole === "ADMIN"
+        ? `MAKE ${roleDialog.user.username} ADMIN`
+        : `REMOVE ${roleDialog.user.username} ADMIN`;
+
+    if (roleDialog.confirmText !== expectedText) {
+      toast.error("Confirmation text does not match");
+      return;
+    }
+
+    try {
+      await updateUserRole(roleDialog.user.id, roleDialog.newRole);
+      toast.success(
+        roleDialog.newRole === "ADMIN"
+          ? `${roleDialog.user.displayName} is now admin`
+          : `${roleDialog.user.displayName} is now user`,
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update role";
+      toast.error(message);
+    }
+    setRoleDialog({ open: false, user: null, newRole: "", confirmText: "" });
+  };
+
+  const expectedConfirmText =
+    roleDialog.newRole === "ADMIN"
+      ? `MAKE ${roleDialog.user?.username} ADMIN`
+      : `REMOVE ${roleDialog.user?.username} ADMIN`;
 
   return (
     <div className="space-y-4">
@@ -131,14 +201,14 @@ export function UserTable({ users, loading }: UserTableProps) {
                 Loading...
               </TableCell>
             </TableRow>
-          ) : filtered.length === 0 ? (
+          ) : users.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                 No users found
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((user) => (
+            users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
@@ -195,14 +265,14 @@ export function UserTable({ users, loading }: UserTableProps) {
                       )}
                       {user.role === "ADMIN" ? (
                         <DropdownMenuItem
-                          onClick={() => handleAction("make-user", user)}
+                          onClick={() => openRoleDialog(user, "USER")}
                         >
                           <Shield className="mr-2 h-4 w-4" />
                           Remove Admin
                         </DropdownMenuItem>
                       ) : (
                         <DropdownMenuItem
-                          onClick={() => handleAction("make-admin", user)}
+                          onClick={() => openRoleDialog(user, "ADMIN")}
                         >
                           <Shield className="mr-2 h-4 w-4" />
                           Make Admin
@@ -229,6 +299,14 @@ export function UserTable({ users, loading }: UserTableProps) {
           )}
         </TableBody>
       </Table>
+
+      <AdminPagination
+        currentPage={page}
+        pageSize={pageSize}
+        totalItems={total}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+      />
 
       <Dialog
         open={confirmDialog.open}
@@ -269,6 +347,59 @@ export function UserTable({ users, loading }: UserTableProps) {
                 confirmDialog.user &&
                 handleAction(confirmDialog.action, confirmDialog.user)
               }
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={roleDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setRoleDialog({ open: false, user: null, newRole: "", confirmText: "" });
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              {roleDialog.newRole === "ADMIN" ? "Grant Admin Role" : "Remove Admin Role"}
+            </DialogTitle>
+            <DialogDescription>
+              {roleDialog.newRole === "ADMIN"
+                ? `You are about to grant admin privileges to ${roleDialog.user?.displayName}. Admins have full access to the admin dashboard.`
+                : `You are about to remove admin privileges from ${roleDialog.user?.displayName}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm font-medium">
+              Type the following to confirm:
+            </p>
+            <code className="block rounded bg-muted px-3 py-2 text-sm font-mono">
+              {expectedConfirmText}
+            </code>
+            <Input
+              placeholder="Type confirmation here..."
+              value={roleDialog.confirmText}
+              onChange={(e) =>
+                setRoleDialog((prev) => ({ ...prev, confirmText: e.target.value }))
+              }
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setRoleDialog({ open: false, user: null, newRole: "", confirmText: "" })
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={roleDialog.newRole === "USER" ? "destructive" : "default"}
+              onClick={handleRoleChange}
+              disabled={roleDialog.confirmText !== expectedConfirmText}
             >
               Confirm
             </Button>

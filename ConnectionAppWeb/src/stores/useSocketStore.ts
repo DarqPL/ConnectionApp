@@ -27,6 +27,7 @@ interface SecurityNotification {
 
 interface SocketState {
   client: Client | null;
+  heartbeatTimer: ReturnType<typeof setInterval> | null;
   connectSocket: (userId: number) => void;
   disconnectSocket: () => void;
   notifyTyping: (conversationId: number) => void;
@@ -53,6 +54,7 @@ const resolveSocketUrl = (): string => {
 
 export const useSocketStore = create<SocketState>((set, get) => ({
   client: null,
+  heartbeatTimer: null,
 
   connectSocket: (userId) => {
     const token = useAuthStore.getState().accessToken;
@@ -71,6 +73,26 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
       onConnect: () => {
         console.log("Connected to WebSocket");
+
+        api.put("/users/status", null, { params: { status: "ONLINE" } })
+          .catch(() => {});
+
+        const existingTimer = get().heartbeatTimer;
+        if (existingTimer) {
+          clearInterval(existingTimer);
+        }
+
+        const timer = setInterval(() => {
+          const currentClient = get().client;
+          if (currentClient?.connected) {
+            currentClient.publish({
+              destination: "/app/presence/heartbeat",
+              body: "{}",
+            });
+          }
+        }, 30000);
+
+        set({ heartbeatTimer: timer });
 
         // Subscribe to personal user topic for all conversation messages
         client.subscribe(`/topic/user.${userId}`, (message) => {
@@ -330,6 +352,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   },
 
   disconnectSocket: () => {
+    const timer = get().heartbeatTimer;
+    if (timer) {
+      clearInterval(timer);
+      set({ heartbeatTimer: null });
+    }
+
+    api.put("/users/status", null, { params: { status: "OFFLINE" } })
+      .catch(() => {});
+
     const client = get().client;
     client?.deactivate();
     useChatStore.getState().clearAllTypingUsers();

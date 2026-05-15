@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -23,14 +23,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Lock, Trash2, Users, Hash } from "lucide-react";
+import { MoreHorizontal, Lock, Unlock, Trash2, Users, Hash } from "lucide-react";
 import { useAdminStore } from "@/stores/useAdminStore";
 import type { AdminConversation } from "@/types/admin";
 import { toast } from "sonner";
+import { AdminPagination } from "./AdminPagination";
 
 interface ConversationTableProps {
   conversations: AdminConversation[];
   loading: boolean;
+  total: number;
+  page: number;
+  onRefresh: (params?: { type?: string; page?: number; limit?: number }) => void;
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -44,26 +48,60 @@ const statusColors: Record<string, string> = {
   DELETED: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
 };
 
-export function ConversationTable({ conversations, loading }: ConversationTableProps) {
-  const { lockConversation, deleteConversation } = useAdminStore();
+export function ConversationTable({
+  conversations,
+  loading,
+  total,
+  page,
+  onRefresh,
+}: ConversationTableProps) {
+  const { lockConversation, unlockConversation, deleteConversation } = useAdminStore();
   const [typeFilter, setTypeFilter] = useState("");
+  const [pageSize, setPageSize] = useState(10);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     action: string;
     conversation: AdminConversation | null;
   }>({ open: false, action: "", conversation: null });
 
-  const filtered = typeFilter
-    ? conversations.filter((c) => c.type === typeFilter)
-    : conversations;
+  const applyFilters = useCallback(
+    (overrides?: { type?: string; page?: number }) => {
+      onRefresh({
+        type: overrides?.type ?? typeFilter,
+        page: (overrides?.page ?? page) + 1,
+        limit: pageSize,
+      });
+    },
+    [typeFilter, page, pageSize, onRefresh],
+  );
+
+  useEffect(() => {
+    applyFilters({ page: 0 });
+  }, [typeFilter]);
+
+  const handlePageChange = (newPage: number) => {
+    applyFilters({ page: newPage });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    onRefresh({ type: typeFilter, page: 1, limit: newSize });
+  };
 
   const handleAction = async (action: string, convo: AdminConversation) => {
-    if (action === "lock") {
-      await lockConversation(convo.id);
-      toast.success(`Locked conversation "${convo.name}"`);
-    } else if (action === "delete") {
-      await deleteConversation(convo.id);
-      toast.success(`Deleted conversation "${convo.name}"`);
+    try {
+      if (action === "lock") {
+        await lockConversation(convo.id);
+        toast.success(`Locked "${convo.name}"`);
+      } else if (action === "unlock") {
+        await unlockConversation(convo.id);
+        toast.success(`Unlocked "${convo.name}"`);
+      } else if (action === "delete") {
+        await deleteConversation(convo.id);
+        toast.success(`Deleted "${convo.name}"`);
+      }
+    } catch {
+      toast.error(`Failed to ${action} conversation`);
     }
     setConfirmDialog({ open: false, action: "", conversation: null });
   };
@@ -101,14 +139,14 @@ export function ConversationTable({ conversations, loading }: ConversationTableP
                 Loading...
               </TableCell>
             </TableRow>
-          ) : filtered.length === 0 ? (
+          ) : conversations.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                 No conversations found
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((convo) => (
+            conversations.map((convo) => (
               <TableRow key={convo.id}>
                 <TableCell className="font-medium">{convo.name}</TableCell>
                 <TableCell>
@@ -137,7 +175,20 @@ export function ConversationTable({ conversations, loading }: ConversationTableP
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {convo.status !== "LOCKED" && (
+                      {convo.status === "LOCKED" ? (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setConfirmDialog({
+                              open: true,
+                              action: "unlock",
+                              conversation: convo,
+                            })
+                          }
+                        >
+                          <Unlock className="mr-2 h-4 w-4" />
+                          Unlock
+                        </DropdownMenuItem>
+                      ) : (
                         <DropdownMenuItem
                           onClick={() =>
                             setConfirmDialog({
@@ -173,6 +224,14 @@ export function ConversationTable({ conversations, loading }: ConversationTableP
         </TableBody>
       </Table>
 
+      <AdminPagination
+        currentPage={page}
+        pageSize={pageSize}
+        totalItems={total}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+      />
+
       <Dialog
         open={confirmDialog.open}
         onOpenChange={(open) =>
@@ -184,12 +243,16 @@ export function ConversationTable({ conversations, loading }: ConversationTableP
             <DialogTitle>
               {confirmDialog.action === "lock"
                 ? "Lock Conversation"
-                : "Delete Conversation"}
+                : confirmDialog.action === "unlock"
+                  ? "Unlock Conversation"
+                  : "Delete Conversation"}
             </DialogTitle>
             <DialogDescription>
               {confirmDialog.action === "lock"
                 ? `Lock "${confirmDialog.conversation?.name}"? Users won't be able to send new messages.`
-                : `Delete "${confirmDialog.conversation?.name}"? This action cannot be undone.`}
+                : confirmDialog.action === "unlock"
+                  ? `Unlock "${confirmDialog.conversation?.name}"? Users will be able to send messages again.`
+                  : `Delete "${confirmDialog.conversation?.name}"? All messages will be soft-deleted.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -202,7 +265,7 @@ export function ConversationTable({ conversations, loading }: ConversationTableP
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              variant={confirmDialog.action === "delete" ? "destructive" : "default"}
               onClick={() =>
                 confirmDialog.action &&
                 confirmDialog.conversation &&

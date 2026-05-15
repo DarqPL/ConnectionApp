@@ -64,4 +64,26 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
             "WHERE cu.user.id = :userId " +
             "AND c.activate = true")
     long countByUserId(@Param("userId") Long userId);
+
+    /**
+     * Get all conversations for admin (paginated)
+     */
+    @Query("SELECT c FROM Conversation c ORDER BY c.createdAt DESC")
+    Page<Conversation> findAllForAdmin(Pageable pageable);
+
+    /**
+     * Get conversations by type for admin
+     */
+    @Query("SELECT c FROM Conversation c WHERE c.type = :type ORDER BY c.createdAt DESC")
+    Page<Conversation> findByTypeForAdmin(@Param("type") iuh.fit.ConnectionAppBackend.domain.common.ConversationType type, Pageable pageable);
+
+    /**
+     * Count all conversations
+     */
+    long countByActivateTrue();
+
+    /**
+     * Count conversations by type
+     */
+    long countByTypeAndActivateTrue(iuh.fit.ConnectionAppBackend.domain.common.ConversationType type);
 }
