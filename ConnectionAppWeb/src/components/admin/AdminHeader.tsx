@@ -1,11 +1,12 @@
 import { MessageSquare, LogOut } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function AdminHeader() {
   const { user, signOut } = useAuthStore();
+  const navigate = useNavigate();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-card px-6">
@@ -33,9 +34,9 @@ export function AdminHeader() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              signOut();
-              window.location.href = "/signin";
+            onClick={async () => {
+              await signOut();
+              navigate("/signin");
             }}
             title="Sign out"
           >

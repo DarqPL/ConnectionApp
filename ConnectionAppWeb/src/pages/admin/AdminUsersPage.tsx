@@ -3,7 +3,7 @@ import { useAdminStore } from "@/stores/useAdminStore";
 import { UserTable } from "@/components/admin/UserTable";
 
 export default function AdminUsersPage() {
-  const { users, loading, fetchUsers } = useAdminStore();
+  const { users, loading, userTotal, userPage, fetchUsers } = useAdminStore();
 
   useEffect(() => {
     fetchUsers();
@@ -17,7 +17,13 @@ export default function AdminUsersPage() {
           Manage all registered users in the system.
         </p>
       </div>
-      <UserTable users={users} loading={loading} onRefresh={fetchUsers} />
+      <UserTable
+        users={users}
+        loading={loading}
+        total={userTotal}
+        page={userPage}
+        onRefresh={fetchUsers}
+      />
     </div>
   );
 }

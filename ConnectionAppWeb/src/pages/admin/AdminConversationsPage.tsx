@@ -3,7 +3,8 @@ import { useAdminStore } from "@/stores/useAdminStore";
 import { ConversationTable } from "@/components/admin/ConversationTable";
 
 export default function AdminConversationsPage() {
-  const { conversations, loading, fetchConversations } = useAdminStore();
+  const { conversations, loading, conversationTotal, conversationPage, fetchConversations } =
+    useAdminStore();
 
   useEffect(() => {
     fetchConversations();
@@ -22,6 +23,9 @@ export default function AdminConversationsPage() {
       <ConversationTable
         conversations={conversations}
         loading={loading}
+        total={conversationTotal}
+        page={conversationPage}
+        onRefresh={fetchConversations}
       />
     </div>
   );

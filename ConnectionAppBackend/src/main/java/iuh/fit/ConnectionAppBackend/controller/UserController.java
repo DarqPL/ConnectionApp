@@ -19,6 +19,7 @@ import java.util.List;
 
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
 import iuh.fit.ConnectionAppBackend.domain.dto.UserProfileResponse;
+import iuh.fit.ConnectionAppBackend.security.AdminOnly;
 import iuh.fit.ConnectionAppBackend.service.UserService;
 
 @RestController
@@ -120,11 +121,13 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+    @AdminOnly
     @PostMapping("/{id}/lock")
     public ResponseEntity<String> lockAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.lockAccount(id));
     }
 
+    @AdminOnly
     @PostMapping("/{id}/unlock")
     public ResponseEntity<String> unlockAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.unlockAccount(id));
@@ -145,6 +148,7 @@ public class UserController {
         return ResponseEntity.ok(userService.confirmDeleteAccount(userId, otp));
     }
 
+    @AdminOnly
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.deleteAccount(id));

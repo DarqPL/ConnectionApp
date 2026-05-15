@@ -27,10 +27,15 @@ api.interceptors.response.use(
       typeof originalRequest?.url === "string" &&
       originalRequest.url.includes("/auth/refresh");
 
+    const isSigninRequest =
+      typeof originalRequest?.url === "string" &&
+      originalRequest.url.includes("/auth/signin");
+
     if (
       error.response?.status === 401 &&
       !originalRequest?._retry &&
-      !isRefreshRequest
+      !isRefreshRequest &&
+      !isSigninRequest
     ) {
       originalRequest._retry = true;
 

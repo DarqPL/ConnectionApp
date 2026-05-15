@@ -11,17 +11,18 @@ interface AdminState {
   stats: AdminStats | null;
   users: AdminUser[];
   userTotal: number;
+  userPage: number;
   reports: MessageReport[];
   reportTotal: number;
   conversations: AdminConversation[];
   conversationTotal: number;
+  conversationPage: number;
   loading: boolean;
 
   fetchStats: () => Promise<void>;
   fetchUsers: (params?: {
     search?: string;
     status?: string;
-    role?: string;
     page?: number;
     limit?: number;
   }) => Promise<void>;
@@ -32,12 +33,12 @@ interface AdminState {
   }) => Promise<void>;
   fetchConversations: (params?: {
     type?: string;
-    status?: string;
     page?: number;
     limit?: number;
   }) => Promise<void>;
 
-  updateUserStatus: (userId: number, status: string) => Promise<void>;
+  lockUser: (userId: number) => Promise<void>;
+  unlockUser: (userId: number) => Promise<void>;
   updateUserRole: (userId: number, role: string) => Promise<void>;
   deleteUser: (userId: number) => Promise<void>;
 
@@ -47,6 +48,7 @@ interface AdminState {
   ) => Promise<void>;
 
   lockConversation: (conversationId: number) => Promise<void>;
+  unlockConversation: (conversationId: number) => Promise<void>;
   deleteConversation: (conversationId: number) => Promise<void>;
 }
 
@@ -54,22 +56,28 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   stats: null,
   users: [],
   userTotal: 0,
+  userPage: 0,
   reports: [],
   reportTotal: 0,
   conversations: [],
   conversationTotal: 0,
+  conversationPage: 0,
   loading: false,
 
   fetchStats: async () => {
-    const stats = await adminService.getStats();
-    set({ stats });
+    try {
+      const stats = await adminService.getStats();
+      set({ stats });
+    } catch {
+      // silent fail for stats
+    }
   },
 
   fetchUsers: async (params) => {
     set({ loading: true });
     try {
-      const { users, total } = await adminService.getUsers(params);
-      set({ users, userTotal: total });
+      const { items, total, page } = await adminService.getUsers(params);
+      set({ users: items, userTotal: total, userPage: page });
     } finally {
       set({ loading: false });
     }
@@ -78,8 +86,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   fetchReports: async (params) => {
     set({ loading: true });
     try {
-      const { reports, total } = await adminService.getReports(params);
-      set({ reports, reportTotal: total });
+      const { items, total } = await adminService.getReports(params);
+      set({ reports: items, reportTotal: total });
     } finally {
       set({ loading: false });
     }
@@ -88,16 +96,21 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   fetchConversations: async (params) => {
     set({ loading: true });
     try {
-      const { conversations, total } =
-        await adminService.getConversations(params);
-      set({ conversations, conversationTotal: total });
+      const { items, total, page } = await adminService.getConversations(params);
+      set({ conversations: items, conversationTotal: total, conversationPage: page });
     } finally {
       set({ loading: false });
     }
   },
 
-  updateUserStatus: async (userId, status) => {
-    await adminService.updateUserStatus(userId, status);
+  lockUser: async (userId) => {
+    await adminService.lockUser(userId);
+    await get().fetchUsers();
+    await get().fetchStats();
+  },
+
+  unlockUser: async (userId) => {
+    await adminService.unlockUser(userId);
     await get().fetchUsers();
     await get().fetchStats();
   },
@@ -121,6 +134,11 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 
   lockConversation: async (conversationId) => {
     await adminService.lockConversation(conversationId);
+    await get().fetchConversations();
+  },
+
+  unlockConversation: async (conversationId) => {
+    await adminService.unlockConversation(conversationId);
     await get().fetchConversations();
   },
 
