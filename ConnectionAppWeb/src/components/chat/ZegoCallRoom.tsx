@@ -12,7 +12,7 @@ interface ZegoCallRoomProps {
 interface ZegoRoomHandle {
   destroy?: () => void;
   hangUp?: () => void;
-  closeBackgroundProcess?: () => void;
+  closeBackgroundProcess?: () => Promise<void> | void;
   localStream?: MediaStream;
   autoLeaveRoomWhenOnlySelfInRoom?: boolean;
 }
@@ -52,33 +52,64 @@ const detachMediaElements = (root?: ParentNode | null) => {
   });
 };
 
-const cleanupRoomResources = (
-  roomHandle: ZegoRoomHandle | null,
-  container?: HTMLDivElement | null,
+const safeCall = (fn: (() => void) | undefined) => {
+  try {
+    fn?.();
+  } catch {
+    // SDK may already be destroyed
+  }
+};
+
+const safeCallAsync = async (
+  fn: (() => Promise<void> | void) | undefined,
 ) => {
   try {
-    roomHandle?.hangUp?.();
-  } catch (cleanupError) {
-    console.warn("ZEGO hangUp cleanup failed", cleanupError);
+    const result = fn?.();
+    if (result instanceof Promise) {
+      await result;
+    }
+  } catch {
+    // SDK may already be destroyed
   }
+};
 
-  stopMediaStream(roomHandle?.localStream);
-  detachMediaElements(container);
-  detachMediaElements(document.body);
+const cleanupRoomResources = async (
+  roomHandle: ZegoRoomHandle | null,
+  container?: HTMLDivElement | null,
+  didJoinRoom = true,
+) => {
+  if (!roomHandle) return;
 
-  try {
-    roomHandle?.closeBackgroundProcess?.();
-  } catch (cleanupError) {
-    console.warn("ZEGO closeBackgroundProcess cleanup failed", cleanupError);
+  if (didJoinRoom) {
+    safeCall(roomHandle.hangUp);
+
+    stopMediaStream(roomHandle.localStream);
+    detachMediaElements(container);
+    detachMediaElements(document.body);
+
+    await safeCallAsync(roomHandle.closeBackgroundProcess);
+
+    safeCall(roomHandle.destroy);
+
+    // Zego's destroy() handles its own DOM cleanup. Calling replaceChildren()
+    // causes "createSpan" and "removeChild" errors because Zego's internal
+    // async rendering may still reference nodes we just removed.
+    // Only clear if container still has children after a short delay.
+    await new Promise((r) => setTimeout(r, 300));
+    if (container && container.childNodes.length > 0) {
+      safeCall(() => container.replaceChildren());
+    }
+  } else {
+    stopMediaStream(roomHandle.localStream);
+    detachMediaElements(container);
+    detachMediaElements(document.body);
+
+    safeCall(roomHandle.destroy);
+
+    if (container && container.childNodes.length > 0) {
+      safeCall(() => container.replaceChildren());
+    }
   }
-
-  try {
-    roomHandle?.destroy?.();
-  } catch (cleanupError) {
-    console.warn("ZEGO destroy cleanup failed", cleanupError);
-  }
-
-  container?.replaceChildren();
 };
 
 const cleanupGlobalRoomInstance = () => {
@@ -87,7 +118,7 @@ const cleanupGlobalRoomInstance = () => {
     pendingGlobalCleanupTimer = null;
   }
 
-  cleanupRoomResources(activeGlobalRoomHandle, null);
+  void cleanupRoomResources(activeGlobalRoomHandle, null);
   activeGlobalRoomHandle = null;
   activeGlobalRoomKey = null;
 };
@@ -105,6 +136,7 @@ const ZegoCallRoom = ({
   const isCleanupDestroyRef = useRef(false);
   const hasReportedLeaveRef = useRef(false);
   const roomInstanceKeyRef = useRef("");
+  const callRef = useRef(call);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -114,6 +146,10 @@ const ZegoCallRoom = ({
   useEffect(() => {
     onLeaveRoomRef.current = onLeaveRoom;
   }, [onLeaveRoom]);
+
+  useEffect(() => {
+    callRef.current = call;
+  }, [call]);
 
   const displayName = useMemo(() => {
     const expectedId = Number(call.token?.userId);
@@ -133,7 +169,9 @@ const ZegoCallRoom = ({
     let destroyed = false;
     let roomHandle: ZegoRoomHandle | null = null;
     const container = containerRef.current;
-    const roomInstanceKey = `${call.callId}:${call.roomId}:${call.token?.userId ?? "unknown"}`;
+    const currentCall = callRef.current;
+    const roomInstanceKey = `${currentCall.callId}:${currentCall.roomId}:${currentCall.token?.userId ?? "unknown"}`;
+    let didJoinRoom = false;
 
     hasJoinedRoomRef.current = false;
     hasReportedLeaveRef.current = false;
@@ -141,7 +179,12 @@ const ZegoCallRoom = ({
     roomInstanceKeyRef.current = roomInstanceKey;
 
     const bootstrap = async () => {
-      if (!container || !call.token?.token) {
+      if (!container) {
+        return;
+      }
+
+      const c = callRef.current;
+      if (!c.token?.token) {
         return;
       }
 
@@ -158,10 +201,10 @@ const ZegoCallRoom = ({
         const generateKitTokenForProduction =
           ZegoUIKitPrebuilt.generateKitTokenForProduction;
 
-        const roomId = call.token?.roomId || call.roomId;
-        const userId = call.token?.userId;
-        const appId = call.token?.appId;
-        const rawToken = call.token?.token;
+        const roomId = c.token?.roomId || c.roomId;
+        const userId = c.token?.userId;
+        const appId = c.token?.appId;
+        const rawToken = c.token?.token;
 
         if (!roomId || !userId || !appId || !rawToken) {
           throw new Error("Missing token payload for ZEGO room");
@@ -194,7 +237,7 @@ const ZegoCallRoom = ({
         activeGlobalRoomHandle = zp;
         activeGlobalRoomKey = roomInstanceKey;
         if (destroyed || !container) {
-          cleanupRoomResources(zp, container);
+          await cleanupRoomResources(zp, container, false);
           if (activeGlobalRoomKey === roomInstanceKey) {
             activeGlobalRoomHandle = null;
             activeGlobalRoomKey = null;
@@ -222,6 +265,7 @@ const ZegoCallRoom = ({
               return;
             }
 
+            didJoinRoom = true;
             hasJoinedRoomRef.current = true;
             onJoinRoomRef.current?.();
           },
@@ -257,7 +301,7 @@ const ZegoCallRoom = ({
       isCleanupDestroyRef.current = true;
       hasJoinedRoomRef.current = false;
       hasReportedLeaveRef.current = true;
-      cleanupRoomResources(roomHandle, container);
+      void cleanupRoomResources(roomHandle, container, didJoinRoom);
 
       if (activeGlobalRoomKey === roomInstanceKey) {
         activeGlobalRoomHandle = null;
@@ -270,12 +314,12 @@ const ZegoCallRoom = ({
         }
       }, 1500);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     call.callId,
     call.roomId,
     call.token?.appId,
     call.token?.roomId,
-    call.token?.token,
     call.token?.userId,
     displayName,
     mediaType,
