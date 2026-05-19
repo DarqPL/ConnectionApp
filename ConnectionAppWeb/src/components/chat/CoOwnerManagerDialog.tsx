@@ -27,7 +27,7 @@ export function CoOwnerManagerDialog({
   isOpen,
   onClose,
   conversation,
-  currentUserId,
+  currentUserId: _currentUserId,
 }: CoOwnerManagerDialogProps) {
   const fetchConversationById = useChatStore((s) => s.fetchConversationById);
   const [search, setSearch] = useState("");

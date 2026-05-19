@@ -286,7 +286,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       isDeleted: false,
       recalledAt: null,
       replyInfo: null,
-      poll,
+      poll: poll as any,
       reminder: null,
       reactions: [],
       isOwn: true,
@@ -557,7 +557,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (optimisticIndex !== -1) {
       const nextItems = prevItems.map((item, index) =>
         index === optimisticIndex
-          ? { ...messageWithOwn, status: "SENT" }
+          ? { ...messageWithOwn, status: "SENT" as const }
           : item,
       );
 

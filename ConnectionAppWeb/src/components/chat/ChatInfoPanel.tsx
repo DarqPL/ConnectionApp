@@ -6,7 +6,6 @@ import {
   Download,
   File,
   UserPlus,
-  Settings,
   BellOff,
   Pin,
   ChevronDown,
