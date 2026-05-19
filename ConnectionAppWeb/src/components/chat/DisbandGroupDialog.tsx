@@ -19,7 +19,7 @@ interface DisbandGroupDialogProps {
 export function DisbandGroupDialog({
   isOpen,
   onClose,
-  conversation,
+  conversation: _conversation,
   onDisband,
 }: DisbandGroupDialogProps) {
   const handleDisband = async () => {

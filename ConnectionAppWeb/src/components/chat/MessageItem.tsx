@@ -165,7 +165,6 @@ const MessageItemBase = ({
 
   const isAdmin = participant?.role === "OWNER" || participant?.role === "CO_OWNER";
   const isOwner = participant?.role === "OWNER";
-  const isCoOwner = participant?.role === "CO_OWNER";
   const markAdminMessages = selectedConvo.markAdminMessages ?? false;
   const showKeyIcon = markAdminMessages && isAdmin && !message.isOwn;
 

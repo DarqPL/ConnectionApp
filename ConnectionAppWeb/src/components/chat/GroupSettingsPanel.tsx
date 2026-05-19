@@ -11,8 +11,9 @@ import {
   Share2,
   Lock,
   Check,
+  X,
 } from "lucide-react";
-import type { Conversation } from "@/types/chat";
+import type { Conversation, Participant } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -126,7 +127,7 @@ const GroupSettingsPanel = ({
     if (!isOwner) return;
     setIsRefreshingToken(true);
     try {
-      const res = await chatService.refreshInviteToken(chat.id);
+      await chatService.refreshInviteToken(chat.id);
       await fetchConversationById(chat.id);
       toast.success("Đã tạo link mời mới");
     } catch {
