@@ -239,6 +239,7 @@ const ChatRoomScreen = ({ route }: any) => {
   );
   const [isPreparingCallRoom, setIsPreparingCallRoom] = React.useState(false);
   const callEndGuardRef = useRef<number | null>(null);
+  const activeCallIdRef = useRef<number | null>(null);
   const zegoAppId = Number.parseInt(getExpoEnv("EXPO_PUBLIC_ZEGO_APP_ID"), 10);
   const zegoAppSign = getExpoEnv("EXPO_PUBLIC_ZEGO_APP_SIGN");
   const devRuntimeConnectionWarning =
@@ -256,6 +257,10 @@ const ChatRoomScreen = ({ route }: any) => {
     incomingCall?.conversationId === conversationId ? incomingCall : null;
   const activeForConversation =
     activeCall?.conversationId === conversationId ? activeCall : null;
+
+  useEffect(() => {
+    activeCallIdRef.current = activeForConversation?.callId ?? null;
+  }, [activeForConversation?.callId]);
 
   const ensureCallPermissions = React.useCallback(
     async (mediaType: CallMediaType) => {
@@ -884,6 +889,11 @@ const ChatRoomScreen = ({ route }: any) => {
     }
   };
 
+  const handleSdkCallEndRef = useRef(handleSdkCallEnd);
+  useEffect(() => {
+    handleSdkCallEndRef.current = handleSdkCallEnd;
+  });
+
   const zegoCallConfig = React.useMemo(() => {
     if (!zegoCallModule) {
       return null;
@@ -903,11 +913,18 @@ const ChatRoomScreen = ({ route }: any) => {
       turnOnCameraWhenJoining: activeForConversation?.mediaType === "VIDEO",
       turnOnMicrophoneWhenJoining: true,
       useSpeakerWhenJoining: true,
-      onCallEnd: handleSdkCallEnd,
+      onCallEnd: (data: { callID?: string; reason?: string }) => {
+        const currentCallId = activeCallIdRef.current;
+        if (currentCallId) {
+          handleSdkCallEndRef.current(
+            currentCallId,
+            data?.reason ?? "remoteHangUp",
+          ).catch(() => {});
+        }
+      },
     };
   }, [
     activeForConversation?.mediaType,
-    handleSdkCallEnd,
     isGroupCall,
     zegoCallModule,
   ]);

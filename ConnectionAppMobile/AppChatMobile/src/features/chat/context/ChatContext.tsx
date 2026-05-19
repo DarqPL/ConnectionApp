@@ -14,6 +14,11 @@ import type { TypingPayload } from "../services/socket.service";
 import { callService, type CallSession } from "../services/call.service";
 import { useAuth } from "../../auth/context/AuthContext";
 import { authService } from "../../auth/services/auth.service";
+import {
+  initZegoCallKit,
+  uninitZegoCallKit,
+  isZegoRuntimeAvailable,
+} from "../services/zegoCallKit";
 
 interface TypingPresence {
   userId: number;
@@ -139,6 +144,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     appStateRef.current = appState;
   }, [appState]);
 
+  // ─── Zego CallKit init/uninit on user change ───
+  useEffect(() => {
+    if (!user || !isAuthenticated) {
+      uninitZegoCallKit();
+      return;
+    }
+
+    if (!user.id) {
+      return;
+    }
+
+    if (!isZegoRuntimeAvailable()) {
+      return;
+    }
+
+    initZegoCallKit(user).catch((err) => {
+      console.error("[ZEGO] Init failed:", err);
+    });
+
+    return () => {
+      uninitZegoCallKit();
+    };
+  }, [user?.id, isAuthenticated]);
+
   const sortConversations = (items: Conversation[]): Conversation[] =>
     [...items].sort((a, b) => {
       const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
@@ -147,7 +176,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
   const upsertMessage = (messages: Message[], incoming: Message): Message[] => {
-    const index = messages.findIndex((item) => item.id === incoming.id);
+    const index = messages.findIndex(
+      (item) =>
+        item.id === incoming.id ||
+        (incoming.tempId && item.tempId === incoming.tempId),
+    );
     if (index === -1) return [...messages, incoming];
     const next = [...messages];
     next[index] = incoming;
@@ -442,6 +475,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     // 1. Add to current chat room if it's open
     if (incomingMessage.conversationId === currentConversationRef.current) {
       setCurrentMessages((prev) => {
+        // If REST response already added this message, skip
+        const alreadyExists = prev.some((m) => m.id === incomingMessage.id);
+        if (alreadyExists) {
+          return prev;
+        }
+
         const optimisticIndex = findOptimisticMatchIndex(
           prev,
           incomingMessage,
@@ -452,6 +491,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           const optimistic = prev[optimisticIndex];
           return prev.map((item, index) =>
             index === optimisticIndex
+              ? {
+                  ...incomingMessage,
+                  status: "SENT",
+                  tempId: optimistic.tempId ?? optimistic.id,
+                }
+              : item,
+          );
+        }
+
+        // Fallback: check by tempId for same sender's SENDING message
+        const tempIdIndex = prev.findIndex(
+          (item) =>
+            item.status === "SENDING" &&
+            item.senderInfo?.senderId === incomingMessage.senderInfo?.senderId &&
+            item.tempId,
+        );
+
+        if (tempIdIndex !== -1) {
+          const optimistic = prev[tempIdIndex];
+          return prev.map((item, index) =>
+            index === tempIdIndex
               ? {
                   ...incomingMessage,
                   status: "SENT",
@@ -1273,14 +1333,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             );
           }
 
-          const indexById = prev.findIndex((m) => m.id === newMsg.id);
-          if (indexById !== -1) {
-            return prev.map((m) =>
-              m.id === newMsg.id ? messageWithStatus : m,
-            );
-          }
-
-          return [...prev, messageWithStatus];
+          return upsertMessage(prev, messageWithStatus);
         });
         // Update conversation list
         setConversations((prev) =>
@@ -1397,14 +1450,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             );
           }
 
-          const indexById = prev.findIndex((m) => m.id === newMsg.id);
-          if (indexById !== -1) {
-            return prev.map((m) =>
-              m.id === newMsg.id ? messageWithStatus : m,
-            );
-          }
-
-          return [...prev, messageWithStatus];
+          return upsertMessage(prev, messageWithStatus);
         });
 
         setConversations((prev) =>

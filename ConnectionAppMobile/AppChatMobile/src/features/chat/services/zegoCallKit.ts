@@ -3,6 +3,24 @@ import { Platform } from "react-native";
 import type { ComponentType } from "react";
 import type { User } from "../../auth/services/auth.service";
 
+// Workaround for Zego SDK bug: Platform is not imported internally
+if (typeof global !== "undefined" && !(global as any).Platform) {
+  (global as any).Platform = Platform;
+}
+
+// Static require to avoid Metro bundler issues with dynamic imports
+let ZegoServiceModule: any;
+let ZegoZimModule: any;
+let ZegoZpnsModule: any;
+
+try {
+  ZegoServiceModule = require("@zegocloud/zego-uikit-prebuilt-call-rn");
+  ZegoZimModule = require("zego-zim-react-native");
+  ZegoZpnsModule = require("zego-zpns-react-native");
+} catch (e) {
+  console.warn("[ZEGO] Static require failed:", e);
+}
+
 type ZegoCallServiceModule = {
   init: (
     appId: number,
@@ -128,15 +146,14 @@ export const loadZegoDependencies = async (): Promise<ZegoDependencyLoadResult> 
     };
   }
 
-  try {
-    const serviceModule = await import("@zegocloud/zego-uikit-prebuilt-call-rn");
-    const zimModule = await import("zego-zim-react-native");
-    const zpnsModule = await import("zego-zpns-react-native");
+  if (!ZegoServiceModule || !ZegoZimModule || !ZegoZpnsModule) {
+    throw new Error("Zego modules failed to load at startup");
+  }
 
-    const service = ((serviceModule as any).default ??
-      serviceModule) as ZegoCallServiceModule;
-    const zim = ((zimModule as any).default ?? zimModule) as unknown;
-    const zpns = ((zpnsModule as any).default ?? zpnsModule) as unknown;
+  try {
+    const service = (ZegoServiceModule.default ?? ZegoServiceModule) as ZegoCallServiceModule;
+    const zim = ZegoZimModule;
+    const zpns = ZegoZpnsModule;
 
     loadedService = service;
     loadedPlugins = [zim, zpns];
@@ -146,6 +163,7 @@ export const loadZegoDependencies = async (): Promise<ZegoDependencyLoadResult> 
       plugins: loadedPlugins,
     };
   } catch (error) {
+    console.error("[ZEGO] loadZegoDependencies failed:", error);
     throw buildZegoDependencyLoadError(error);
   }
 };
@@ -155,9 +173,12 @@ export const loadZegoRoomModule = async (): Promise<ZegoRoomModule> => {
     return loadedRoomModule;
   }
 
+  if (!ZegoServiceModule) {
+    throw new Error("Zego service module failed to load at startup");
+  }
+
   try {
-    const serviceModule = await import("@zegocloud/zego-uikit-prebuilt-call-rn");
-    const roomComponent = (serviceModule as any).ZegoUIKitPrebuiltCall;
+    const roomComponent = (ZegoServiceModule as any).ZegoUIKitPrebuiltCall;
 
     if (!roomComponent) {
       throw new Error(
@@ -167,17 +188,18 @@ export const loadZegoRoomModule = async (): Promise<ZegoRoomModule> => {
 
     const exportedModule = {
       ZegoUIKitPrebuiltCall: roomComponent,
-      ONE_ON_ONE_VIDEO_CALL_CONFIG: (serviceModule as any)
+      ONE_ON_ONE_VIDEO_CALL_CONFIG: (ZegoServiceModule as any)
         .ONE_ON_ONE_VIDEO_CALL_CONFIG,
-      ONE_ON_ONE_VOICE_CALL_CONFIG: (serviceModule as any)
+      ONE_ON_ONE_VOICE_CALL_CONFIG: (ZegoServiceModule as any)
         .ONE_ON_ONE_VOICE_CALL_CONFIG,
-      GROUP_VIDEO_CALL_CONFIG: (serviceModule as any).GROUP_VIDEO_CALL_CONFIG,
-      GROUP_VOICE_CALL_CONFIG: (serviceModule as any).GROUP_VOICE_CALL_CONFIG,
+      GROUP_VIDEO_CALL_CONFIG: (ZegoServiceModule as any).GROUP_VIDEO_CALL_CONFIG,
+      GROUP_VOICE_CALL_CONFIG: (ZegoServiceModule as any).GROUP_VOICE_CALL_CONFIG,
     } as ZegoRoomModule;
 
     loadedRoomModule = exportedModule;
     return exportedModule;
   } catch (error) {
+    console.error("[ZEGO] loadZegoRoomModule failed:", error);
     throw buildZegoDependencyLoadError(error);
   }
 };
@@ -190,14 +212,26 @@ export const initZegoCallKit = (user: User): Promise<void> => {
   const appId = readCallKitAppId();
   const appSign = readCallKitAppSign();
 
-  if (!appId || !appSign) {
+  if (!appId || !appSign || appSign.trim().length === 0) {
     return Promise.reject(
       new Error("Thieu cau hinh ZEGO_APP_ID hoac ZEGO_APP_SIGN"),
     );
   }
 
+  if (!user?.id) {
+    return Promise.reject(new Error("User ID is missing for ZEGO init"));
+  }
+
   const userId = String(user.id);
   const userName = buildDisplayName(user);
+
+  if (!userId || typeof userId !== "string" || userId.length === 0) {
+    return Promise.reject(new Error("ZEGO userId is invalid"));
+  }
+  if (!userName || typeof userName !== "string" || userName.length === 0) {
+    return Promise.reject(new Error("ZEGO userName is invalid"));
+  }
+
   const initKey = `${appId}:${userId}`;
 
   if (currentInitPromise && currentInitKey === initKey) {
@@ -207,22 +241,53 @@ export const initZegoCallKit = (user: User): Promise<void> => {
   currentInitKey = initKey;
   currentInitPromise = loadZegoDependencies()
     .then(({ service, plugins }) => {
+      console.log(
+        "[ZEGO] service.init() params:",
+        "appId:",
+        appId,
+        "type:",
+        typeof appId,
+        "appSign:",
+        appSign?.substring(0, 8) + "...",
+        "type:",
+        typeof appSign,
+        "userId:",
+        userId,
+        "type:",
+        typeof userId,
+        "userName:",
+        userName,
+        "type:",
+        typeof userName,
+        "plugins count:",
+        plugins.length,
+        "plugins[0]:",
+        typeof plugins[0],
+        "plugins[1]:",
+        typeof plugins[1],
+      );
+
       if (!systemUiConfigured) {
         service.useSystemCallingUI(plugins);
         systemUiConfigured = true;
       }
 
-      return service.init(appId, appSign, userId, userName, plugins, {
-        androidNotificationConfig: {
-          channelID: "CallInvitation",
-          channelName: "CallInvitation",
-        },
-        ringtoneConfig: {
-          incomingCallFileName: "zego_incoming.mp3",
-          outgoingCallFileName: "zego_outgoing.mp3",
-        },
-        notifyWhenAppRunningInBackgroundOrQuit: true,
-      });
+      try {
+        const initResult = service.init(appId, appSign, userId, userName, plugins, {
+          ringtoneConfig: {
+            incomingCallFileName: "zego_incoming.mp3",
+            outgoingCallFileName: "zego_outgoing.mp3",
+          },
+          androidNotificationConfig: {
+            channelID: "CallInvitation",
+            channelName: "CallInvitation",
+          },
+        });
+        return initResult;
+      } catch (error) {
+        console.error("[ZEGO] service.init() threw error:", error);
+        throw error;
+      }
     })
     .catch((error) => {
       currentInitPromise = null;

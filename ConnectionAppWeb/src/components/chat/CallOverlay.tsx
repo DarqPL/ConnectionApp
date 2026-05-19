@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCallStore } from "@/stores/useCallStore";
 import { Phone, PhoneCall, PhoneIncoming, PhoneOff, Video } from "lucide-react";
@@ -20,11 +20,20 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
   } = useCallStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const lastIncomingCallIdRef = useRef<number | null>(null);
 
   const incomingForConversation =
     incomingCall?.conversationId === conversationId ? incomingCall : null;
   const activeForConversation =
     activeCall?.conversationId === conversationId ? activeCall : null;
+
+  // Reset isSubmitting when a new incoming call appears (different callId)
+  useEffect(() => {
+    if (incomingForConversation?.callId !== lastIncomingCallIdRef.current) {
+      setIsSubmitting(false);
+      lastIncomingCallIdRef.current = incomingForConversation?.callId ?? null;
+    }
+  }, [incomingForConversation?.callId]);
 
   const callerDisplayName = useMemo(() => {
     if (!incomingForConversation) {
@@ -55,7 +64,13 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     void ensureActiveCallToken(activeForConversation.callId);
   }, [activeForConversation, ensureActiveCallToken]);
 
-  if (!incomingForConversation && !activeForConversation) {
+  // If there's an active call for this conversation, don't show incoming UI
+  // even if a stale socket event re-set incomingCall.
+  const showIncoming =
+    incomingForConversation && !activeForConversation;
+  const showActive = !!activeForConversation;
+
+  if (!showIncoming && !showActive) {
     return null;
   }
 
@@ -137,7 +152,7 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
 
   return (
     <div className="border-b border-border/40 bg-muted/40 px-4 py-3">
-      {incomingForConversation && (
+      {showIncoming && (
         <div className="mb-3 rounded-lg border border-emerald-300/60 bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
             <PhoneIncoming className="size-4" />
@@ -172,7 +187,7 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
         </div>
       )}
 
-      {activeForConversation && (
+      {showActive && (
         <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-primary">
