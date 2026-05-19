@@ -39,3 +39,9 @@ env
 .env
 .env.*
 !.env.example
+!.env.production.example
+
+### Production deployment ###
+certbot/
+certbot-www/
+certbot-certs/

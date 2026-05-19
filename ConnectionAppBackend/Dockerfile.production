@@ -1,0 +1,18 @@
+# Stage 1: Build
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /app
+COPY pom.xml .
+COPY .mvn .mvn
+COPY mvnw .
+RUN chmod +x mvnw
+RUN ./mvnw dependency:go-offline -B
+COPY src src
+RUN ./mvnw clean package -DskipTests -B
+
+# Stage 2: Run
+FROM eclipse-temurin:21-jre-alpine AS run
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
+RUN addgroup -g 1001 appgroup && adduser -u 1001 -G appgroup -D appuser
+USER appuser
+ENTRYPOINT ["java", "-jar", "app.jar"]
