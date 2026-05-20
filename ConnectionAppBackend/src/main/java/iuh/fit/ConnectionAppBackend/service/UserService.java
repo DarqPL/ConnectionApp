@@ -239,6 +239,13 @@ public class UserService {
     }
 
     /**
+     * Check if a username is available for registration
+     */
+    public boolean isUsernameAvailable(String username) {
+        return !userRepository.existsByUsername(username);
+    }
+
+    /**
      * Search users by username, display name, or phone
      */
     public List<UserProfileResponse> searchUsers(String query) {
