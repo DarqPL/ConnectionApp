@@ -118,17 +118,19 @@ export default function SignUpScreen({ navigation }: any) {
   };
 
   // ─── STEP 3: Đăng ký tài khoản ─────────────────────────────────────────────
-  const checkUsername = async (value: string) => {
+  const checkUsername = async (value: string): Promise<boolean> => {
     if (!value || value.length < 3) {
       setUsernameAvailable(null);
-      return;
+      return true;
     }
     setCheckingUsername(true);
     try {
       const result = await userService.checkUsername(value);
       setUsernameAvailable(result.available);
+      return result.available;
     } catch {
       setUsernameAvailable(null);
+      return true;
     } finally {
       setCheckingUsername(false);
     }
@@ -156,8 +158,8 @@ export default function SignUpScreen({ navigation }: any) {
       return;
     }
     if (usernameAvailable === null && !checkingUsername) {
-      await checkUsername(username);
-      if (usernameAvailable === false) {
+      const available = await checkUsername(username);
+      if (!available) {
         Alert.alert("Tên đăng nhập", "Tên đăng nhập đã được sử dụng");
         return;
       }

@@ -150,20 +150,22 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     }
   };
 
-  const checkUsername = async (value: string) => {
+  const checkUsername = async (value: string): Promise<boolean> => {
     if (!value || value.length < 3) {
       setUsernameAvailable(null);
       usernameCheckedRef.current = false;
-      return;
+      return true;
     }
     setCheckingUsername(true);
     try {
       const result = await userService.checkUsername(value);
       setUsernameAvailable(result.available);
       usernameCheckedRef.current = true;
+      return result.available;
     } catch {
       setUsernameAvailable(null);
       usernameCheckedRef.current = false;
+      return true;
     } finally {
       setCheckingUsername(false);
     }
@@ -171,10 +173,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
 
   // ── Step 3: Đăng ký tài khoản ──────────────────────────────────────────
   const onSubmitRegister = async (data: RegisterForm) => {
-    if (!usernameAvailable && !checkingUsername) {
-      await checkUsername(data.username);
-      if (!usernameAvailable) {
-        toast.error("Ten dang nhap da duoc su dung");
+    if (usernameAvailable === false) {
+      toast.error("Tên đăng nhập đã được sử dụng");
+      return;
+    }
+    if (usernameAvailable === null && !checkingUsername) {
+      const available = await checkUsername(data.username);
+      if (!available) {
+        toast.error("Tên đăng nhập đã được sử dụng");
         return;
       }
     }
