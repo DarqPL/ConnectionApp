@@ -13,43 +13,20 @@ import type { User } from "@/types/user";
 import { useState } from "react";
 import { useUserStore } from "@/stores/useUserStore";
 
-type EditableField = {
-  key: keyof Pick<User, "displayName" | "username" | "email" | "phone">;
-  label: string;
-  type?: string;
-};
-
-const PERSONAL_FIELDS: EditableField[] = [
-  { key: "displayName", label: "Tên hiển thị" },
-  { key: "username", label: "Tên người dùng" },
-  { key: "email", label: "Email", type: "email" },
-  { key: "phone", label: "Số điện thoại" },
-];
-
 type Props = {
   userInfo: User | null;
 };
-  
+
 const PersonalInfoForm = ({ userInfo }: Props) => {
   const { updateProfile } = useUserStore();
-  const [formData, setFormData] = useState<Partial<User>>({
-    displayName: userInfo?.displayName ?? "",
-    username: userInfo?.username ?? "",
-    email: userInfo?.email ?? "",
-    phone: userInfo?.phone ?? "",
-  });
-
-  const handleChange = (key: keyof User, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
+  const [displayName, setDisplayName] = useState(userInfo?.displayName ?? "");
 
   const handleSave = async () => {
-    await updateProfile(formData);
+    await updateProfile({ displayName });
   };
 
   if (!userInfo) return null;
 
-  
   return (
     <Card className="glass-strong border-border/30">
       <CardHeader>
@@ -64,21 +41,41 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
 
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {PERSONAL_FIELDS.map(({ key, label, type }) => (
-            <div
-              key={key}
-              className="space-y-2"
-            >
-              <Label htmlFor={key}>{label}</Label>
-              <Input
-                id={key}
-                type={type ?? "text"}
-                value={(formData[key] as string) ?? ""}
-                onChange={(e) => handleChange(key, e.target.value)}
-                className="glass-light border-border/30"
-              />
-            </div>
-          ))}
+          {/* Display Name - Editable */}
+          <div className="space-y-2">
+            <Label htmlFor="displayName">Tên hiển thị</Label>
+            <Input
+              id="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="glass-light border-border/30"
+            />
+          </div>
+
+          {/* Username - Read-only */}
+          <div className="space-y-2">
+            <Label htmlFor="username">Tên người dùng</Label>
+            <Input
+              id="username"
+              type="text"
+              value={userInfo.username}
+              disabled
+              className="glass-light border-border/30 bg-muted/50 cursor-not-allowed"
+            />
+          </div>
+
+          {/* Email - Read-only */}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={userInfo.email}
+              disabled
+              className="glass-light border-border/30 bg-muted/50 cursor-not-allowed"
+            />
+          </div>
         </div>
 
         <Button
