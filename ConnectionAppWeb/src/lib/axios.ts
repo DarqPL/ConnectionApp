@@ -58,8 +58,11 @@ api.interceptors.response.use(
         code === "ACCOUNT_MANUAL_LOCKED" ||
         code === "ACCOUNT_TEMP_LOCKED"
       ) {
-        localStorage.removeItem("accessToken");
-        window.location.href = "/signin";
+        // Don't redirect on signin requests — let the signin form display the error
+        if (!isSigninRequest) {
+          localStorage.removeItem("accessToken");
+          window.location.href = "/signin";
+        }
       }
     }
 
