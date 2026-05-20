@@ -79,9 +79,6 @@ public class UserService {
         if (profileRequest.getEmail() != null && !profileRequest.getEmail().isEmpty()) {
             user.setEmail(profileRequest.getEmail());
         }
-        if (profileRequest.getPhone() != null && !profileRequest.getPhone().isEmpty()) {
-            user.setPhone(profileRequest.getPhone());
-        }
         if (profileRequest.getBio() != null) {
             user.setBio(profileRequest.getBio());
         }
@@ -239,6 +236,13 @@ public class UserService {
     }
 
     /**
+     * Check if a username is available for registration
+     */
+    public boolean isUsernameAvailable(String username) {
+        return !userRepository.existsByUsername(username);
+    }
+
+    /**
      * Search users by username, display name, or phone
      */
     public List<UserProfileResponse> searchUsers(String query) {
@@ -256,7 +260,6 @@ public class UserService {
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .email(user.getEmail())
-                .phone(user.getPhone())
                 .bio(user.getBio())
                 .avatarUrl(user.getAvatarUrl())
                 .gender(user.getGender() != null ? user.getGender().name() : null)

@@ -11,6 +11,7 @@ import { useNavigate } from "react-router";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
+import { userService } from "@/services/userService";
 import { Mail, KeyRound, UserPlus } from "lucide-react";
 
 // ─── Step 1: Nhập email ───────────────────────────────────────────────────────
@@ -52,6 +53,9 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const usernameCheckedRef = useRef(false);
 
   // ── Đếm ngược chỉ bắt đầu khi bước OTP được hiển thị ──────────────────────
   useEffect(() => {
@@ -146,10 +150,49 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     }
   };
 
+  const checkUsername = async (value: string): Promise<{ available: boolean; ok: boolean }> => {
+    if (!value || value.length < 3) {
+      setUsernameAvailable(null);
+      usernameCheckedRef.current = false;
+      return { available: true, ok: true };
+    }
+    setCheckingUsername(true);
+    try {
+      const result = await userService.checkUsername(value);
+      setUsernameAvailable(result.available);
+      usernameCheckedRef.current = true;
+      return { available: result.available, ok: true };
+    } catch {
+      setUsernameAvailable(null);
+      usernameCheckedRef.current = false;
+      return { available: false, ok: false };
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
+
   // ── Step 3: Đăng ký tài khoản ──────────────────────────────────────────
   const onSubmitRegister = async (data: RegisterForm) => {
+    if (checkingUsername) {
+      toast.error("Vui lòng đợi kiểm tra tên đăng nhập...");
+      return;
+    }
+    if (usernameAvailable === false) {
+      toast.error("Tên đăng nhập đã được sử dụng");
+      return;
+    }
+    if (usernameAvailable === null) {
+      const result = await checkUsername(data.username);
+      if (!result.ok) {
+        toast.error("Không thể kiểm tra tên đăng nhập. Vui lòng thử lại.");
+        return;
+      }
+      if (!result.available) {
+        toast.error("Tên đăng nhập đã được sử dụng");
+        return;
+      }
+    }
     try {
-      // Backend kiểm tra trạng thái xác minh email (không cần gửi OTP)
       await signUp(data.username, data.password, email, data.firstname, data.lastname);
       toast.success("Đăng ký tài khoản thành công!");
       navigate("/signin");
@@ -363,12 +406,23 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                     type="text"
                     id="username"
                     placeholder="connection"
-                    {...registerForm.register("username")}
+                    {...registerForm.register("username", {
+                      onBlur: (e) => checkUsername(e.target.value),
+                    })}
                   />
                   {registerForm.formState.errors.username && (
                     <p className="error-message text-destructive text-xs">
                       {registerForm.formState.errors.username.message}
                     </p>
+                  )}
+                  {checkingUsername && (
+                    <p className="text-muted-foreground text-xs">Đang kiểm tra...</p>
+                  )}
+                  {usernameAvailable === false && !checkingUsername && (
+                    <p className="text-destructive text-xs">Tên đăng nhập đã được sử dụng</p>
+                  )}
+                  {usernameAvailable === true && !checkingUsername && (
+                    <p className="text-green-600 text-xs">Tên đăng nhập khả dụng</p>
                   )}
                 </div>
 
@@ -407,9 +461,9 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={registerForm.formState.isSubmitting}
+                  disabled={registerForm.formState.isSubmitting || checkingUsername}
                 >
-                  {registerForm.formState.isSubmitting ? "Đang đăng ký..." : "Xác nhận & Đăng ký"}
+                  {checkingUsername ? "Đang kiểm tra..." : registerForm.formState.isSubmitting ? "Đang đăng ký..." : "Xác nhận & Đăng ký"}
                 </Button>
 
                 <div className="text-center text-sm">

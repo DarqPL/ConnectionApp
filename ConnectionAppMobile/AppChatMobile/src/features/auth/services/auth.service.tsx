@@ -279,7 +279,6 @@ export interface User {
   username: string;
   displayName: string;
   email: string;
-  phone?: string;
   bio?: string;
   avatarUrl?: string;
   gender?: string;

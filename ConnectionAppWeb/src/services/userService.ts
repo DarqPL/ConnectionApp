@@ -107,4 +107,13 @@ export const userService = {
     const res = await api.put("/users/profile/avatar", formData);
     return res.data;
   },
+
+  /**
+   * GET /api/users/username/check?username=X
+   * Returns: { available: boolean }
+   */
+  async checkUsername(username: string): Promise<{ available: boolean }> {
+    const res = await api.get("/users/username/check", { params: { username } });
+    return res.data;
+  },
 };

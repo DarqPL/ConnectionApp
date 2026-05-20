@@ -10,7 +10,6 @@ export const MOCK_CURRENT_USER: User = {
   status: "OFFLINE",
   avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=connection-user",
   bio: "ConnectionApp",
-  phone: "",
 };
 
 export const MOCK_CONVERSATIONS: Conversation[] = [];
