@@ -137,10 +137,28 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+    /**
+     * Lock own account (self-service, no admin required)
+     */
+    @PostMapping("/lock")
+    public ResponseEntity<String> lockMyAccount(Authentication authentication) {
+        Long userId = getAuthenticatedUserId(authentication);
+        return ResponseEntity.ok(userService.lockAccount(userId));
+    }
+
     @AdminOnly
     @PostMapping("/{id}/lock")
     public ResponseEntity<String> lockAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.lockAccount(id));
+    }
+
+    /**
+     * Unlock own account (self-service, no admin required)
+     */
+    @PostMapping("/unlock")
+    public ResponseEntity<String> unlockMyAccount(Authentication authentication) {
+        Long userId = getAuthenticatedUserId(authentication);
+        return ResponseEntity.ok(userService.unlockAccount(userId));
     }
 
     @AdminOnly

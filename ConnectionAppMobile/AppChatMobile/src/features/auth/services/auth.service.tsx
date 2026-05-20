@@ -601,6 +601,16 @@ export class AuthService {
     }
   }
 
+  async lockMyAccount(): Promise<void> {
+    const response = await this.authFetch("/users/lock", {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Khoá tài khoản thất bại");
+    }
+  }
+
   async lockAccount(userId: number): Promise<void> {
     const response = await this.authFetch(`/users/${userId}/lock`, {
       method: "POST",
