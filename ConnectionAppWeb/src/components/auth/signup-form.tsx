@@ -150,22 +150,22 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     }
   };
 
-  const checkUsername = async (value: string): Promise<boolean> => {
+  const checkUsername = async (value: string): Promise<{ available: boolean; ok: boolean }> => {
     if (!value || value.length < 3) {
       setUsernameAvailable(null);
       usernameCheckedRef.current = false;
-      return true;
+      return { available: true, ok: true };
     }
     setCheckingUsername(true);
     try {
       const result = await userService.checkUsername(value);
       setUsernameAvailable(result.available);
       usernameCheckedRef.current = true;
-      return result.available;
+      return { available: result.available, ok: true };
     } catch {
       setUsernameAvailable(null);
       usernameCheckedRef.current = false;
-      return true;
+      return { available: false, ok: false };
     } finally {
       setCheckingUsername(false);
     }
@@ -178,8 +178,12 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       return;
     }
     if (usernameAvailable === null && !checkingUsername) {
-      const available = await checkUsername(data.username);
-      if (!available) {
+      const result = await checkUsername(data.username);
+      if (!result.ok) {
+        toast.error("Không thể kiểm tra tên đăng nhập. Vui lòng thử lại.");
+        return;
+      }
+      if (!result.available) {
         toast.error("Tên đăng nhập đã được sử dụng");
         return;
       }

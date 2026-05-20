@@ -118,19 +118,19 @@ export default function SignUpScreen({ navigation }: any) {
   };
 
   // ─── STEP 3: Đăng ký tài khoản ─────────────────────────────────────────────
-  const checkUsername = async (value: string): Promise<boolean> => {
+  const checkUsername = async (value: string): Promise<{ available: boolean; ok: boolean }> => {
     if (!value || value.length < 3) {
       setUsernameAvailable(null);
-      return true;
+      return { available: true, ok: true };
     }
     setCheckingUsername(true);
     try {
       const result = await userService.checkUsername(value);
       setUsernameAvailable(result.available);
-      return result.available;
+      return { available: result.available, ok: true };
     } catch {
       setUsernameAvailable(null);
-      return true;
+      return { available: false, ok: false };
     } finally {
       setCheckingUsername(false);
     }
@@ -158,8 +158,12 @@ export default function SignUpScreen({ navigation }: any) {
       return;
     }
     if (usernameAvailable === null && !checkingUsername) {
-      const available = await checkUsername(username);
-      if (!available) {
+      const result = await checkUsername(username);
+      if (!result.ok) {
+        Alert.alert("Lỗi", "Không thể kiểm tra tên đăng nhập. Vui lòng thử lại.");
+        return;
+      }
+      if (!result.available) {
         Alert.alert("Tên đăng nhập", "Tên đăng nhập đã được sử dụng");
         return;
       }

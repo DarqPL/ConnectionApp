@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import type { User } from "@/types/user";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUserStore } from "@/stores/useUserStore";
 
 type Props = {
@@ -20,6 +20,12 @@ type Props = {
 const PersonalInfoForm = ({ userInfo }: Props) => {
   const { updateProfile } = useUserStore();
   const [displayName, setDisplayName] = useState(userInfo?.displayName ?? "");
+
+  useEffect(() => {
+    if (userInfo?.displayName) {
+      setDisplayName(userInfo.displayName);
+    }
+  }, [userInfo?.displayName]);
 
   const handleSave = async () => {
     await updateProfile({ displayName });
