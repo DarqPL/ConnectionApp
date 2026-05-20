@@ -53,7 +53,16 @@ export const userService = {
     return res.data;
   },
   /**
-   * POST /api/users/{id}/lock
+   * POST /api/users/lock (self-service)
+   * Returns: string
+   */
+  async lockMyAccount(): Promise<string> {
+    const res = await api.post("/users/lock");
+    return res.data;
+  },
+
+  /**
+   * POST /api/users/{id}/lock (admin only)
    * Returns: string
    */
   async lockAccount(userId: number): Promise<string> {
@@ -62,7 +71,16 @@ export const userService = {
   },
 
   /**
-   * POST /api/users/{id}/unlock
+   * POST /api/users/unlock (self-service, only works for SELF_LOCK)
+   * Returns: string
+   */
+  async unlockMyAccount(): Promise<string> {
+    const res = await api.post("/users/unlock");
+    return res.data;
+  },
+
+  /**
+   * POST /api/users/{id}/unlock (admin only)
    * Returns: string
    */
   async unlockAccount(userId: number): Promise<string> {
@@ -105,6 +123,15 @@ export const userService = {
    */
   async updateAvatar(formData: FormData): Promise<User> {
     const res = await api.put("/users/profile/avatar", formData);
+    return res.data;
+  },
+
+  /**
+   * GET /api/users/username/check?username=X
+   * Returns: { available: boolean }
+   */
+  async checkUsername(username: string): Promise<{ available: boolean }> {
+    const res = await api.get("/users/username/check", { params: { username } });
     return res.data;
   },
 };

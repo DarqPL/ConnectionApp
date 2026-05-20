@@ -79,9 +79,6 @@ public class UserService {
         if (profileRequest.getEmail() != null && !profileRequest.getEmail().isEmpty()) {
             user.setEmail(profileRequest.getEmail());
         }
-        if (profileRequest.getPhone() != null && !profileRequest.getPhone().isEmpty()) {
-            user.setPhone(profileRequest.getPhone());
-        }
         if (profileRequest.getBio() != null) {
             user.setBio(profileRequest.getBio());
         }
@@ -239,6 +236,13 @@ public class UserService {
     }
 
     /**
+     * Check if a username is available for registration
+     */
+    public boolean isUsernameAvailable(String username) {
+        return !userRepository.existsByUsername(username);
+    }
+
+    /**
      * Search users by username, display name, or phone
      */
     public List<UserProfileResponse> searchUsers(String query) {
@@ -256,7 +260,6 @@ public class UserService {
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .email(user.getEmail())
-                .phone(user.getPhone())
                 .bio(user.getBio())
                 .avatarUrl(user.getAvatarUrl())
                 .gender(user.getGender() != null ? user.getGender().name() : null)
@@ -270,7 +273,8 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
     /**
-     * Lock account
+     * Lock account by admin — sets status LOCKED, reason ADMIN_LOCK.
+     * User CANNOT self-unlock; only admin can unlock.
      */
     @Transactional
     public String lockAccount(Long userId) {
@@ -286,9 +290,9 @@ public class UserService {
             return "Account is already locked";
         }
 
-        user.setStatus(UserStatus.OFFLINE);
+        user.setStatus(UserStatus.LOCKED);
         user.setLockUntil(now.plusYears(100));
-        user.setLockReason("MANUAL_LOCK");
+        user.setLockReason("ADMIN_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
         refreshTokenService.revokeAllByUser(user);
@@ -297,7 +301,35 @@ public class UserService {
     }
 
     /**
-     * Unlock account
+     * Self-lock account — sets status LOCKED, reason SELF_LOCK.
+     * User CAN self-unlock via OTP. Admin can also unlock.
+     */
+    @Transactional
+    public String lockAccountSelf(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new IllegalStateException("Cannot lock a deleted account");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getLockUntil() != null && user.getLockUntil().isAfter(now)) {
+            return "Account is already locked";
+        }
+
+        user.setStatus(UserStatus.LOCKED);
+        user.setLockUntil(now.plusYears(100));
+        user.setLockReason("SELF_LOCK");
+        bumpAllPlatformTokenVersions(user);
+        userRepository.save(user);
+        refreshTokenService.revokeAllByUser(user);
+
+        return "Account locked successfully";
+    }
+
+    /**
+     * Unlock account (admin) — works for ANY lock reason.
      */
     @Transactional
     public String unlockAccount(Long userId) {
@@ -312,7 +344,34 @@ public class UserService {
             return "Account is not locked";
         }
 
-        // tuỳ logic: OFFLINE hoặc ONLINE
+        user.setStatus(UserStatus.OFFLINE);
+        user.setLockUntil(null);
+        user.setLockReason(null);
+        userRepository.save(user);
+
+        return "Account unlocked successfully";
+    }
+
+    /**
+     * Self-unlock account — only works if lockReason is SELF_LOCK.
+     */
+    @Transactional
+    public String unlockAccountSelf(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new IllegalStateException("Cannot unlock a deleted account");
+        }
+
+        if (user.getLockUntil() == null) {
+            return "Account is not locked";
+        }
+
+        if (!"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
+            throw new BadRequestException("Tài khoản của bạn đã bị quản trị viên khoá. Hãy liên hệ quản trị viên để được mở khoá.");
+        }
+
         user.setStatus(UserStatus.OFFLINE);
         user.setLockUntil(null);
         user.setLockReason(null);
@@ -326,7 +385,7 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         LocalDateTime now = LocalDateTime.now();
-        if (user.getLockUntil() == null || !user.getLockUntil().isAfter(now) || !"MANUAL_LOCK".equalsIgnoreCase(user.getLockReason())) {
+        if (user.getLockUntil() == null || !user.getLockUntil().isAfter(now) || !"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
             throw new BadRequestException("Tài khoản không ở trạng thái tự khóa.");
         }
 
@@ -346,7 +405,7 @@ public class UserService {
         LocalDateTime now = LocalDateTime.now();
         if (user.getLockUntil() == null
                 || !user.getLockUntil().isAfter(now)
-                || !"MANUAL_LOCK".equalsIgnoreCase(user.getLockReason())) {
+                || !"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
             throw new BadRequestException("Tai khoan khong o trang thai tu khoa.");
         }
 

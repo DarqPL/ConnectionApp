@@ -524,20 +524,29 @@ const ChatInfoPanel = ({
             </h3>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 w-full pt-2">
+          <div
+            className={cn(
+              "grid gap-4 w-full pt-2",
+              chat.type === "PRIVATE" ? "grid-cols-2 max-w-[160px] mx-auto" : "grid-cols-4"
+            )}
+          >
             {[
               { icon: BellOff, label: "Tắt thông báo", action: "mute" },
               { icon: Pin, label: "Ghim hội thoại", action: "pin" },
-              {
-                icon: UserPlus,
-                label: "Thêm thành viên",
-                action: "add-member",
-              },
-              {
-                icon: Shield,
-                label: "Quản lý nhóm",
-                action: "group-settings",
-              },
+              ...(chat.type === "GROUP"
+                ? [
+                    {
+                      icon: UserPlus,
+                      label: "Thêm thành viên",
+                      action: "add-member",
+                    },
+                    {
+                      icon: Shield,
+                      label: "Quản lý nhóm",
+                      action: "group-settings",
+                    },
+                  ]
+                : []),
             ].map((action, i) => (
               <button
                 key={i}
@@ -562,95 +571,103 @@ const ChatInfoPanel = ({
         </div>
 
         {/* Members Section */}
-        <SectionHeader
-          title="Thành viên nhóm"
-          count={chat.participants.length}
-          isOpen={openSections.members}
-          onToggle={() => toggleSection("members")}
-        />
-        {openSections.members && (
-          <div className="px-4 pb-4 space-y-3">
-            <div
-              className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
-              onClick={() => setShowMemberListDialog(true)}
-            >
-              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                <Users className="size-4" />
-              </div>
-              <span className="text-sm font-medium">
-                {chat.participants.length} thành viên
-              </span>
-            </div>
-            {chat.participants.slice(0, 3).map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
-                onClick={() => {
-                  if (
-                    currentUserRole === "OWNER" ||
-                    currentUserRole === "CO_OWNER"
-                  ) {
-                    setShowMemberListDialog(true);
-                  }
-                }}
-              >
-                <UserAvatar
-                  type="chat"
-                  name={p.displayName}
-                  avatarUrl={p.avatarUrl || undefined}
-                  className="size-8"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {p.displayName}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground uppercase">
-                    {p.role}
-                  </p>
+        {chat.type === "GROUP" && (
+          <>
+            <SectionHeader
+              title="Thành viên nhóm"
+              count={chat.participants.length}
+              isOpen={openSections.members}
+              onToggle={() => toggleSection("members")}
+            />
+            {openSections.members && (
+              <div className="px-4 pb-4 space-y-3">
+                <div
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
+                  onClick={() => setShowMemberListDialog(true)}
+                >
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <Users className="size-4" />
+                  </div>
+                  <span className="text-sm font-medium">
+                    {chat.participants.length} thành viên
+                  </span>
                 </div>
+                {chat.participants.slice(0, 3).map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
+                    onClick={() => {
+                      if (
+                        currentUserRole === "OWNER" ||
+                        currentUserRole === "CO_OWNER"
+                      ) {
+                        setShowMemberListDialog(true);
+                      }
+                    }}
+                  >
+                    <UserAvatar
+                      type="chat"
+                      name={p.displayName}
+                      avatarUrl={p.avatarUrl || undefined}
+                      className="size-8"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {p.displayName}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground uppercase">
+                        {p.role}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {chat.participants.length > 3 && (
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs text-muted-foreground hover:bg-accent/50"
+                    onClick={() => setShowMemberListDialog(true)}
+                  >
+                    Xem tất cả ({chat.participants.length})
+                  </Button>
+                )}
               </div>
-            ))}
-            {chat.participants.length > 3 && (
-              <Button
-                variant="ghost"
-                className="w-full text-xs text-muted-foreground hover:bg-accent/50"
-                onClick={() => setShowMemberListDialog(true)}
-              >
-                Xem tất cả ({chat.participants.length})
-              </Button>
             )}
-          </div>
+          </>
         )}
 
         {/* Group Description Section */}
-        <SectionHeader
-          title="Mô tả nhóm"
-          isOpen={openSections.description}
-          onToggle={() => toggleSection("description")}
-        />
-        {openSections.description && (
-          <div className="px-4 pb-4 space-y-3">
-            <Textarea
-              value={descriptionDraft}
-              onChange={(e) => setDescriptionDraft(e.target.value)}
-              placeholder="Nhập mô tả nhóm..."
-              disabled={!canEditDescription || isSavingDescription}
-              className="min-h-24"
+        {chat.type === "GROUP" && (
+          <>
+            <SectionHeader
+              title="Mô tả nhóm"
+              isOpen={openSections.description}
+              onToggle={() => toggleSection("description")}
             />
-            {canEditDescription ? (
-              <Button
-                size="sm"
-                onClick={handleSaveDescription}
-                disabled={isSavingDescription}
-              >
-                {isSavingDescription ? "Đang lưu..." : "Lưu mô tả"}
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">
-                Chỉ trưởng nhóm hoặc phó nhóm mới có thể chỉnh sửa mô tả.
-              </p>
+            {openSections.description && (
+              <div className="px-4 pb-4 space-y-3">
+                <Textarea
+                  value={descriptionDraft}
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  placeholder="Nhập mô tả nhóm..."
+                  disabled={!canEditDescription || isSavingDescription}
+                  className="min-h-24"
+                />
+                {canEditDescription ? (
+                  <Button
+                    size="sm"
+                    onClick={handleSaveDescription}
+                    disabled={isSavingDescription}
+                  >
+                    {isSavingDescription ? "Đang lưu..." : "Lưu mô tả"}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    Chỉ trưởng nhóm hoặc phó nhóm mới có thể chỉnh sửa mô tả.
+                  </p>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {/* Reminders Section */}
@@ -796,18 +813,22 @@ const ChatInfoPanel = ({
         )}
 
         {/* Polls Section */}
-        <SectionHeader
-          title="Bình chọn"
-          isOpen={openSections.polls}
-          onToggle={() => toggleSection("polls")}
-        />
-        {openSections.polls && (
-          <div className="px-4 pb-4">
-            <div className="text-center py-4 text-muted-foreground">
-              <BarChart3 className="size-6 mx-auto mb-2 opacity-50" />
-              <p className="text-xs italic">Chưa có bình chọn nào</p>
-            </div>
-          </div>
+        {chat.type === "GROUP" && (
+          <>
+            <SectionHeader
+              title="Bình chọn"
+              isOpen={openSections.polls}
+              onToggle={() => toggleSection("polls")}
+            />
+            {openSections.polls && (
+              <div className="px-4 pb-4">
+                <div className="text-center py-4 text-muted-foreground">
+                  <BarChart3 className="size-6 mx-auto mb-2 opacity-50" />
+                  <p className="text-xs italic">Chưa có bình chọn nào</p>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {chat.type === "GROUP" && (
@@ -900,26 +921,30 @@ const ChatInfoPanel = ({
         )}
 
         {/* Board Section */}
-        <SectionHeader
-          title="Bảng tin nhóm"
-          isOpen={openSections.board}
-          onToggle={() => toggleSection("board")}
-        />
-        {openSections.board && (
-          <div className="px-4 pb-4 space-y-1">
-            {[
-              { icon: Calendar, label: "Danh sách nhắc hẹn" },
-              { icon: StickyNote, label: "Ghi chú, ghim, bình chọn" },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
-              >
-                <item.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="text-sm font-medium">{item.label}</span>
+        {chat.type === "GROUP" && (
+          <>
+            <SectionHeader
+              title="Bảng tin nhóm"
+              isOpen={openSections.board}
+              onToggle={() => toggleSection("board")}
+            />
+            {openSections.board && (
+              <div className="px-4 pb-4 space-y-1">
+                {[
+                  { icon: Calendar, label: "Danh sách nhắc hẹn" },
+                  { icon: StickyNote, label: "Ghi chú, ghim, bình chọn" },
+                ].map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors group"
+                  >
+                    <item.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {/* Media Section */}
@@ -1060,30 +1085,34 @@ const ChatInfoPanel = ({
             <Trash2 className="size-4 mr-2" />
             Xóa lịch sử cuộc trò chuyện
           </Button>
-          {currentUserRole === "OWNER" && chat.participants.length > 1 && (
-            <div className="px-2 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-700 dark:text-yellow-400">
-              <p className="font-medium">Bạn là quản lý nhóm</p>
-              <p className="text-[11px] mt-1">
-                Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm
-              </p>
-            </div>
+          {chat.type === "GROUP" && (
+            <>
+              {currentUserRole === "OWNER" && chat.participants.length > 1 && (
+                <div className="px-2 py-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-700 dark:text-yellow-400">
+                  <p className="font-medium">Bạn là quản lý nhóm</p>
+                  <p className="text-[11px] mt-1">
+                    Vui lòng chuyển quyền quản lý cho người khác trước khi rời nhóm
+                  </p>
+                </div>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full h-9 text-xs text-destructive hover:text-destructive"
+                onClick={handleLeaveGroup}
+                disabled={isLeavingGroup}
+              >
+                <LogOut className="size-4 mr-2" />
+                {isLeavingGroup
+                  ? "Đang xử lý..."
+                  : currentUserRole === "OWNER" && chat.participants.length > 1
+                    ? "Chuyển quyền & Rời"
+                    : currentUserRole === "OWNER"
+                      ? "Xóa nhóm"
+                      : "Rời khỏi nhóm"}
+              </Button>
+            </>
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full h-9 text-xs text-destructive hover:text-destructive"
-            onClick={handleLeaveGroup}
-            disabled={isLeavingGroup}
-          >
-            <LogOut className="size-4 mr-2" />
-            {isLeavingGroup
-              ? "Đang xử lý..."
-              : currentUserRole === "OWNER" && chat.participants.length > 1
-                ? "Chuyển quyền & Rời"
-                : currentUserRole === "OWNER"
-                  ? "Xóa nhóm"
-                  : "Rời khỏi nhóm"}
-          </Button>
         </div>
       </div>
 

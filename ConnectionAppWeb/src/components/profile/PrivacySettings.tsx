@@ -79,7 +79,7 @@ const PrivacySettings = ({ user }: Props) => {
 
     try {
       setLoading(true);
-      await userService.lockAccount(user.id);
+      await userService.lockMyAccount();
       localStorage.removeItem("accessToken");
       window.location.href = "/signin";
     } catch {

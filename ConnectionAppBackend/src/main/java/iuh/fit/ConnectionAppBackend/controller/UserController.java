@@ -19,6 +19,7 @@ import java.util.List;
 
 import iuh.fit.ConnectionAppBackend.domain.common.UserStatus;
 import iuh.fit.ConnectionAppBackend.domain.dto.UserProfileResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.UsernameAvailabilityResponse;
 import iuh.fit.ConnectionAppBackend.security.AdminOnly;
 import iuh.fit.ConnectionAppBackend.service.UserService;
 
@@ -59,6 +60,21 @@ public class UserController {
     public ResponseEntity<List<UserProfileResponse>> searchUsers(@RequestParam String query) {
         List<UserProfileResponse> results = userService.searchUsers(query);
         return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Check if a username is available
+     */
+    @GetMapping("/username/check")
+    public ResponseEntity<UsernameAvailabilityResponse> checkUsernameAvailability(
+            @RequestParam String username) {
+        
+        if (username == null || username.trim().length() < 3) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        boolean available = userService.isUsernameAvailable(username.trim());
+        return ResponseEntity.ok(new UsernameAvailabilityResponse(available));
     }
 
     /**
@@ -121,10 +137,28 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+    /**
+     * Lock own account (self-service, no admin required)
+     */
+    @PostMapping("/lock")
+    public ResponseEntity<String> lockMyAccount(Authentication authentication) {
+        Long userId = getAuthenticatedUserId(authentication);
+        return ResponseEntity.ok(userService.lockAccountSelf(userId));
+    }
+
     @AdminOnly
     @PostMapping("/{id}/lock")
     public ResponseEntity<String> lockAccount(@PathVariable Long id){
         return ResponseEntity.ok(userService.lockAccount(id));
+    }
+
+    /**
+     * Unlock own account (self-service, only works for SELF_LOCK)
+     */
+    @PostMapping("/unlock")
+    public ResponseEntity<String> unlockMyAccount(Authentication authentication) {
+        Long userId = getAuthenticatedUserId(authentication);
+        return ResponseEntity.ok(userService.unlockAccountSelf(userId));
     }
 
     @AdminOnly

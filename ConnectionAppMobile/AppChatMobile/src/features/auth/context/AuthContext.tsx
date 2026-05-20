@@ -268,13 +268,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const lockAccount = useCallback(async () => {
-    if (!user?.id) {
-      throw new Error("Không tìm thấy tài khoản người dùng");
-    }
     setIsLoading(true);
     setError(null);
     try {
-      await authService.lockAccount(user.id);
+      await authService.lockMyAccount();
       await authService.signOut();
       setUser(null);
       setAccessToken(null);
@@ -286,7 +283,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, []);
 
   const requestManualUnlockOtp = useCallback(
     async (usernameOrEmail: string, email: string) => {

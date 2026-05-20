@@ -80,6 +80,7 @@ public class SecurityConfig {
                                 "/ws/info/**",
                                 "/ws").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/conversations/invite/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/username/check").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

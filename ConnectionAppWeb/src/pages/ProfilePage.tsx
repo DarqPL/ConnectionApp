@@ -12,7 +12,6 @@ import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   Mail,
-  Phone,
   Calendar,
   MessageSquare,
   Users,
@@ -47,7 +46,6 @@ const ProfilePage = () => {
 
   // Profile Form states
   const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [phone, setPhone] = useState(user?.phone || "");
 
   // Password Form states
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
@@ -89,7 +87,6 @@ const ProfilePage = () => {
     try {
       const updatedUser = await userService.updateProfile({
         displayName,
-        phone,
       });
       setUser(updatedUser);
       setIsEditDialogOpen(false);
@@ -201,7 +198,6 @@ const ProfilePage = () => {
                     size="icon"
                     onClick={() => {
                       setDisplayName(user.displayName);
-                      setPhone(user.phone || "");
                       setIsEditDialogOpen(true);
                     }}
                   >
@@ -216,20 +212,6 @@ const ProfilePage = () => {
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground">Email</p>
                       <p className="font-medium">{user.email}</p>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center gap-4 p-3 rounded-lg">
-                    <div className="p-2 bg-green-500/10 rounded-lg text-green-500">
-                      <Phone className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground">
-                        Số điện thoại
-                      </p>
-                      <p className="font-medium">
-                        {user.phone || "Chưa cập nhật"}
-                      </p>
                     </div>
                   </div>
                   <Separator />
@@ -312,14 +294,6 @@ const ProfilePage = () => {
                 id="ename"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ephone">Điện thoại</Label>
-              <Input
-                id="ephone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
               />
             </div>
           </div>

@@ -34,9 +34,15 @@ Three independent apps (no workspace manager, no shared root scripts):
 ## Env setup
 
 Each app has its own `.env` (gitignored) and `.env.example`:
-- **Backend** (`ConnectionAppBackend/.env`): must set `DB_PASSWORD`, `MAIL_USERNAME`/`MAIL_PASSWORD` (Gmail app password), `S3_*` keys, `GEMINI_API_KEY`, `ZEGO_APP_ID`/`ZEGO_SERVER_SECRET`. Admin account auto-seeded on first startup (`APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD`).
-- **Web** (`ConnectionAppWeb/.env`): optional `VITE_API_BASE_URL` (backend URL), `VITE_DEV_SERVER_HOST` (LAN).
-- **Mobile** (`ConnectionAppMobile/AppChatMobile/.env`): optional `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_ZEGO_APP_ID`/`EXPO_PUBLIC_ZEGO_APP_SIGN`.
+- **Backend** (`ConnectionAppBackend/.env`): must set `DB_PASSWORD`, `MAIL_USERNAME`/`MAIL_PASSWORD` (Gmail app password), `S3_*` keys, `GEMINI_API_KEY`, `ZEGO_APP_ID`/`ZEGO_SERVER_SECRET`. Admin account auto-seeded on first startup (`APP_ADMIN_USERNAME`/`APP_ADMIN_PASSWORD`). Cookie security: `APP_AUTH_COOKIE_SECURE=true` + `APP_AUTH_COOKIE_SAME_SITE=None` for HTTPS cross-site.
+- **Web** (`ConnectionAppWeb/.env`): optional `VITE_API_BASE_URL` (backend URL), `VITE_DEV_SERVER_HOST` (LAN), `VITE_PUBLIC_APP_URL`, `VITE_MAX_UPLOAD_FILE_SIZE_BYTES`, `VITE_ZEGO_APP_ID`.
+- **Mobile** (`ConnectionAppMobile/AppChatMobile/.env`): optional `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_ZEGO_APP_ID`/`EXPO_PUBLIC_ZEGO_APP_SIGN`, `EXPO_PUBLIC_WEB_APP_URL`, `EXPO_PUBLIC_USE_FORWARDED_API` + `EXPO_PUBLIC_FORWARDED_API_BASE_URL` for VS Code dev tunnels.
+
+## Docker Compose
+
+- `docker compose up` — starts MariaDB, MongoDB, backend, and web (backend waits for DB healthchecks)
+- Dockerfiles exist for backend (multi-stage: Temurin 21 JDK build → JRE run) and web (Node 22 Alpine, runs `npm run dev -- --host 0.0.0.0`)
+- Mobile is NOT included in compose (requires dev-client build on host)
 
 ## Backend details
 
@@ -47,12 +53,13 @@ Each app has its own `.env` (gitignored) and `.env.example`:
 - **JWT secret** is hardcoded in `application.properties` (not ideal, but that's how it works)
 - **Realtime chat**: STOMP over WebSocket (`ChatRealtimeController`), authenticated via `WebSocketAuthInterceptor`
 - **Storage**: AWS S3 (`S3StorageService`) for image/file uploads (default prefix: `images`)
-- **AI**: Gemini for group media safety filtering and message rewrite (both use `gemini-2.0-flash` default)
+- **AI**: Gemini for group media safety filtering and message rewrite (both default to `gemini-3-flash-preview` with fallback to `gemini-3.1-flash-lite-preview`)
 - **Calls**: Zego Cloud integration (`CallController`, `CallService`, `CallTimeoutScheduler`)
 - **Env loading**: uses `spring-dotenv` — `.env` file is read automatically (not standard Spring Boot)
 - **Default server binds** to `0.0.0.0`, not just localhost
 - **Email templates**: Thymeleaf (`spring-boot-starter-thymeleaf`)
 - Entry point: `ConnectionAppBackendApplication.java` | Package: `iuh.fit.ConnectionAppBackend`
+- Default admin credentials: `admin` / `Admin@123456`
 
 ## Testing
 

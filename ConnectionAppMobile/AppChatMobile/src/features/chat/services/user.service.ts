@@ -30,6 +30,18 @@ export class UserService {
     return await response.json();
   }
 
+  async checkUsername(username: string): Promise<{ available: boolean }> {
+    const response = await fetch(
+      `${authService.getApiBaseUrl()}/users/username/check?username=${encodeURIComponent(username)}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Không thể kiểm tra tên đăng nhập");
+    }
+
+    return await response.json();
+  }
+
   async updateAvatar(formData: FormData): Promise<User> {
     try {
       console.log("[UserService] Uploading avatar with FormData");

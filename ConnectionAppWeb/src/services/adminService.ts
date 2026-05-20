@@ -51,13 +51,13 @@ export const adminService = {
   },
 
   async lockUser(userId: number): Promise<{ message: string }> {
-    const res = await api.post(`/users/${userId}/lock`);
-    return { message: res.data };
+    const res = await api.post(`/admin/users/${userId}/lock`);
+    return { message: res.data.message };
   },
 
   async unlockUser(userId: number): Promise<{ message: string }> {
-    const res = await api.post(`/users/${userId}/unlock`);
-    return { message: res.data };
+    const res = await api.post(`/admin/users/${userId}/unlock`);
+    return { message: res.data.message };
   },
 
   async deleteUser(userId: number): Promise<{ message: string }> {

@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Mail,
-  Phone,
   UserIcon,
   UserPlus,
   UserCheck,
@@ -197,16 +196,6 @@ const BusinessCard = ({
               <p className="text-foreground truncate" title={user.email}>
                 {user.email}
               </p>
-            </div>
-          </div>
-        )}
-
-        {user.phone && (
-          <div className="flex items-center gap-3 text-sm">
-            <Phone className="size-4 text-primary shrink-0" />
-            <div className="flex-1">
-              <p className="text-muted-foreground">Điện thoại</p>
-              <p className="text-foreground">{user.phone}</p>
             </div>
           </div>
         )}

@@ -279,7 +279,6 @@ export interface User {
   username: string;
   displayName: string;
   email: string;
-  phone?: string;
   bio?: string;
   avatarUrl?: string;
   gender?: string;
@@ -359,6 +358,10 @@ export class AuthService {
 
       if (code === "ACCOUNT_TEMP_LOCKED" && remainingMinutes > 0) {
         message = `${message}. Con ${remainingMinutes} phut de go khoa.`;
+      }
+
+      if (code === "ACCOUNT_ADMIN_LOCKED") {
+        // Message already contains admin contact info from backend
       }
 
       return new AuthApiError(
@@ -602,6 +605,16 @@ export class AuthService {
     }
   }
 
+  async lockMyAccount(): Promise<void> {
+    const response = await this.authFetch("/users/lock", {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Khoá tài khoản thất bại");
+    }
+  }
+
   async lockAccount(userId: number): Promise<void> {
     const response = await this.authFetch(`/users/${userId}/lock`, {
       method: "POST",
@@ -757,6 +770,21 @@ export class AuthService {
     if (response.status === 401) {
       await this.setAccessToken(null);
       this.unauthorizedHandler?.();
+    }
+
+    if (response.status === 403) {
+      try {
+        const data = await response.clone().json();
+        const code = data?.code;
+        if (code === "ACCOUNT_ADMIN_LOCKED" || code === "ACCOUNT_MANUAL_LOCKED" || code === "ACCOUNT_TEMP_LOCKED") {
+          await this.setAccessToken(null);
+          this.unauthorizedHandler?.();
+        }
+      } catch {
+        // If we can't parse the body, still clear on 403
+        await this.setAccessToken(null);
+        this.unauthorizedHandler?.();
+      }
     }
 
     return response;

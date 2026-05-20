@@ -26,6 +26,11 @@ export default function SignInScreen({ navigation }: any) {
     try {
       await signIn(username, password);
     } catch (err: any) {
+      if (err?.code === "ACCOUNT_ADMIN_LOCKED") {
+        Alert.alert("Tài khoản bị khoá", err.message || "Tài khoản của bạn đã bị quản trị viên khoá.");
+        return;
+      }
+
       if (err?.code === "ACCOUNT_MANUAL_LOCKED") {
         navigation.navigate("ManualUnlock", { usernameOrEmail: username });
         return;

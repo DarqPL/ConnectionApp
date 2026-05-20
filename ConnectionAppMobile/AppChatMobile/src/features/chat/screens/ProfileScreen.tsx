@@ -39,7 +39,6 @@ const ProfileScreen = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [phone, setPhone] = useState(user?.phone || "");
   const [bio, setBio] = useState(user?.bio || "");
 
   // Change password
@@ -62,7 +61,6 @@ const ProfileScreen = () => {
     try {
       await updateUserProfile({
         displayName: displayName.trim(),
-        phone: phone.trim(),
         bio: bio.trim()
       });
       setIsEditing(false);
@@ -330,21 +328,6 @@ const ProfileScreen = () => {
                     onChangeText={setDisplayName}
                     placeholder="Tên hiển thị..."
                     placeholderTextColor={COLORS.textLight}
-                  />
-                </View>
-                <View style={styles.fieldRow}>
-                  <Ionicons
-                    name="call-outline"
-                    size={20}
-                    color={COLORS.primary}
-                  />
-                  <TextInput
-                    style={styles.editInput}
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="Số điện thoại..."
-                    placeholderTextColor={COLORS.textLight}
-                    keyboardType="phone-pad"
                   />
                 </View>
                 <View style={styles.fieldRow}>
