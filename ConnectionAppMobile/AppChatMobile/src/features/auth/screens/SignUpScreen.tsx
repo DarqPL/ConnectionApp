@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../context/AuthContext";
+import { userService } from "../../chat/services/user.service";
 import { COLORS } from "../../../theme";
 
 type Step = "email" | "otp" | "register";
@@ -37,6 +38,8 @@ export default function SignUpScreen({ navigation }: any) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -115,6 +118,22 @@ export default function SignUpScreen({ navigation }: any) {
   };
 
   // ─── STEP 3: Đăng ký tài khoản ─────────────────────────────────────────────
+  const checkUsername = async (value: string) => {
+    if (!value || value.length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+    setCheckingUsername(true);
+    try {
+      const result = await userService.checkUsername(value);
+      setUsernameAvailable(result.available);
+    } catch {
+      setUsernameAvailable(null);
+    } finally {
+      setCheckingUsername(false);
+    }
+  };
+
   const handleSignUp = async () => {
     if (!firstName || !lastName || !username || !password || !confirmPassword) {
       Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin");
@@ -131,6 +150,17 @@ export default function SignUpScreen({ navigation }: any) {
     if (password !== confirmPassword) {
       Alert.alert("Mật khẩu", "Mật khẩu xác nhận không khớp");
       return;
+    }
+    if (usernameAvailable === false) {
+      Alert.alert("Tên đăng nhập", "Tên đăng nhập đã được sử dụng");
+      return;
+    }
+    if (usernameAvailable === null && !checkingUsername) {
+      await checkUsername(username);
+      if (usernameAvailable === false) {
+        Alert.alert("Tên đăng nhập", "Tên đăng nhập đã được sử dụng");
+        return;
+      }
     }
     try {
       // Backend sẽ kiểm tra isEmailVerified(email) thay vì OTP
@@ -308,9 +338,28 @@ export default function SignUpScreen({ navigation }: any) {
               placeholderTextColor={COLORS.textLight}
               autoCapitalize="none"
               value={username}
-              onChangeText={setUsername}
+              onChangeText={(text) => {
+                setUsername(text);
+                setUsernameAvailable(null);
+              }}
+              onBlur={() => checkUsername(username)}
               editable={!isLoading}
             />
+            {checkingUsername && (
+              <Text style={{ fontSize: 12, color: COLORS.textLight, marginTop: -8, marginBottom: 8 }}>
+                Đang kiểm tra...
+              </Text>
+            )}
+            {usernameAvailable === false && !checkingUsername && (
+              <Text style={{ fontSize: 12, color: COLORS.destructive, marginTop: -8, marginBottom: 8 }}>
+                Tên đăng nhập đã được sử dụng
+              </Text>
+            )}
+            {usernameAvailable === true && !checkingUsername && (
+              <Text style={{ fontSize: 12, color: "#16a34a", marginTop: -8, marginBottom: 8 }}>
+                Tên đăng nhập khả dụng
+              </Text>
+            )}
 
             <Text style={styles.label}>Mật khẩu</Text>
             <TextInput
