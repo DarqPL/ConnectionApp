@@ -53,7 +53,7 @@ export const adminService = {
   async lockUser(userId: number): Promise<{ message: string }> {
     const res = await api.post(`/admin/users/${userId}/lock`);
     return { message: res.data.message };
-  }
+  },
 
   async unlockUser(userId: number): Promise<{ message: string }> {
     const res = await api.post(`/admin/users/${userId}/unlock`);
