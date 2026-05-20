@@ -360,6 +360,10 @@ export class AuthService {
         message = `${message}. Con ${remainingMinutes} phut de go khoa.`;
       }
 
+      if (code === "ACCOUNT_ADMIN_LOCKED") {
+        // Message already contains admin contact info from backend
+      }
+
       return new AuthApiError(
         message,
         code,

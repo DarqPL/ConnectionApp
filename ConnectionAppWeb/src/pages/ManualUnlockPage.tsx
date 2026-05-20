@@ -44,6 +44,10 @@ export default function ManualUnlockPage() {
       toast.success("Mã OTP đã được gửi đến email của bạn.");
     } catch (error: any) {
       const msg = error?.response?.data?.message ?? "Không thể gửi mã OTP.";
+      if (msg?.includes("quản trị viên") || msg?.includes("ADMIN_LOCK")) {
+        toast.error("Tài khoản của bạn đã bị quản trị viên khoá. Hãy liên hệ quản trị viên để được mở khoá.");
+        return;
+      }
       toast.error(msg);
     } finally {
       setLoading(false);

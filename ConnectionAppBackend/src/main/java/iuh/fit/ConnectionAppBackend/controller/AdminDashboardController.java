@@ -63,6 +63,34 @@ public class AdminDashboardController {
         return ResponseEntity.ok(Map.of("message", message));
     }
 
+    @PostMapping("/users/{id}/lock")
+    public ResponseEntity<Map<String, String>> lockUser(
+            Authentication authentication,
+            @PathVariable Long id) {
+
+        String username = authentication.getName();
+        Long adminId = userService.getUserByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Admin user not found"))
+                .getId();
+
+        String message = userService.lockAccount(id);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
+    @PostMapping("/users/{id}/unlock")
+    public ResponseEntity<Map<String, String>> unlockUser(
+            Authentication authentication,
+            @PathVariable Long id) {
+
+        String username = authentication.getName();
+        Long adminId = userService.getUserByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Admin user not found"))
+                .getId();
+
+        String message = userService.unlockAccount(id);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
     @GetMapping("/conversations")
     public ResponseEntity<Map<String, Object>> getConversations(
             @RequestParam(required = false) String type,

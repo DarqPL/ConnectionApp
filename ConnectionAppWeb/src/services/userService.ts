@@ -71,7 +71,7 @@ export const userService = {
   },
 
   /**
-   * POST /api/users/unlock (self-service)
+   * POST /api/users/unlock (self-service, only works for SELF_LOCK)
    * Returns: string
    */
   async unlockMyAccount(): Promise<string> {

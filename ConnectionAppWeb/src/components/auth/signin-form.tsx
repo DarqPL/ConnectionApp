@@ -52,6 +52,12 @@ export function SigninForm({
       const code = error.response?.data?.code;
       const remainingMinutes = error.response?.data?.remainingMinutes;
 
+      if (code === "ACCOUNT_ADMIN_LOCKED") {
+        const message = error.response?.data?.message || "Tài khoản của bạn đã bị quản trị viên khoá.";
+        setError("root", { message });
+        return;
+      }
+
       if (code === "ACCOUNT_MANUAL_LOCKED") {
         navigate("/unlock-account", { state: { usernameOrEmail: username } });
         return;

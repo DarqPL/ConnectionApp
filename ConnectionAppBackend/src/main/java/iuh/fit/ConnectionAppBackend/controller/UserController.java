@@ -143,7 +143,7 @@ public class UserController {
     @PostMapping("/lock")
     public ResponseEntity<String> lockMyAccount(Authentication authentication) {
         Long userId = getAuthenticatedUserId(authentication);
-        return ResponseEntity.ok(userService.lockAccount(userId));
+        return ResponseEntity.ok(userService.lockAccountSelf(userId));
     }
 
     @AdminOnly
@@ -153,12 +153,12 @@ public class UserController {
     }
 
     /**
-     * Unlock own account (self-service, no admin required)
+     * Unlock own account (self-service, only works for SELF_LOCK)
      */
     @PostMapping("/unlock")
     public ResponseEntity<String> unlockMyAccount(Authentication authentication) {
         Long userId = getAuthenticatedUserId(authentication);
-        return ResponseEntity.ok(userService.unlockAccount(userId));
+        return ResponseEntity.ok(userService.unlockAccountSelf(userId));
     }
 
     @AdminOnly
