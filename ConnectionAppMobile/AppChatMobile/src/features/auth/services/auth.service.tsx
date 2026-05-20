@@ -360,6 +360,10 @@ export class AuthService {
         message = `${message}. Con ${remainingMinutes} phut de go khoa.`;
       }
 
+      if (code === "ACCOUNT_ADMIN_LOCKED") {
+        // Message already contains admin contact info from backend
+      }
+
       return new AuthApiError(
         message,
         code,
@@ -598,6 +602,16 @@ export class AuthService {
 
     if (!response.ok) {
       throw await this.parseError(response, "Xoá tài khoản thất bại");
+    }
+  }
+
+  async lockMyAccount(): Promise<void> {
+    const response = await this.authFetch("/users/lock", {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Khoá tài khoản thất bại");
     }
   }
 
