@@ -10,12 +10,8 @@ import { useSocketStore } from "@/stores/useSocketStore";
 const ChatAppPage = () => {
   const { fetchConversations } = useChatStore();
   const { getFriends, getPendingRequests } = useFriendStore();
-  const { fetchMe, user } = useAuthStore();
+  const { user } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
-
-  useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
 
   useEffect(() => {
     if (user) {

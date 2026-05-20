@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Navigate, useLocation } from "react-router"
 import { useAuthStore } from "@/stores/useAuthStore"
 
@@ -6,6 +6,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const accessToken = localStorage.getItem("accessToken")
   const { fetchMe, user } = useAuthStore()
   const [checking, setChecking] = useState(true)
+  const hasFetched = useRef(false)
   const location = useLocation()
 
   useEffect(() => {
@@ -14,15 +15,21 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       return
     }
 
-    let cancelled = false
-    fetchMe().finally(() => {
-      if (!cancelled) setChecking(false)
-    })
-
-    return () => {
-      cancelled = true
+    if (user) {
+      setChecking(false)
+      return
     }
-  }, [accessToken, fetchMe])
+
+    if (hasFetched.current) {
+      setChecking(false)
+      return
+    }
+
+    hasFetched.current = true
+    fetchMe().finally(() => {
+      setChecking(false)
+    })
+  }, [accessToken])
 
   if (!accessToken) {
     return <Navigate to="/signin" state={{ from: location }} replace />
@@ -64,6 +71,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   const accessToken = localStorage.getItem("accessToken")
   const { fetchMe, user } = useAuthStore()
   const [checking, setChecking] = useState(true)
+  const hasFetched = useRef(false)
   const location = useLocation()
 
   useEffect(() => {
@@ -72,15 +80,21 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
       return
     }
 
-    let cancelled = false
-    fetchMe().finally(() => {
-      if (!cancelled) setChecking(false)
-    })
-
-    return () => {
-      cancelled = true
+    if (user) {
+      setChecking(false)
+      return
     }
-  }, [accessToken, fetchMe])
+
+    if (hasFetched.current) {
+      setChecking(false)
+      return
+    }
+
+    hasFetched.current = true
+    fetchMe().finally(() => {
+      setChecking(false)
+    })
+  }, [accessToken])
 
   if (!accessToken) {
     return <Navigate to="/signin" state={{ from: location }} replace />
