@@ -772,6 +772,21 @@ export class AuthService {
       this.unauthorizedHandler?.();
     }
 
+    if (response.status === 403) {
+      try {
+        const data = await response.clone().json();
+        const code = data?.code;
+        if (code === "ACCOUNT_ADMIN_LOCKED" || code === "ACCOUNT_MANUAL_LOCKED" || code === "ACCOUNT_TEMP_LOCKED") {
+          await this.setAccessToken(null);
+          this.unauthorizedHandler?.();
+        }
+      } catch {
+        // If we can't parse the body, still clear on 403
+        await this.setAccessToken(null);
+        this.unauthorizedHandler?.();
+      }
+    }
+
     return response;
   }
 

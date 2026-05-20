@@ -62,7 +62,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ user });
     } catch (error) {
       console.error("Failed to fetch user profile", error);
-      // If 401, the axios interceptor will handle redirect
+      get().clearState();
     }
   },
 

@@ -51,6 +51,18 @@ api.interceptors.response.use(
       }
     }
 
+    if (error.response?.status === 403) {
+      const code = error.response?.data?.code;
+      if (
+        code === "ACCOUNT_ADMIN_LOCKED" ||
+        code === "ACCOUNT_MANUAL_LOCKED" ||
+        code === "ACCOUNT_TEMP_LOCKED"
+      ) {
+        localStorage.removeItem("accessToken");
+        window.location.href = "/signin";
+      }
+    }
+
     return Promise.reject(error);
   },
 );
