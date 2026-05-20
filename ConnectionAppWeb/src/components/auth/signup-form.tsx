@@ -173,11 +173,15 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
 
   // ── Step 3: Đăng ký tài khoản ──────────────────────────────────────────
   const onSubmitRegister = async (data: RegisterForm) => {
+    if (checkingUsername) {
+      toast.error("Vui lòng đợi kiểm tra tên đăng nhập...");
+      return;
+    }
     if (usernameAvailable === false) {
       toast.error("Tên đăng nhập đã được sử dụng");
       return;
     }
-    if (usernameAvailable === null && !checkingUsername) {
+    if (usernameAvailable === null) {
       const result = await checkUsername(data.username);
       if (!result.ok) {
         toast.error("Không thể kiểm tra tên đăng nhập. Vui lòng thử lại.");
@@ -457,9 +461,9 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={registerForm.formState.isSubmitting}
+                  disabled={registerForm.formState.isSubmitting || checkingUsername}
                 >
-                  {registerForm.formState.isSubmitting ? "Đang đăng ký..." : "Xác nhận & Đăng ký"}
+                  {checkingUsername ? "Đang kiểm tra..." : registerForm.formState.isSubmitting ? "Đang đăng ký..." : "Xác nhận & Đăng ký"}
                 </Button>
 
                 <div className="text-center text-sm">

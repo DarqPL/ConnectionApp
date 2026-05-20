@@ -137,6 +137,10 @@ export default function SignUpScreen({ navigation }: any) {
   };
 
   const handleSignUp = async () => {
+    if (checkingUsername) {
+      Alert.alert("Vui lòng đợi", "Đang kiểm tra tên đăng nhập...");
+      return;
+    }
     if (!firstName || !lastName || !username || !password || !confirmPassword) {
       Alert.alert("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin");
       return;
@@ -157,7 +161,7 @@ export default function SignUpScreen({ navigation }: any) {
       Alert.alert("Tên đăng nhập", "Tên đăng nhập đã được sử dụng");
       return;
     }
-    if (usernameAvailable === null && !checkingUsername) {
+    if (usernameAvailable === null) {
       const result = await checkUsername(username);
       if (!result.ok) {
         Alert.alert("Lỗi", "Không thể kiểm tra tên đăng nhập. Vui lòng thử lại.");
@@ -390,12 +394,14 @@ export default function SignUpScreen({ navigation }: any) {
             />
 
             <TouchableOpacity
-              style={[styles.btnWrapper, isLoading && styles.btnDisabled]}
+              style={[styles.btnWrapper, (isLoading || checkingUsername) && styles.btnDisabled]}
               onPress={handleSignUp}
-              disabled={isLoading}
+              disabled={isLoading || checkingUsername}
             >
               <LinearGradient colors={COLORS.gradient as any} style={styles.btn}>
-                {isLoading ? (
+                {checkingUsername ? (
+                  <ActivityIndicator color="#fff" />
+                ) : isLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.btnText}>Xác nhận & Đăng ký</Text>
