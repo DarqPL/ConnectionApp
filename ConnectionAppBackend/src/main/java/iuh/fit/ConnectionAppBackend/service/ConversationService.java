@@ -101,14 +101,6 @@ public class ConversationService {
         return mapToConversationResponse(conversation);
     }
 
-    public ConversationResponse resolveGroupInvite(String inviteToken) {
-        Conversation conversation = conversationRepository.findByInviteTokenWithUsers(inviteToken)
-                .orElseThrow(() -> new ResourceNotFoundException("Group invite link not found"));
-
-        validateGroupInviteConversation(conversation);
-        return mapToConversationResponse(conversation);
-    }
-
     public ConversationInviteResponse resolveGroupInvitePublic(String inviteToken) {
         Conversation conversation = conversationRepository.findByInviteTokenWithUsers(inviteToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Group invite link not found"));

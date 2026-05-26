@@ -63,7 +63,7 @@ const ChatWindowLayout = () => {
   });
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
   const [isFilesPanelOpen, setIsFilesPanelOpen] = useState(false);
-  const fetchedConversationsRef = useRef<Set<number>>(new Set());
+  const fetchingRef = useRef<Set<number>>(new Set());
 
   const handleLeaveGroup = useCallback(() => {
     if (activeConversationId) {
@@ -185,15 +185,17 @@ const ChatWindowLayout = () => {
     void refreshBlockStatus();
   }, [selectedConvo?.id, selectedConvo?.type, refreshBlockStatus]);
 
-  // fetch messages
+  // fetch messages — guard by store cache (self-healing) + in-flight ref (no dupes)
   useEffect(() => {
-    if (activeConversationId) {
-      if (!fetchedConversationsRef.current.has(activeConversationId)) {
-        fetchedConversationsRef.current.add(activeConversationId);
-        fetchMessages(activeConversationId);
-      }
-    }
-  }, [activeConversationId, fetchMessages]);
+    if (!activeConversationId) return;
+    if (allMessages[activeConversationId]) return;
+    if (fetchingRef.current.has(activeConversationId)) return;
+
+    fetchingRef.current.add(activeConversationId);
+    fetchMessages(activeConversationId).finally(() => {
+      fetchingRef.current.delete(activeConversationId);
+    });
+  }, [activeConversationId, fetchMessages, allMessages]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;

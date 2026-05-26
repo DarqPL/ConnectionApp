@@ -264,11 +264,12 @@ public class UserService {
 
     /**
      * Search users by username, display name, or phone.
-     * Results exclude email, role, and status for privacy.
+     * Endpoint is auth-gated, so callers are authenticated.
+     * Returns full profile including email and status for search functionality.
      */
     public List<UserProfileResponse> searchUsers(String query) {
         return userRepository.searchUsers(query).stream()
-                .map(user -> mapToUserProfileResponse(user, false))
+                .map(this::mapToUserProfileResponse)
                 .collect(Collectors.toList());
     }
 
