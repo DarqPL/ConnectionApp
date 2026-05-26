@@ -6,6 +6,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.UserProfileResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
+import iuh.fit.ConnectionAppBackend.repo.FriendRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +54,9 @@ public class UserService {
     @Autowired
     private UserAccountLockService userAccountLockService;
 
+    @Autowired
+    private FriendRepository friendRepository;
+
     @Value("${app.security.temp-lock-minutes:30}")
     private long tempLockMinutes;
 
@@ -63,6 +67,22 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
         return mapToUserProfileResponse(user);
+    }
+
+    /**
+     * Get user profile with visibility rules applied based on viewer relationship.
+     * Owner sees full profile. Friends see profile with email. Non-friends see sanitized profile.
+     */
+    public UserProfileResponse getUserProfileForViewer(Long targetUserId, Long viewerUserId) {
+        User user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + targetUserId));
+
+        if (targetUserId.equals(viewerUserId)) {
+            return mapToUserProfileResponse(user);
+        }
+
+        boolean areFriends = friendRepository.areFriends(targetUserId, viewerUserId);
+        return mapToUserProfileResponse(user, areFriends);
     }
 
     /**
@@ -243,11 +263,12 @@ public class UserService {
     }
 
     /**
-     * Search users by username, display name, or phone
+     * Search users by username, display name, or phone.
+     * Results exclude email, role, and status for privacy.
      */
     public List<UserProfileResponse> searchUsers(String query) {
         return userRepository.searchUsers(query).stream()
-                .map(this::mapToUserProfileResponse)
+                .map(user -> mapToUserProfileResponse(user, false))
                 .collect(Collectors.toList());
     }
 
@@ -266,6 +287,32 @@ public class UserService {
                 .role(user.getRole().name())
                 .status(user.getStatus().name())
                 .build();
+    }
+
+    /**
+     * Map User entity to UserProfileResponse with visibility controls.
+     * When showSensitiveData is false, email, role, and status are hidden.
+     */
+    private UserProfileResponse mapToUserProfileResponse(User user, boolean showSensitiveData) {
+        UserProfileResponse.UserProfileResponseBuilder builder = UserProfileResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .displayName(user.getDisplayName())
+                .bio(user.getBio())
+                .avatarUrl(user.getAvatarUrl())
+                .gender(user.getGender() != null ? user.getGender().name() : null);
+
+        if (showSensitiveData) {
+            builder.email(user.getEmail())
+                    .role(user.getRole().name())
+                    .status(user.getStatus().name());
+        } else {
+            builder.email(null)
+                    .role(null)
+                    .status(null);
+        }
+
+        return builder.build();
     }
 
     private User getRequiredUser(Long userId) {

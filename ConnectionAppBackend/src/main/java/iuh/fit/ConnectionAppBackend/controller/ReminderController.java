@@ -35,8 +35,14 @@ public class ReminderController {
 
     @GetMapping("/conversation/{conversationId}")
     public ResponseEntity<List<ReminderResponse>> getRemindersByConversation(
+            Authentication authentication,
             @PathVariable Long conversationId) {
-        return ResponseEntity.ok(reminderService.getRemindersByConversation(conversationId));
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        return ResponseEntity.ok(reminderService.getRemindersByConversation(conversationId, userId));
     }
 
     @DeleteMapping("/{reminderId}")

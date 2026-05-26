@@ -1,5 +1,6 @@
 package iuh.fit.ConnectionAppBackend.security;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JWTUtils {
@@ -31,6 +33,9 @@ public class JWTUtils {
         int tokenVersion = extractCurrentTokenVersion(user, normalizedPlatform);
         return Jwts.builder()
                 .setSubject(user.getUsername())
+                .setIssuer(jwtConfig.getIssuer())
+                .setAudience(jwtConfig.getAudience())
+                .setId(UUID.randomUUID().toString())
                 .claim("tv", tokenVersion)
             .claim("pf", normalizedPlatform.name())
                 .setIssuedAt(new Date())
@@ -54,6 +59,21 @@ public class JWTUtils {
     public boolean validateToken(String token, UserDetails userDetails) {
         String username = extractUsername(token);
         AuthPlatform platform = extractPlatform(token);
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSignKey()).build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        String tokenIssuer = claims.getIssuer();
+        String tokenAudience = claims.getAudience();
+
+        if (tokenIssuer != null && !tokenIssuer.equals(jwtConfig.getIssuer())) {
+            return false;
+        }
+        if (tokenAudience != null && !tokenAudience.equals(jwtConfig.getAudience())) {
+            return false;
+        }
+
         return username.equals(userDetails.getUsername())
             && extractTokenVersion(token) == extractCurrentTokenVersion(userDetails, platform)
                 && !isTokenExpired(token);

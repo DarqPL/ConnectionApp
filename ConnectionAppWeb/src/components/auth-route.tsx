@@ -1,41 +1,26 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { Navigate, useLocation } from "react-router"
 import { useAuthStore } from "@/stores/useAuthStore"
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const accessToken = localStorage.getItem("accessToken")
-  const { fetchMe, user } = useAuthStore()
-  const [checking, setChecking] = useState(true)
+  const { accessToken, user, fetchMe } = useAuthStore()
   const hasFetched = useRef(false)
   const location = useLocation()
 
   useEffect(() => {
-    if (!accessToken) {
-      setChecking(false)
-      return
-    }
-
-    if (user) {
-      setChecking(false)
-      return
-    }
-
-    if (hasFetched.current) {
-      setChecking(false)
-      return
-    }
+    if (!accessToken) return
+    if (user) return
+    if (hasFetched.current) return
 
     hasFetched.current = true
-    fetchMe().finally(() => {
-      setChecking(false)
-    })
-  }, [accessToken])
+    fetchMe()
+  }, [accessToken, user, fetchMe])
 
   if (!accessToken) {
     return <Navigate to="/signin" state={{ from: location }} replace />
   }
 
-  if (checking) {
+  if (!user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -44,10 +29,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     )
-  }
-
-  if (!user) {
-    return <Navigate to="/signin" state={{ from: location }} replace />
   }
 
   if (user.role === "ADMIN" && location.pathname === "/") {
@@ -58,7 +39,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function PublicRoute({ children }: { children: React.ReactNode }) {
-  const accessToken = localStorage.getItem("accessToken")
+  const { accessToken } = useAuthStore()
 
   if (accessToken) {
     return <Navigate to="/" replace />
@@ -68,39 +49,24 @@ export function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  const accessToken = localStorage.getItem("accessToken")
-  const { fetchMe, user } = useAuthStore()
-  const [checking, setChecking] = useState(true)
+  const { accessToken, user, fetchMe } = useAuthStore()
   const hasFetched = useRef(false)
   const location = useLocation()
 
   useEffect(() => {
-    if (!accessToken) {
-      setChecking(false)
-      return
-    }
-
-    if (user) {
-      setChecking(false)
-      return
-    }
-
-    if (hasFetched.current) {
-      setChecking(false)
-      return
-    }
+    if (!accessToken) return
+    if (user) return
+    if (hasFetched.current) return
 
     hasFetched.current = true
-    fetchMe().finally(() => {
-      setChecking(false)
-    })
-  }, [accessToken])
+    fetchMe()
+  }, [accessToken, user, fetchMe])
 
   if (!accessToken) {
     return <Navigate to="/signin" state={{ from: location }} replace />
   }
 
-  if (checking) {
+  if (!user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -109,10 +75,6 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     )
-  }
-
-  if (!user) {
-    return <Navigate to="/signin" state={{ from: location }} replace />
   }
 
   if (user.role !== "ADMIN") {

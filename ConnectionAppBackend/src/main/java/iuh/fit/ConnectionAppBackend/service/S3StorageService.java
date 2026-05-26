@@ -5,6 +5,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
 import iuh.fit.ConnectionAppBackend.exception.ImageNotFoundException;
 import iuh.fit.ConnectionAppBackend.exception.ImageValidationException;
 import iuh.fit.ConnectionAppBackend.exception.StorageException;
+import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -86,6 +87,28 @@ public class S3StorageService {
             );
         } catch (S3Exception ex) {
             throw new StorageException("IMG_S3_DELETE_FAILED", "Failed to delete image from S3", ex);
+        }
+    }
+
+    public void assertImageOwnership(String objectKey, Long userId) {
+        if (!StringUtils.hasText(objectKey)) {
+            throw new ImageValidationException("IMG_KEY_REQUIRED", "Object key is required");
+        }
+
+        String normalizedKey = normalizeKey(objectKey);
+        String prefix = trimSlashes(s3Properties.getKeyPrefix());
+
+        String pathWithoutPrefix = StringUtils.hasText(prefix) && normalizedKey.startsWith(prefix + "/")
+                ? normalizedKey.substring(prefix.length() + 1)
+                : normalizedKey;
+
+        boolean isUserOwned = pathWithoutPrefix.startsWith("users/" + userId + "/")
+                || pathWithoutPrefix.startsWith("avatars/" + userId + "/")
+                || pathWithoutPrefix.startsWith("users/" + userId + "-")
+                || pathWithoutPrefix.startsWith("avatars/" + userId + "-");
+
+        if (!isUserOwned) {
+            throw new UnauthorizedException("You do not have permission to modify this image");
         }
     }
 
