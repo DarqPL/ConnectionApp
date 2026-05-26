@@ -24,7 +24,7 @@ const ChatAppPage = () => {
         disconnectSocket();
       };
     }
-  }, [user, fetchConversations, getFriends, getPendingRequests, connectSocket, disconnectSocket]);
+  }, [user?.id, fetchConversations, getFriends, getPendingRequests, connectSocket, disconnectSocket]);
 
   return (
     <SidebarProvider>

@@ -8,6 +8,7 @@ import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.SenderInfo;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
+import iuh.fit.ConnectionAppBackend.exception.UnauthorizedException;
 import iuh.fit.ConnectionAppBackend.repo.ConversationRepository;
 import iuh.fit.ConnectionAppBackend.repo.ConversationUserRepository;
 import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
@@ -98,7 +99,12 @@ public class ReminderService {
         return response;
     }
 
-    public List<ReminderResponse> getRemindersByConversation(Long conversationId) {
+    public List<ReminderResponse> getRemindersByConversation(Long conversationId, Long userId) {
+        boolean isMember = conversationUserRepository.isMember(conversationId, userId);
+        if (!isMember) {
+            throw new UnauthorizedException("User is not a member of this conversation");
+        }
+
         return messageRepository.findByConversationIdAndReminderNotNull(conversationId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());

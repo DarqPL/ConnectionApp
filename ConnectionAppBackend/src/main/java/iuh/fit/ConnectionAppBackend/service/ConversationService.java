@@ -5,6 +5,7 @@ import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.ConversationInviteResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsResponse;
@@ -100,12 +101,24 @@ public class ConversationService {
         return mapToConversationResponse(conversation);
     }
 
-    public ConversationResponse resolveGroupInvite(String inviteToken) {
+    public ConversationInviteResponse resolveGroupInvitePublic(String inviteToken) {
         Conversation conversation = conversationRepository.findByInviteTokenWithUsers(inviteToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Group invite link not found"));
 
         validateGroupInviteConversation(conversation);
-        return mapToConversationResponse(conversation);
+
+        int memberCount = conversation.getConversationUsers() != null
+                ? conversation.getConversationUsers().size()
+                : 0;
+
+        return ConversationInviteResponse.builder()
+                .id(conversation.getId())
+                .name(conversation.getName())
+                .avatarUrl(conversation.getAvatarUrl())
+                .type(conversation.getType() != null ? conversation.getType().name() : "GROUP")
+                .memberCount(memberCount)
+                .createdByName(conversation.getCreatedBy() != null ? conversation.getCreatedBy().getDisplayName() : "")
+                .build();
     }
 
     @Transactional

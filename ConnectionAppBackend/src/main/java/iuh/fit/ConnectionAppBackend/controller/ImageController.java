@@ -2,10 +2,12 @@ package iuh.fit.ConnectionAppBackend.controller;
 
 import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
 import iuh.fit.ConnectionAppBackend.service.S3StorageService;
+import iuh.fit.ConnectionAppBackend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -21,26 +23,84 @@ public class ImageController {
     @Autowired
     private S3StorageService s3StorageService;
 
+    @Autowired
+    private UserService userService;
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImageObjectResponse> uploadImage(
+            Authentication authentication,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", required = false) String folder) {
 
-        ImageObjectResponse uploaded = s3StorageService.uploadImage(file, folder);
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        String resolvedFolder = resolveUploadFolder(folder, userId);
+        ImageObjectResponse uploaded = s3StorageService.uploadImage(file, resolvedFolder);
         return ResponseEntity.status(HttpStatus.CREATED).body(uploaded);
+    }
+
+    private String resolveUploadFolder(String folder, Long userId) {
+        if (folder == null || folder.isBlank()) {
+            return "users/" + userId;
+        }
+
+        String normalized = folder.trim();
+
+        if ("messages".equals(normalized)) {
+            return "messages";
+        }
+
+        if (normalized.startsWith("users/")) {
+            String suffix = normalized.substring("users/".length());
+            if (suffix.equals(String.valueOf(userId)) || suffix.startsWith(userId + "-")) {
+                return normalized;
+            }
+            throw new iuh.fit.ConnectionAppBackend.exception.UnauthorizedException(
+                    "Cannot upload to another user's folder");
+        }
+
+        if (normalized.startsWith("avatars/")) {
+            String suffix = normalized.substring("avatars/".length());
+            if (suffix.equals(String.valueOf(userId)) || suffix.startsWith(userId + "-")) {
+                return normalized;
+            }
+            throw new iuh.fit.ConnectionAppBackend.exception.UnauthorizedException(
+                    "Cannot upload to another user's avatar folder");
+        }
+
+        throw new iuh.fit.ConnectionAppBackend.exception.BadRequestException(
+                "Invalid upload folder. Allowed: messages, users/" + userId + ", avatars/" + userId);
     }
 
     @PutMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImageObjectResponse> replaceImage(
+            Authentication authentication,
             @RequestParam("key") String key,
             @RequestParam("file") MultipartFile file) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        s3StorageService.assertImageOwnership(key, userId);
 
         ImageObjectResponse updated = s3StorageService.replaceImage(key, file);
         return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping
-    public ResponseEntity<Void> deleteImage(@RequestParam("key") String key) {
+    public ResponseEntity<Void> deleteImage(
+            Authentication authentication,
+            @RequestParam("key") String key) {
+
+        Long userId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        s3StorageService.assertImageOwnership(key, userId);
+
         s3StorageService.deleteImage(key);
         return ResponseEntity.noContent().build();
     }

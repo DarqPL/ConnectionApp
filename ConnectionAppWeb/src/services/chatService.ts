@@ -3,6 +3,7 @@ import type {
   Attachment,
   AttachmentType,
   Conversation,
+  ConversationInvitePreview,
   ConversationRequest,
   Message,
   MessageRequest,
@@ -92,7 +93,7 @@ export const chatService = {
     return res.data;
   },
 
-  async resolveGroupInvite(inviteToken: string): Promise<Conversation> {
+  async resolveGroupInvite(inviteToken: string): Promise<ConversationInvitePreview> {
     const res = await api.get(`/conversations/invite/${inviteToken}`);
     return res.data;
   },
