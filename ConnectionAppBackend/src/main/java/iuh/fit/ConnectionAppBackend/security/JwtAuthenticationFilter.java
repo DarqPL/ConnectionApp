@@ -22,7 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -128,7 +128,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .message(ex.getMessage())
                         .error("Forbidden")
                         .path(request.getRequestURI())
-                        .timestamp(LocalDateTime.now())
+                        .timestamp(Instant.now())
                         .remainingMinutes(ex.getRemainingMinutes())
                         .lockUntil(ex.getLockUntil())
                         .build();
@@ -148,7 +148,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .message(ex.getMessage())
                         .error("Forbidden")
                         .path(request.getRequestURI())
-                        .timestamp(LocalDateTime.now())
+                        .timestamp(Instant.now())
                         .build();
 
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);

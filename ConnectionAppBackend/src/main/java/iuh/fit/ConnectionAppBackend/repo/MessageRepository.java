@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.repo;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,7 +42,7 @@ public interface MessageRepository extends MongoRepository<Message, String> {
      * Get messages between two timestamps
      */
     List<Message> findByConversationIdAndCreatedAtBetweenAndIsDeletedFalseOrderByCreatedAtDesc(
-            Long conversationId, LocalDateTime start, LocalDateTime end);
+            Long conversationId, Instant start, Instant end);
 
     /**
      * Get latest message in conversation
@@ -73,7 +73,7 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     /**
      * Find messages with active reminders that are due
      */
-    List<Message> findByReminderNotNullAndReminderNotifiedFalseAndReminderReminderTimeBefore(LocalDateTime time);
+    List<Message> findByReminderNotNullAndReminderNotifiedFalseAndReminderReminderTimeBefore(Instant time);
 
     /**
      * Find messages with reminders in a conversation

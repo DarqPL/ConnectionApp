@@ -177,7 +177,7 @@ public class UserService {
                 ? user.getLockUntil()
                 : now;
 
-        Instant lockUntil = base.plusMinutes(Math.max(1, tempLockMinutes));
+        Instant lockUntil = base.plus(java.time.Duration.ofMinutes(Math.max(1, tempLockMinutes)));
         String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : DEFAULT_TEMP_LOCK_REASON;
 
         user.setStatus(UserStatus.OFFLINE);
