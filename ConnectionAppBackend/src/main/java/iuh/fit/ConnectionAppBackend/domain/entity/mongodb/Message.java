@@ -13,7 +13,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,16 +50,16 @@ public class Message {
     private List<MessageReaction> reactions = new ArrayList<>();
 
     @LastModifiedDate
-    private LocalDateTime updateAt;
+    private Instant updateAt;
 
     @CreatedDate
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Field("parent_id")
     private String parentId;
 
     @Field("recalled_at")
-    private LocalDateTime recalledAt;
+    private Instant recalledAt;
 
     @Field("is_deleted")
     @Builder.Default
@@ -70,7 +70,7 @@ public class Message {
         this.isDeleted = isDeleted;
     }
 
-    public void setUpdateAt(LocalDateTime updateAt) {
+    public void setUpdateAt(Instant updateAt) {
         this.updateAt = updateAt;
     }
 
@@ -98,7 +98,7 @@ public class Message {
         this.parentId = parentId;
     }
 
-    public void setRecalledAt(LocalDateTime recalledAt) {
+    public void setRecalledAt(Instant recalledAt) {
         this.recalledAt = recalledAt;
     }
 

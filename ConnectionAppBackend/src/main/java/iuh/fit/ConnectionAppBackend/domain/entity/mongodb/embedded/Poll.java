@@ -2,7 +2,7 @@ package iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,5 +23,5 @@ public class Poll {
     private boolean isAnonymous = false;
     @Builder.Default
     private boolean closed = false;
-    private LocalDateTime expiredAt;
+    private Instant expiredAt;
 }
