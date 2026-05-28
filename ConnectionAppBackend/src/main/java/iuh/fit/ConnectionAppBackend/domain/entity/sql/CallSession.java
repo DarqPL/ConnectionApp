@@ -5,7 +5,7 @@ import iuh.fit.ConnectionAppBackend.domain.common.CallStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,9 +43,9 @@ public class CallSession {
     @Column(nullable = false, unique = true, length = 128)
     private String zegoRoomId;
 
-    private LocalDateTime startedAt;
+    private Instant startedAt;
 
-    private LocalDateTime endedAt;
+    private Instant endedAt;
 
     private Long durationSeconds;
 
@@ -53,7 +53,7 @@ public class CallSession {
     private String endedReason;
 
     @Column(nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @OneToMany(mappedBy = "callSession", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CallParticipant> participants = new ArrayList<>();
