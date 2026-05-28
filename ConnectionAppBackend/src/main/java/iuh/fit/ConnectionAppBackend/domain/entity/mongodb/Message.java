@@ -8,7 +8,6 @@ import iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded.ReminderInfo;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -28,7 +27,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EnableMongoAuditing
 public class Message {
 
     @org.springframework.data.annotation.Id
