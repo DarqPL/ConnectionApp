@@ -726,7 +726,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
   );
 };
 
-export default ChatInput;
+const chatInputPropsEqual = (
+  prev: ChatInputProps,
+  next: ChatInputProps,
+): boolean => {
+  return (
+    prev.conversationId === next.conversationId &&
+    prev.disabled === next.disabled &&
+    prev.replyTo === next.replyTo &&
+    prev.allowMemberSendMessage === next.allowMemberSendMessage &&
+    prev.currentUserRole === next.currentUserRole &&
+    prev.isGroup === next.isGroup &&
+    prev.onSend === next.onSend &&
+    prev.onCancelReply === next.onCancelReply &&
+    prev.onOpenPollCreator === next.onOpenPollCreator &&
+    prev.onOpenReminderCreator === next.onOpenReminderCreator
+  );
+};
+
+export default React.memo(ChatInput, chatInputPropsEqual);
 
 const styles = StyleSheet.create({
   wrapper: {
