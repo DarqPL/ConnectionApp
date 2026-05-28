@@ -36,10 +36,17 @@ public class MongoConfig {
             try {
                 // New data: proper ISO-8601 with Z suffix
                 return Instant.parse(source);
-            } catch (DateTimeParseException e) {
-                // Old data: naive string without timezone — interpret as Singapore time
-                LocalDateTime ldt = LocalDateTime.parse(source);
-                return ldt.atZone(SERVER_TZ).toInstant();
+            } catch (DateTimeParseException e1) {
+                try {
+                    // Old data: naive string without timezone — interpret as Singapore time
+                    LocalDateTime ldt = LocalDateTime.parse(source);
+                    return ldt.atZone(SERVER_TZ).toInstant();
+                } catch (DateTimeParseException e2) {
+                    throw new IllegalArgumentException(
+                        "Cannot parse datetime string: '" + source + "'. Expected ISO-8601 (e.g., '2024-05-28T06:30:00Z') or naive format (e.g., '2024-05-28T14:30:00')",
+                        e2
+                    );
+                }
             }
         }
     }
