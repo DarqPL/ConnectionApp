@@ -483,7 +483,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </ScrollView>
         )}
 
-        {isExpanded && canSendMessage && (
+        {isExpanded && canSendMessage && !isSending && !disabled && (
           <View style={styles.dropdown}>
             <View style={styles.dropdownGrid}>
               <TouchableOpacity
