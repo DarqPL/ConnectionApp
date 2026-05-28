@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -18,13 +18,13 @@ public class ConversationResponse {
     private String avatarUrl;
     private String inviteToken;
     private String type;
-    private LocalDateTime lastMessageAt;
+    private Instant lastMessageAt;
     private String lastMessageContent;
     private boolean activate;
     private Long createdById;
     private String createdByName;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
     private List<ConversationUserResponse> participants;
     private List<MessageResponse> pinnedMessages;
     private long unreadCount = 0;

@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +18,6 @@ public class ConversationUserResponse {
     private String displayName;
     private String avatarUrl;
     private String role;
-    private LocalDateTime joinedAt;
+    private Instant joinedAt;
     private Long unreadCounts;
 }

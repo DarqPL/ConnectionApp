@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +18,7 @@ public class FriendResponse {
     private String displayName;
     private String avatarUrl;
     private String status;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
     private boolean isRequester;
 }
