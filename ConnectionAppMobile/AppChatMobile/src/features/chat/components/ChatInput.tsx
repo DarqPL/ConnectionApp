@@ -483,6 +483,60 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </ScrollView>
         )}
 
+        {isExpanded && canSendMessage && (
+          <View style={styles.dropdown}>
+            <View style={styles.dropdownGrid}>
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setIsExpanded(false);
+                  pickDocuments();
+                }}
+              >
+                <Ionicons name="attach-outline" size={22} color={COLORS.textMuted} />
+                <Text style={styles.dropdownItemLabel}>Tệp</Text>
+              </TouchableOpacity>
+
+              {onOpenPollCreator && (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setIsExpanded(false);
+                    onOpenPollCreator();
+                  }}
+                >
+                  <Ionicons name="stats-chart-outline" size={22} color={COLORS.textMuted} />
+                  <Text style={styles.dropdownItemLabel}>Bình chọn</Text>
+                </TouchableOpacity>
+              )}
+
+              {onOpenReminderCreator && (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setIsExpanded(false);
+                    onOpenReminderCreator();
+                  }}
+                >
+                  <Ionicons name="alarm-outline" size={22} color={COLORS.textMuted} />
+                  <Text style={styles.dropdownItemLabel}>Nhắc hẹn</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setIsExpanded(false);
+                  openAiMenu();
+                }}
+              >
+                <Ionicons name="sparkles-outline" size={22} color={COLORS.textMuted} />
+                <Text style={styles.dropdownItemLabel}>AI Rewrite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.container}>
           <TouchableOpacity
             style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
@@ -494,66 +548,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
           <TouchableOpacity
             style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-            onPress={pickDocuments}
-            disabled={!canSendMessage}
-          >
-            <Ionicons
-              name="attach-outline"
-              size={24}
-              color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
             onPress={handleOpenEmojiPicker}
             disabled={!canSendMessage}
           >
             <Ionicons name="happy-outline" size={24} color={canSendMessage ? COLORS.textMuted : COLORS.textLight} />
           </TouchableOpacity>
 
-          {onOpenPollCreator && (
-            <TouchableOpacity
-              style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-              onPress={onOpenPollCreator}
-              disabled={isSending || disabled || !canSendMessage}
-            >
-              <Ionicons
-                name="stats-chart-outline"
-                size={22}
-                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-              />
-            </TouchableOpacity>
-          )}
-
-          {onOpenReminderCreator && (
-            <TouchableOpacity
-              style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-              onPress={onOpenReminderCreator}
-              disabled={isSending || disabled || !canSendMessage}
-            >
-              <Ionicons
-                name="alarm-outline"
-                size={22}
-                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-              />
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity
             style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-            onPress={openAiMenu}
-            disabled={isSending || disabled || isAiProcessing || !canSendMessage}
+            onPress={toggleExpand}
+            disabled={!canSendMessage}
           >
-            {isAiProcessing ? (
-              <ActivityIndicator size="small" color={COLORS.textMuted} />
-            ) : (
-              <Ionicons
-                name="sparkles-outline"
-                size={22}
-                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-              />
-            )}
+            <Ionicons
+              name={isExpanded ? "chevron-down" : "chevron-up"}
+              size={24}
+              color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
+            />
           </TouchableOpacity>
 
           <View style={styles.inputWrap}>
@@ -934,5 +944,34 @@ const styles = StyleSheet.create({
   suggestionCancelText: {
     color: COLORS.text,
     fontWeight: "600",
+  },
+  dropdown: {
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  dropdownGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    backgroundColor: COLORS.backgroundMuted,
+    borderRadius: 12,
+    padding: 8,
+  },
+  dropdownItem: {
+    width: "48%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  dropdownItemLabel: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: "500",
   },
 });
