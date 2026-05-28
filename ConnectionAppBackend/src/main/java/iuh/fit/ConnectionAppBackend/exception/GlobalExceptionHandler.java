@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,7 +30,7 @@ public class GlobalExceptionHandler {
         .message(ex.getMessage())
         .error("Resource Not Found")
         .path(request.getDescription(false).replace("uri=", ""))
-        .timestamp(LocalDateTime.now())
+        .timestamp(Instant.now())
         .build();
 
     return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
         .message(ex.getMessage())
         .error("Bad Request")
         .path(request.getDescription(false).replace("uri=", ""))
-        .timestamp(LocalDateTime.now())
+        .timestamp(Instant.now())
         .build();
 
     return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
@@ -62,7 +62,7 @@ public class GlobalExceptionHandler {
         .message("File size must not exceed " + maxFileSizeLabel)
         .error("Bad Request")
         .path(request.getDescription(false).replace("uri=", ""))
-        .timestamp(LocalDateTime.now())
+        .timestamp(Instant.now())
         .build();
 
     return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
@@ -78,7 +78,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Resource Not Found")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
@@ -94,7 +94,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Unauthorized")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
@@ -110,7 +110,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Bad Request")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
@@ -126,7 +126,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Forbidden")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
@@ -142,7 +142,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Forbidden")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .remainingMinutes(ex.getRemainingMinutes())
                 .lockUntil(ex.getLockUntil())
                 .build();
@@ -160,7 +160,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Forbidden")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
@@ -176,7 +176,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Forbidden")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
@@ -192,7 +192,7 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage())
                 .error("Storage Error")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -208,7 +208,7 @@ public class GlobalExceptionHandler {
                 .message("Tên đăng nhập hoặc mật khẩu không chính xác")
                 .error("Unauthorized")
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
@@ -231,7 +231,7 @@ public class GlobalExceptionHandler {
         response.put("message", "Validation failed");
         response.put("errors", errors);
         response.put("path", request.getDescription(false).replace("uri=", ""));
-        response.put("timestamp", LocalDateTime.now());
+        response.put("timestamp", Instant.now());
 
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
@@ -246,7 +246,7 @@ public class GlobalExceptionHandler {
                 .message("An unexpected error occurred")
                 .error(ex.getClass().getSimpleName())
                 .path(request.getDescription(false).replace("uri=", ""))
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .trace(ex.getMessage())
                 .build();
 

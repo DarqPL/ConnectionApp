@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.exception;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,8 +17,8 @@ public class ErrorResponse {
     private String message;
     private String error;
     private String path;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private Long remainingMinutes;
-    private LocalDateTime lockUntil;
+    private Instant lockUntil;
     private String trace;
 }
