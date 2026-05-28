@@ -20,7 +20,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -83,7 +83,7 @@ public class ReminderService {
                 .content("[Nhắc hẹn] " + request.getTitle())
                 .reminder(reminderInfo)
                 .isDeleted(false)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
         Message saved = messageRepository.save(message);
@@ -144,7 +144,7 @@ public class ReminderService {
 
     @Scheduled(fixedRate = 60000)
     public void checkAndSendReminders() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         List<Message> dueMessages = messageRepository.findByReminderNotNullAndReminderNotifiedFalseAndReminderReminderTimeBefore(now);
 
         for (Message message : dueMessages) {
@@ -197,7 +197,7 @@ public class ReminderService {
                 .content("🔔 ĐẾN GIỜ: " + originalInfo.getTitle())
                 .reminder(notifiedCopy)
                 .isDeleted(false)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
         Message saved = messageRepository.save(notificationMsg);
@@ -286,7 +286,7 @@ public class ReminderService {
 
         // Save as NEW message to re-display at bottom
         message.setId(null); 
-        message.setCreatedAt(LocalDateTime.now());
+        message.setCreatedAt(Instant.now());
         Message saved = messageRepository.save(message);
 
         // Broadcast new message card
@@ -346,7 +346,7 @@ public class ReminderService {
 
         // Save as NEW message
         message.setId(null);
-        message.setCreatedAt(LocalDateTime.now());
+        message.setCreatedAt(Instant.now());
         Message saved = messageRepository.save(message);
 
         // Broadcast new message card

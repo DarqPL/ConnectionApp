@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -59,7 +59,7 @@ public class FriendService {
                 .requester(requester)
                 .receiver(receiver)
                 .status(FriendStatus.PENDING)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
         Friend savedFriend = friendRepository.save(friend);
@@ -79,7 +79,7 @@ public class FriendService {
         }
 
         friend.setStatus(FriendStatus.ACCEPTED);
-        friend.setUpdateAt(LocalDateTime.now());
+        friend            .setUpdateAt(Instant.now());
 
         Friend updatedFriend = friendRepository.save(friend);
         return mapToFriendResponse(updatedFriend, userId);
@@ -141,14 +141,14 @@ public class FriendService {
             friend.setRequester(blocker);
             friend.setReceiver(blockedUser);
             friend.setStatus(FriendStatus.BLOCKED);
-            friend.setUpdateAt(LocalDateTime.now());
+            friend            .setUpdateAt(Instant.now());
             friendRepository.save(friend);
         } else {
             Friend friend = Friend.builder()
                     .requester(blocker)
                     .receiver(blockedUser)
                     .status(FriendStatus.BLOCKED)
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(Instant.now())
                     .build();
             friendRepository.save(friend);
         }

@@ -36,7 +36,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -136,7 +136,7 @@ public class CallService {
             throw new BadRequestException("Cannot start a call without at least 2 participants");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         CallSession callSession = CallSession.builder()
                 .conversation(conversation)
                 .initiatedBy(caller)
@@ -207,14 +207,14 @@ public class CallService {
 
         if (participant.getStatus() != CallParticipantStatus.JOINED) {
             participant.setStatus(CallParticipantStatus.JOINED);
-            participant.setJoinedAt(LocalDateTime.now());
+            participant.setJoinedAt(Instant.now());
             callParticipantRepository.save(participant);
         }
 
         if (callSession.getStatus() == CallStatus.RINGING) {
             callSession.setStatus(CallStatus.ONGOING);
             if (callSession.getStartedAt() == null) {
-                callSession.setStartedAt(LocalDateTime.now());
+                callSession.setStartedAt(Instant.now());
             }
             callSessionRepository.save(callSession);
         }
@@ -240,7 +240,7 @@ public class CallService {
 
         if (participant.getStatus() != CallParticipantStatus.DECLINED) {
             participant.setStatus(CallParticipantStatus.DECLINED);
-            participant.setLeftAt(LocalDateTime.now());
+            participant.setLeftAt(Instant.now());
             callParticipantRepository.save(participant);
         }
 
@@ -266,7 +266,7 @@ public class CallService {
             return toCallSessionResponse(callSession, existingParticipants, user.getId(), false);
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         callSession.setStatus(CallStatus.ENDED);
         callSession.setEndedAt(now);
         callSession.setEndedReason(normalizeEndedReason(request == null ? null : request.getReason()));
@@ -355,7 +355,7 @@ public class CallService {
     @Transactional
     public int processRingingTimeouts() {
         long timeoutSeconds = Math.max(5L, ringTimeoutSeconds);
-        LocalDateTime deadline = LocalDateTime.now().minusSeconds(timeoutSeconds);
+        Instant deadline = Instant.now().minusSeconds(timeoutSeconds);
 
         List<CallSession> timedOutCalls = callSessionRepository.findByStatusTimedOut(CallStatus.RINGING, deadline);
         int processedCount = 0;
@@ -396,7 +396,7 @@ public class CallService {
                 .anyMatch(p -> p.getStatus() == CallParticipantStatus.RINGING);
 
         if (!hasRingingParticipant) {
-            LocalDateTime now = LocalDateTime.now();
+            Instant now = Instant.now();
             callSession.setStatus(CallStatus.MISSED);
             callSession.setEndedAt(now);
             callSession.setEndedReason("NO_ANSWER");
@@ -411,7 +411,7 @@ public class CallService {
         }
 
         if (callSession.getStatus() == CallStatus.RINGING) {
-            LocalDateTime deadline = LocalDateTime.now().minusSeconds(Math.max(5L, ringTimeoutSeconds));
+            Instant deadline = Instant.now().minusSeconds(Math.max(5L, ringTimeoutSeconds));
             if (callSession.getCreatedAt() != null && !callSession.getCreatedAt().isAfter(deadline)) {
                 markCallAsMissed(callSession, participants, "RING_TIMEOUT");
                 return;
@@ -437,7 +437,7 @@ public class CallService {
     private void markCallAsMissed(CallSession callSession,
                                   List<CallParticipant> participants,
                                   String reason) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         callSession.setStatus(CallStatus.MISSED);
         callSession.setEndedAt(now);
         callSession.setEndedReason(reason);
@@ -464,7 +464,7 @@ public class CallService {
     private void markCallAsEnded(CallSession callSession,
                                  List<CallParticipant> participants,
                                  String reason) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         callSession.setStatus(CallStatus.ENDED);
         callSession.setEndedAt(now);
         callSession.setEndedReason(reason);
@@ -604,7 +604,7 @@ public class CallService {
             throw new BadRequestException("ZEGO server secret must be 32 bytes");
         }
 
-        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(Math.max(60L, zegoTokenTtlSeconds));
+        Instant expiresAt = Instant.now().plusSeconds(Math.max(60L, zegoTokenTtlSeconds));
         int effectiveTimeInSeconds = (int) Math.min(Integer.MAX_VALUE, Math.max(60L, zegoTokenTtlSeconds));
         String payload = buildRtcRoomPayload(callSession.getZegoRoomId());
         String token = generateToken04(zegoAppId, String.valueOf(userId), zegoServerSecret, effectiveTimeInSeconds, payload);
@@ -654,7 +654,7 @@ public class CallService {
             throw new BadRequestException("Invalid ZEGO token effective time");
         }
 
-        long currentEpoch = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
+        long currentEpoch = Instant.now().getEpochSecond();
         long expireEpoch = currentEpoch + effectiveTimeInSeconds;
 
         Map<String, Object> tokenInfo = new LinkedHashMap<>();
