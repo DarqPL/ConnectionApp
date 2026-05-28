@@ -108,6 +108,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
   const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const toggleExpand = useCallback(() => {
+    Keyboard.dismiss();
+    setIsExpanded((prev) => !prev);
+  }, []);
 
   const stopTyping = useCallback((targetConversationId: number) => {
     if (typingTimeoutRef.current) {
