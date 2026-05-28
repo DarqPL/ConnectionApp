@@ -20,13 +20,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Optional;
 import java.util.List;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.stream.Collectors;
 
 @Service
 public class UserService {
 
-    public record TemporaryLockInfo(LocalDateTime lockUntil, long remainingMinutes, String reason) {
+    public record TemporaryLockInfo(Instant lockUntil, long remainingMinutes, String reason) {
     }
 
     private static final String DEFAULT_TEMP_LOCK_REASON = "POLICY_VIOLATION";
@@ -118,7 +118,7 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        if (user.getLockUntil() != null && user.getLockUntil().isAfter(LocalDateTime.now())) {
+        if (user.getLockUntil() != null && user.getLockUntil().isAfter(Instant.now())) {
             return;
         }
 
@@ -172,12 +172,12 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime base = user.getLockUntil() != null && user.getLockUntil().isAfter(now)
+        Instant now = Instant.now();
+        Instant base = user.getLockUntil() != null && user.getLockUntil().isAfter(now)
                 ? user.getLockUntil()
                 : now;
 
-        LocalDateTime lockUntil = base.plusMinutes(Math.max(1, tempLockMinutes));
+        Instant lockUntil = base.plusMinutes(Math.max(1, tempLockMinutes));
         String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : DEFAULT_TEMP_LOCK_REASON;
 
         user.setStatus(UserStatus.OFFLINE);
@@ -333,13 +333,13 @@ public class UserService {
             throw new IllegalStateException("Cannot lock a deleted account");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() != null && user.getLockUntil().isAfter(now)) {
             return "Account is already locked";
         }
 
         user.setStatus(UserStatus.LOCKED);
-        user.setLockUntil(now.plusYears(100));
+        user.setLockUntil(now.plus(100, java.time.temporal.ChronoUnit.YEARS));
         user.setLockReason("ADMIN_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
@@ -361,13 +361,13 @@ public class UserService {
             throw new IllegalStateException("Cannot lock a deleted account");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() != null && user.getLockUntil().isAfter(now)) {
             return "Account is already locked";
         }
 
         user.setStatus(UserStatus.LOCKED);
-        user.setLockUntil(now.plusYears(100));
+        user.setLockUntil(now.plus(100, java.time.temporal.ChronoUnit.YEARS));
         user.setLockReason("SELF_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
@@ -432,7 +432,7 @@ public class UserService {
         User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() == null || !user.getLockUntil().isAfter(now) || !"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
             throw new BadRequestException("Tài khoản không ở trạng thái tự khóa.");
         }
@@ -450,7 +450,7 @@ public class UserService {
         User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() == null
                 || !user.getLockUntil().isAfter(now)
                 || !"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
@@ -540,8 +540,8 @@ public class UserService {
         return "Account deleted successfully";
     }
 
-    private long calculateRemainingMinutes(LocalDateTime lockUntil) {
-        long remainingSeconds = Duration.between(LocalDateTime.now(), lockUntil).getSeconds();
+    private long calculateRemainingMinutes(Instant lockUntil) {
+        long remainingSeconds = Duration.between(Instant.now(), lockUntil).getSeconds();
         if (remainingSeconds <= 0) {
             return 0;
         }

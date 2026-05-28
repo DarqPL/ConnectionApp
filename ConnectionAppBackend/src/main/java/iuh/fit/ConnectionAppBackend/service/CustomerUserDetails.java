@@ -8,7 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 
 public class CustomerUserDetails implements UserDetails {
@@ -53,7 +53,7 @@ public class CustomerUserDetails implements UserDetails {
             return false;
         }
 
-        return user.getLockUntil() == null || !user.getLockUntil().isAfter(LocalDateTime.now());
+        return user.getLockUntil() == null || !user.getLockUntil().isAfter(Instant.now());
     }
 
     @Override
