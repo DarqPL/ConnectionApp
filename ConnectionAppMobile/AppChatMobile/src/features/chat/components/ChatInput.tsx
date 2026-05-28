@@ -303,8 +303,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSelectEmoji = useCallback(({ emoji }: { emoji: string }) => {
     if (!emoji) return;
-    handleTextChange(`${text}${emoji}`);
-  }, [text, handleTextChange]);
+    setText(prev => `${prev}${emoji}`);
+  }, []);
 
   const applyAiDraft = useCallback((nextDraft: string) => {
     handleTextChange(nextDraft);

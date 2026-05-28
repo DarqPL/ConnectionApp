@@ -715,10 +715,10 @@ const ChatRoomScreen = ({ route }: any) => {
     setIsAtBottom(true);
   };
 
-  const handleMessageLongPress = (item: Message) => {
+  const handleMessageLongPress = useCallback((item: Message) => {
     if (item.recalledAt) return;
     setActionSheetMessage(item);
-  };
+  }, []);
 
   const renderItem = useCallback(
     ({ item }: { item: Message }) => (
