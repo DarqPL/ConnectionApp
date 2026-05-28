@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @AllArgsConstructor
@@ -14,6 +14,6 @@ import java.time.LocalDateTime;
 public class ReminderRequest {
     private String title;
     private String content;
-    private LocalDateTime reminderTime;
+    private Instant reminderTime;
     private Long conversationId;
 }

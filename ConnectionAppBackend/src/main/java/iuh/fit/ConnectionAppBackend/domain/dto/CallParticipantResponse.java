@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -18,6 +18,6 @@ public class CallParticipantResponse {
     private String status;
     private boolean audioMuted;
     private boolean videoMuted;
-    private LocalDateTime joinedAt;
-    private LocalDateTime leftAt;
+    private Instant joinedAt;
+    private Instant leftAt;
 }

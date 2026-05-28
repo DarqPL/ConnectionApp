@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -19,7 +19,7 @@ public class PollResponse {
     private boolean allowAddOptions;
     private boolean isAnonymous;
     private boolean closed;
-    private LocalDateTime expiredAt;
+    private Instant expiredAt;
 
     @Data
     @NoArgsConstructor
