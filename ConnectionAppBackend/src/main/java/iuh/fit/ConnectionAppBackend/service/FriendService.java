@@ -79,7 +79,7 @@ public class FriendService {
         }
 
         friend.setStatus(FriendStatus.ACCEPTED);
-        friend            .setUpdateAt(Instant.now());
+        friend.setUpdateAt(Instant.now());
 
         Friend updatedFriend = friendRepository.save(friend);
         return mapToFriendResponse(updatedFriend, userId);
@@ -141,7 +141,7 @@ public class FriendService {
             friend.setRequester(blocker);
             friend.setReceiver(blockedUser);
             friend.setStatus(FriendStatus.BLOCKED);
-            friend            .setUpdateAt(Instant.now());
+            friend.setUpdateAt(Instant.now());
             friendRepository.save(friend);
         } else {
             Friend friend = Friend.builder()
