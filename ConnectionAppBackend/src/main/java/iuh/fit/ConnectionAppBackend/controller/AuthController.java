@@ -34,7 +34,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 
@@ -124,7 +124,7 @@ public class AuthController {
         user.setEmail(req.getEmail());
         user.setDisplayName(req.getFirstName() + " " + req.getLastName());
         user.setRole(Role.USER);
-        user.setCreatedAt(LocalDateTime.now());
+        user.setCreatedAt(Instant.now());
         user.setStatus(UserStatus.OFFLINE);
         user.setWebTokenVersion(0);
         user.setMobileTokenVersion(0);
