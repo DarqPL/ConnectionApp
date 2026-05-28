@@ -4,7 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "conversation_pending_members", uniqueConstraints = {
@@ -33,5 +33,5 @@ public class ConversationPendingMember {
     private User requestedBy;
 
     @CreatedDate
-    private LocalDateTime requestedAt;
+    private Instant requestedAt;
 }

@@ -4,7 +4,7 @@ import iuh.fit.ConnectionAppBackend.domain.common.AuthPlatform;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "refresh_tokens")
@@ -35,9 +35,9 @@ public class RefreshToken {
 
     private String ipAddress;
 
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
-    private LocalDateTime lastUsedAt;
+    private Instant lastUsedAt;
 
-    private LocalDateTime expiryDate;
+    private Instant expiryDate;
 }
