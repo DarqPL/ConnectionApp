@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   TextInput,
@@ -121,7 +121,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const appendFiles = (incoming: LocalAttachment[]) => {
+  const appendFiles = useCallback((incoming: LocalAttachment[]) => {
     if (incoming.length === 0) return;
 
     setSelectedFiles((prev) => {
@@ -158,9 +158,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
       return [...prev, ...acceptedBySize];
     });
-  };
+  }, []);
 
-  const pickImages = async () => {
+  const pickImages = useCallback(async () => {
     Keyboard.dismiss();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -181,9 +181,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
         isImage: true,
       })),
     );
-  };
+  }, [appendFiles]);
 
-  const pickDocuments = async () => {
+  const pickDocuments = useCallback(async () => {
     Keyboard.dismiss();
     const result = await DocumentPicker.getDocumentAsync({
       multiple: true,
@@ -203,13 +203,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
         isImage: (asset.mimeType ?? "").startsWith("image/"),
       })),
     );
-  };
+  }, [appendFiles]);
 
-  const removeFile = (id: string) => {
+  const removeFile = useCallback((id: string) => {
     setSelectedFiles((prev) => prev.filter((item) => item.id !== id));
-  };
+  }, []);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if ((!trimmed && selectedFiles.length === 0) || isSending || disabled)
       return;
@@ -243,28 +243,68 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsSending(false);
     }
-  };
+  }, [text, selectedFiles, isSending, disabled, conversationId, onSend, replyTo, onCancelReply]);
 
   const canSend =
     (text.trim().length > 0 || selectedFiles.length > 0) &&
     !isSending &&
     !disabled;
 
-  const handleOpenEmojiPicker = () => {
+  const handleOpenEmojiPicker = useCallback(() => {
     Keyboard.dismiss();
     setIsEmojiPickerOpen(true);
-  };
+  }, []);
 
   const handleSelectEmoji = ({ emoji }: { emoji: string }) => {
     if (!emoji) return;
     handleTextChange(`${text}${emoji}`);
   };
 
-  const applyAiDraft = (nextDraft: string) => {
-    handleTextChange(nextDraft);
-  };
+  // NEW: Handle text input with typing notification
+  const handleTextChange = useCallback((newText: string) => {
+    setText(newText);
 
-  const runAiRewrite = async (
+    // If user is typing and text is not empty
+    if (newText.trim().length > 0) {
+      // If not already in typing state, send typing notification
+      if (!typingStateRef.current) {
+        notifyTyping(conversationId);
+        typingStateRef.current = true;
+        console.log("[ChatInput] User started typing");
+      }
+
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set new timeout to send stopped typing after 1 second of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+        typingTimeoutRef.current = null;
+        console.log("[ChatInput] User stopped typing");
+      }, 1000);
+    } else {
+      // Text is empty, send stopped typing
+      if (typingStateRef.current) {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+        console.log("[ChatInput] User cleared text");
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    }
+  }, [conversationId, notifyTyping, notifyStoppedTyping]);
+
+  const applyAiDraft = useCallback((nextDraft: string) => {
+    handleTextChange(nextDraft);
+  }, [handleTextChange]);
+
+  const runAiRewrite = useCallback(async (
     action: AiRewriteAction,
     targetLanguage?: "EN" | "VI",
   ) => {
@@ -316,58 +356,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsAiProcessing(false);
     }
-  };
+  }, [text, conversationId]);
 
-  const openAiMenu = () => {
+  const openAiMenu = useCallback(() => {
     Keyboard.dismiss();
     setIsAiActionModalOpen(true);
-  };
+  }, []);
 
-  const handleSuggestionSelect = (suggestion: string) => {
+  const handleSuggestionSelect = useCallback((suggestion: string) => {
     applyAiDraft(suggestion);
     setIsSuggestionModalOpen(false);
     setAiSuggestions([]);
-  };
-
-  // NEW: Handle text input with typing notification
-  const handleTextChange = (newText: string) => {
-    setText(newText);
-
-    // If user is typing and text is not empty
-    if (newText.trim().length > 0) {
-      // If not already in typing state, send typing notification
-      if (!typingStateRef.current) {
-        notifyTyping(conversationId);
-        typingStateRef.current = true;
-        console.log("[ChatInput] User started typing");
-      }
-
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      // Set new timeout to send stopped typing after 1 second of inactivity
-      typingTimeoutRef.current = setTimeout(() => {
-        notifyStoppedTyping(conversationId);
-        typingStateRef.current = false;
-        typingTimeoutRef.current = null;
-        console.log("[ChatInput] User stopped typing");
-      }, 1000);
-    } else {
-      // Text is empty, send stopped typing
-      if (typingStateRef.current) {
-        notifyStoppedTyping(conversationId);
-        typingStateRef.current = false;
-        console.log("[ChatInput] User cleared text");
-      }
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-    }
-  };
+  }, []);
 
   // NEW: Cleanup timeout on unmount
   useEffect(() => {
