@@ -255,11 +255,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setIsEmojiPickerOpen(true);
   }, []);
 
-  const handleSelectEmoji = ({ emoji }: { emoji: string }) => {
-    if (!emoji) return;
-    handleTextChange(`${text}${emoji}`);
-  };
-
   // NEW: Handle text input with typing notification
   const handleTextChange = useCallback((newText: string) => {
     setText(newText);
@@ -299,6 +294,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
   }, [conversationId, notifyTyping, notifyStoppedTyping]);
+
+  const handleSelectEmoji = useCallback(({ emoji }: { emoji: string }) => {
+    if (!emoji) return;
+    handleTextChange(`${text}${emoji}`);
+  }, [text, handleTextChange]);
 
   const applyAiDraft = useCallback((nextDraft: string) => {
     handleTextChange(nextDraft);

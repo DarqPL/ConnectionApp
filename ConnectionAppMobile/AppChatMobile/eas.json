@@ -6,13 +6,40 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://connection-app.online/api",
+        "EXPO_PUBLIC_USE_FORWARDED_API": "false",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://connection-app-murex.vercel.app",
+        "EXPO_PUBLIC_MAX_UPLOAD_FILE_SIZE_BYTES": "5242880",
+        "EXPO_PUBLIC_ZEGO_APP_ID": "1233491743",
+        "EXPO_PUBLIC_ZEGO_APP_SIGN": "7f9406decb5b2240f70f042e3ef6309f42fd68ae4f5dc7df48c9d56df26ed45f",
+        "EXPO_PUBLIC_CALL_RING_TIMEOUT_SECONDS": "30"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://connection-app.online/api",
+        "EXPO_PUBLIC_USE_FORWARDED_API": "false",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://connection-app-murex.vercel.app",
+        "EXPO_PUBLIC_MAX_UPLOAD_FILE_SIZE_BYTES": "5242880",
+        "EXPO_PUBLIC_ZEGO_APP_ID": "1233491743",
+        "EXPO_PUBLIC_ZEGO_APP_SIGN": "7f9406decb5b2240f70f042e3ef6309f42fd68ae4f5dc7df48c9d56df26ed45f",
+        "EXPO_PUBLIC_CALL_RING_TIMEOUT_SECONDS": "30"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://connection-app.online/api",
+        "EXPO_PUBLIC_USE_FORWARDED_API": "false",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://connection-app-murex.vercel.app",
+        "EXPO_PUBLIC_MAX_UPLOAD_FILE_SIZE_BYTES": "5242880",
+        "EXPO_PUBLIC_ZEGO_APP_ID": "1233491743",
+        "EXPO_PUBLIC_ZEGO_APP_SIGN": "7f9406decb5b2240f70f042e3ef6309f42fd68ae4f5dc7df48c9d56df26ed45f",
+        "EXPO_PUBLIC_CALL_RING_TIMEOUT_SECONDS": "30"
+      }
     }
   },
   "submit": {
