@@ -1,4 +1,5 @@
 FROM node:22-alpine
+ENV TZ=UTC
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
