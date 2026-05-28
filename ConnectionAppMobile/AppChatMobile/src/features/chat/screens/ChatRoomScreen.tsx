@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   FlatList,
@@ -715,6 +715,79 @@ const ChatRoomScreen = ({ route }: any) => {
     setIsAtBottom(true);
   };
 
+  const handleMessageLongPress = useCallback((item: Message) => {
+    if (item.recalledAt) return;
+    setActionSheetMessage(item);
+  }, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: Message }) => (
+      <MessageBubble
+        message={item.content || ""}
+        attachments={item.attachments || []}
+        poll={item.poll}
+        reminder={item.reminder}
+        messageId={item.id}
+        status={item.status}
+        onRetrySend={() =>
+          retrySendMessage(conversationId, item.tempId ?? item.id).catch(
+            (err) => {
+              Alert.alert(
+                "Lỗi",
+                err instanceof Error ? err.message : "Không thể gửi lại tin nhắn",
+              );
+            },
+          )
+        }
+        reactions={item.reactions || []}
+        currentUserId={user?.id}
+        onReact={(reactionCode) => {
+          reactMessage(conversationId, item.id, reactionCode).catch((err) => {
+            Alert.alert(
+              "Lỗi",
+              err instanceof Error ? err.message : "Không thể thả cảm xúc",
+            );
+          });
+        }}
+        isMe={item.senderInfo?.senderId === user?.id}
+        senderName={item.senderInfo?.displayName}
+        avatarUrl={item.senderInfo?.avatarUrl}
+        createdAt={item.createdAt}
+        recalledAt={item.recalledAt}
+        replyInfo={item.replyInfo}
+        isGroup={isGroup}
+        participants={currentParticipants}
+        markAdminMessages={currentConversation?.markAdminMessages}
+        senderRole={
+          currentParticipants?.find(
+            (p: Participant) => p.userId === item.senderInfo?.senderId,
+          )?.role
+        }
+        onLongPress={() => handleMessageLongPress(item)}
+        onReplyPreviewPress={
+          item.replyInfo?.parentId
+            ? () => handleScrollToParent(item.replyInfo?.parentId!)
+            : undefined
+        }
+        onPollVote={() => setPollToVote(item)}
+        onReminderEdit={() => setReminderToEdit(item)}
+        isHighlighted={item.id === highlightedMsgId}
+      />
+    ),
+    [
+      conversationId,
+      retrySendMessage,
+      reactMessage,
+      user?.id,
+      isGroup,
+      currentParticipants,
+      currentConversation?.markAdminMessages,
+      handleMessageLongPress,
+      handleScrollToParent,
+      highlightedMsgId,
+    ],
+  );
+
   const handleSend = async (
     content: string,
     files: PendingAttachment[],
@@ -1038,11 +1111,6 @@ const ChatRoomScreen = ({ route }: any) => {
     handleRecallMessage(target.id, isOwnMessage);
   };
 
-  const handleMessageLongPress = (item: Message) => {
-    if (item.recalledAt) return;
-    setActionSheetMessage(item);
-  };
-
   const actionSheetIsOwnMessage =
     actionSheetMessage?.senderInfo?.senderId === user?.id;
   const actionSheetMyReaction = actionSheetMessage?.reactions?.find(
@@ -1287,70 +1355,12 @@ const ChatRoomScreen = ({ route }: any) => {
             ref={flatListRef}
             data={displayMessages}
             keyExtractor={(item) => item.id}
-            windowSize={10}
-            initialNumToRender={20}
+            windowSize={7}
+            initialNumToRender={15}
             maxToRenderPerBatch={12}
+            updateCellsBatchingPeriod={80}
             removeClippedSubviews
-            renderItem={({ item }) => (
-              <MessageBubble
-                message={item.content || ""}
-                attachments={item.attachments || []}
-                poll={item.poll}
-                reminder={item.reminder}
-                messageId={item.id}
-                status={item.status}
-                onRetrySend={() =>
-                  retrySendMessage(
-                    conversationId,
-                    item.tempId ?? item.id,
-                  ).catch((err) => {
-                    Alert.alert(
-                      "Lỗi",
-                      err instanceof Error
-                        ? err.message
-                        : "Không thể gửi lại tin nhắn",
-                    );
-                  })
-                }
-                reactions={item.reactions || []}
-                currentUserId={user?.id}
-                onReact={(reactionCode) => {
-                  reactMessage(conversationId, item.id, reactionCode).catch(
-                    (err) => {
-                      Alert.alert(
-                        "Lỗi",
-                        err instanceof Error
-                          ? err.message
-                          : "Không thể thả cảm xúc",
-                      );
-                    },
-                  );
-                }}
-                isMe={item.senderInfo?.senderId === user?.id}
-                senderName={item.senderInfo?.displayName}
-                avatarUrl={item.senderInfo?.avatarUrl}
-                createdAt={item.createdAt}
-                recalledAt={item.recalledAt}
-                replyInfo={item.replyInfo}
-                isGroup={isGroup}
-                participants={currentParticipants}
-                markAdminMessages={currentConversation?.markAdminMessages}
-                senderRole={
-                  currentParticipants?.find(
-                    (p: Participant) => p.userId === item.senderInfo?.senderId
-                  )?.role
-                }
-                onLongPress={() => handleMessageLongPress(item)}
-                onReplyPreviewPress={
-                  item.replyInfo?.parentId
-                    ? () => handleScrollToParent(item.replyInfo.parentId)
-                    : undefined
-                }
-                onPollVote={() => setPollToVote(item)}
-                onReminderEdit={() => setReminderToEdit(item)}
-                isHighlighted={item.id === highlightedMsgId}
-              />
-            )}
+            renderItem={renderItem}
             extraData={highlightedMsgId}
             contentContainerStyle={[
               styles.msgList,

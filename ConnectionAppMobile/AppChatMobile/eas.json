@@ -9,10 +9,26 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ZEGO_APP_ID": "EXPO_PUBLIC_ZEGO_APP_ID",
+        "EXPO_PUBLIC_ZEGO_APP_SIGN": "EXPO_PUBLIC_ZEGO_APP_SIGN",
+        "EXPO_PUBLIC_API_BASE_URL": "https://connection-app.online/api",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://connection-app-murex.vercel.app",
+        "EXPO_PUBLIC_MAX_UPLOAD_FILE_SIZE_BYTES": "5242880",
+        "EXPO_PUBLIC_CALL_RING_TIMEOUT_SECONDS": "30"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_ZEGO_APP_ID": "EXPO_PUBLIC_ZEGO_APP_ID",
+        "EXPO_PUBLIC_ZEGO_APP_SIGN": "EXPO_PUBLIC_ZEGO_APP_SIGN",
+        "EXPO_PUBLIC_API_BASE_URL": "https://connection-app.online/api",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://connection-app-murex.vercel.app",
+        "EXPO_PUBLIC_MAX_UPLOAD_FILE_SIZE_BYTES": "5242880",
+        "EXPO_PUBLIC_CALL_RING_TIMEOUT_SECONDS": "30"
+      }
     }
   },
   "submit": {

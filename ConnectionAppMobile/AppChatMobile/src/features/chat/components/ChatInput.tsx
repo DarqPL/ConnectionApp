@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   TextInput,
@@ -108,8 +108,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStateRef = useRef(false);
   const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const stopTyping = (targetConversationId: number) => {
+  const toggleExpand = useCallback(() => {
+    Keyboard.dismiss();
+    setIsExpanded((prev) => !prev);
+  }, []);
+
+  const stopTyping = useCallback((targetConversationId: number) => {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -119,9 +125,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
       notifyStoppedTyping(targetConversationId);
       typingStateRef.current = false;
     }
-  };
+  }, [notifyStoppedTyping]);
 
-  const appendFiles = (incoming: LocalAttachment[]) => {
+  const appendFiles = useCallback((incoming: LocalAttachment[]) => {
     if (incoming.length === 0) return;
 
     setSelectedFiles((prev) => {
@@ -158,9 +164,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
       return [...prev, ...acceptedBySize];
     });
-  };
+  }, []);
 
-  const pickImages = async () => {
+  const pickImages = useCallback(async () => {
     Keyboard.dismiss();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -181,9 +187,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
         isImage: true,
       })),
     );
-  };
+  }, [appendFiles]);
 
-  const pickDocuments = async () => {
+  const pickDocuments = useCallback(async () => {
     Keyboard.dismiss();
     const result = await DocumentPicker.getDocumentAsync({
       multiple: true,
@@ -203,13 +209,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
         isImage: (asset.mimeType ?? "").startsWith("image/"),
       })),
     );
-  };
+  }, [appendFiles]);
 
-  const removeFile = (id: string) => {
+  const removeFile = useCallback((id: string) => {
     setSelectedFiles((prev) => prev.filter((item) => item.id !== id));
-  };
+  }, []);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if ((!trimmed && selectedFiles.length === 0) || isSending || disabled)
       return;
@@ -243,28 +249,68 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsSending(false);
     }
-  };
+  }, [text, selectedFiles, isSending, disabled, conversationId, onSend, replyTo, onCancelReply, stopTyping]);
 
   const canSend =
     (text.trim().length > 0 || selectedFiles.length > 0) &&
     !isSending &&
     !disabled;
 
-  const handleOpenEmojiPicker = () => {
+  const handleOpenEmojiPicker = useCallback(() => {
     Keyboard.dismiss();
     setIsEmojiPickerOpen(true);
-  };
+  }, []);
 
-  const handleSelectEmoji = ({ emoji }: { emoji: string }) => {
+  // NEW: Handle text input with typing notification
+  const handleTextChange = useCallback((newText: string) => {
+    setText(newText);
+
+    // If user is typing and text is not empty
+    if (newText.trim().length > 0) {
+      // If not already in typing state, send typing notification
+      if (!typingStateRef.current) {
+        notifyTyping(conversationId);
+        typingStateRef.current = true;
+        console.log("[ChatInput] User started typing");
+      }
+
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set new timeout to send stopped typing after 1 second of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+        typingTimeoutRef.current = null;
+        console.log("[ChatInput] User stopped typing");
+      }, 1000);
+    } else {
+      // Text is empty, send stopped typing
+      if (typingStateRef.current) {
+        notifyStoppedTyping(conversationId);
+        typingStateRef.current = false;
+        console.log("[ChatInput] User cleared text");
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    }
+  }, [conversationId, notifyTyping, notifyStoppedTyping]);
+
+  const handleSelectEmoji = useCallback(({ emoji }: { emoji: string }) => {
     if (!emoji) return;
-    handleTextChange(`${text}${emoji}`);
-  };
+    setText(prev => `${prev}${emoji}`);
+  }, []);
 
-  const applyAiDraft = (nextDraft: string) => {
+  const applyAiDraft = useCallback((nextDraft: string) => {
     handleTextChange(nextDraft);
-  };
+  }, [handleTextChange]);
 
-  const runAiRewrite = async (
+  const runAiRewrite = useCallback(async (
     action: AiRewriteAction,
     targetLanguage?: "EN" | "VI",
   ) => {
@@ -316,58 +362,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsAiProcessing(false);
     }
-  };
+  }, [text, conversationId, applyAiDraft]);
 
-  const openAiMenu = () => {
+  const openAiMenu = useCallback(() => {
     Keyboard.dismiss();
     setIsAiActionModalOpen(true);
-  };
+  }, []);
 
-  const handleSuggestionSelect = (suggestion: string) => {
+  const handleSuggestionSelect = useCallback((suggestion: string) => {
     applyAiDraft(suggestion);
     setIsSuggestionModalOpen(false);
     setAiSuggestions([]);
-  };
-
-  // NEW: Handle text input with typing notification
-  const handleTextChange = (newText: string) => {
-    setText(newText);
-
-    // If user is typing and text is not empty
-    if (newText.trim().length > 0) {
-      // If not already in typing state, send typing notification
-      if (!typingStateRef.current) {
-        notifyTyping(conversationId);
-        typingStateRef.current = true;
-        console.log("[ChatInput] User started typing");
-      }
-
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      // Set new timeout to send stopped typing after 1 second of inactivity
-      typingTimeoutRef.current = setTimeout(() => {
-        notifyStoppedTyping(conversationId);
-        typingStateRef.current = false;
-        typingTimeoutRef.current = null;
-        console.log("[ChatInput] User stopped typing");
-      }, 1000);
-    } else {
-      // Text is empty, send stopped typing
-      if (typingStateRef.current) {
-        notifyStoppedTyping(conversationId);
-        typingStateRef.current = false;
-        console.log("[ChatInput] User cleared text");
-      }
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-    }
-  };
+  }, [applyAiDraft]);
 
   // NEW: Cleanup timeout on unmount
   useEffect(() => {
@@ -477,6 +483,60 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </ScrollView>
         )}
 
+        {isExpanded && canSendMessage && !isSending && !disabled && (
+          <View style={styles.dropdown}>
+            <View style={styles.dropdownGrid}>
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setIsExpanded(false);
+                  pickDocuments();
+                }}
+              >
+                <Ionicons name="attach-outline" size={22} color={COLORS.textMuted} />
+                <Text style={styles.dropdownItemLabel}>Tệp</Text>
+              </TouchableOpacity>
+
+              {onOpenPollCreator && (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setIsExpanded(false);
+                    onOpenPollCreator();
+                  }}
+                >
+                  <Ionicons name="stats-chart-outline" size={22} color={COLORS.textMuted} />
+                  <Text style={styles.dropdownItemLabel}>Bình chọn</Text>
+                </TouchableOpacity>
+              )}
+
+              {onOpenReminderCreator && (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setIsExpanded(false);
+                    onOpenReminderCreator();
+                  }}
+                >
+                  <Ionicons name="alarm-outline" size={22} color={COLORS.textMuted} />
+                  <Text style={styles.dropdownItemLabel}>Nhắc hẹn</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setIsExpanded(false);
+                  openAiMenu();
+                }}
+              >
+                <Ionicons name="sparkles-outline" size={22} color={COLORS.textMuted} />
+                <Text style={styles.dropdownItemLabel}>AI Rewrite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.container}>
           <TouchableOpacity
             style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
@@ -488,66 +548,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
           <TouchableOpacity
             style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-            onPress={pickDocuments}
-            disabled={!canSendMessage}
-          >
-            <Ionicons
-              name="attach-outline"
-              size={24}
-              color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
             onPress={handleOpenEmojiPicker}
             disabled={!canSendMessage}
           >
             <Ionicons name="happy-outline" size={24} color={canSendMessage ? COLORS.textMuted : COLORS.textLight} />
           </TouchableOpacity>
 
-          {onOpenPollCreator && (
-            <TouchableOpacity
-              style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-              onPress={onOpenPollCreator}
-              disabled={isSending || disabled || !canSendMessage}
-            >
-              <Ionicons
-                name="stats-chart-outline"
-                size={22}
-                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-              />
-            </TouchableOpacity>
-          )}
-
-          {onOpenReminderCreator && (
-            <TouchableOpacity
-              style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-              onPress={onOpenReminderCreator}
-              disabled={isSending || disabled || !canSendMessage}
-            >
-              <Ionicons
-                name="alarm-outline"
-                size={22}
-                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-              />
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity
-            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
-            onPress={openAiMenu}
-            disabled={isSending || disabled || isAiProcessing || !canSendMessage}
+            style={[styles.iconBtn, (!canSendMessage || isSending || disabled) && styles.iconBtnDisabled]}
+            onPress={toggleExpand}
+            disabled={!canSendMessage || isSending || disabled}
           >
-            {isAiProcessing ? (
-              <ActivityIndicator size="small" color={COLORS.textMuted} />
-            ) : (
-              <Ionicons
-                name="sparkles-outline"
-                size={22}
-                color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
-              />
-            )}
+            <Ionicons
+              name={isExpanded ? "chevron-down" : "chevron-up"}
+              size={24}
+              color={canSendMessage ? COLORS.textMuted : COLORS.textLight}
+            />
           </TouchableOpacity>
 
           <View style={styles.inputWrap}>
@@ -710,7 +726,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
   );
 };
 
-export default ChatInput;
+const chatInputPropsEqual = (
+  prev: ChatInputProps,
+  next: ChatInputProps,
+): boolean => {
+  return (
+    prev.conversationId === next.conversationId &&
+    prev.disabled === next.disabled &&
+    prev.replyTo === next.replyTo &&
+    prev.allowMemberSendMessage === next.allowMemberSendMessage &&
+    prev.currentUserRole === next.currentUserRole &&
+    prev.isGroup === next.isGroup &&
+    prev.onSend === next.onSend &&
+    prev.onCancelReply === next.onCancelReply &&
+    prev.onOpenPollCreator === next.onOpenPollCreator &&
+    prev.onOpenReminderCreator === next.onOpenReminderCreator
+  );
+};
+
+export default React.memo(ChatInput, chatInputPropsEqual);
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -928,5 +962,34 @@ const styles = StyleSheet.create({
   suggestionCancelText: {
     color: COLORS.text,
     fontWeight: "600",
+  },
+  dropdown: {
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  dropdownGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    backgroundColor: COLORS.backgroundMuted,
+    borderRadius: 12,
+    padding: 8,
+  },
+  dropdownItem: {
+    width: "47%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  dropdownItemLabel: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: "500",
   },
 });
