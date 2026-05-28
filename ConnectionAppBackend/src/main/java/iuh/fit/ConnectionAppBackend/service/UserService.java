@@ -6,6 +6,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.UserProfileResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.User;
 import iuh.fit.ConnectionAppBackend.exception.BadRequestException;
 import iuh.fit.ConnectionAppBackend.exception.ResourceNotFoundException;
+import iuh.fit.ConnectionAppBackend.repo.FriendRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,13 +20,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Optional;
 import java.util.List;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.stream.Collectors;
 
 @Service
 public class UserService {
 
-    public record TemporaryLockInfo(LocalDateTime lockUntil, long remainingMinutes, String reason) {
+    public record TemporaryLockInfo(Instant lockUntil, long remainingMinutes, String reason) {
     }
 
     private static final String DEFAULT_TEMP_LOCK_REASON = "POLICY_VIOLATION";
@@ -53,6 +54,9 @@ public class UserService {
     @Autowired
     private UserAccountLockService userAccountLockService;
 
+    @Autowired
+    private FriendRepository friendRepository;
+
     @Value("${app.security.temp-lock-minutes:30}")
     private long tempLockMinutes;
 
@@ -63,6 +67,22 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
         return mapToUserProfileResponse(user);
+    }
+
+    /**
+     * Get user profile with visibility rules applied based on viewer relationship.
+     * Owner sees full profile. Friends see profile with email. Non-friends see sanitized profile.
+     */
+    public UserProfileResponse getUserProfileForViewer(Long targetUserId, Long viewerUserId) {
+        User user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + targetUserId));
+
+        if (targetUserId.equals(viewerUserId)) {
+            return mapToUserProfileResponse(user);
+        }
+
+        boolean areFriends = friendRepository.areFriends(targetUserId, viewerUserId);
+        return mapToUserProfileResponse(user, areFriends);
     }
 
     /**
@@ -98,7 +118,7 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        if (user.getLockUntil() != null && user.getLockUntil().isAfter(LocalDateTime.now())) {
+        if (user.getLockUntil() != null && user.getLockUntil().isAfter(Instant.now())) {
             return;
         }
 
@@ -152,12 +172,12 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime base = user.getLockUntil() != null && user.getLockUntil().isAfter(now)
+        Instant now = Instant.now();
+        Instant base = user.getLockUntil() != null && user.getLockUntil().isAfter(now)
                 ? user.getLockUntil()
                 : now;
 
-        LocalDateTime lockUntil = base.plusMinutes(Math.max(1, tempLockMinutes));
+        Instant lockUntil = base.plus(java.time.Duration.ofMinutes(Math.max(1, tempLockMinutes)));
         String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : DEFAULT_TEMP_LOCK_REASON;
 
         user.setStatus(UserStatus.OFFLINE);
@@ -243,7 +263,9 @@ public class UserService {
     }
 
     /**
-     * Search users by username, display name, or phone
+     * Search users by username, display name, or phone.
+     * Endpoint is auth-gated, so callers are authenticated.
+     * Returns full profile including email and status for search functionality.
      */
     public List<UserProfileResponse> searchUsers(String query) {
         return userRepository.searchUsers(query).stream()
@@ -268,6 +290,32 @@ public class UserService {
                 .build();
     }
 
+    /**
+     * Map User entity to UserProfileResponse with visibility controls.
+     * When showSensitiveData is false, email, role, and status are hidden.
+     */
+    private UserProfileResponse mapToUserProfileResponse(User user, boolean showSensitiveData) {
+        UserProfileResponse.UserProfileResponseBuilder builder = UserProfileResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .displayName(user.getDisplayName())
+                .bio(user.getBio())
+                .avatarUrl(user.getAvatarUrl())
+                .gender(user.getGender() != null ? user.getGender().name() : null);
+
+        if (showSensitiveData) {
+            builder.email(user.getEmail())
+                    .role(user.getRole().name())
+                    .status(user.getStatus().name());
+        } else {
+            builder.email(null)
+                    .role(null)
+                    .status(null);
+        }
+
+        return builder.build();
+    }
+
     private User getRequiredUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -285,13 +333,13 @@ public class UserService {
             throw new IllegalStateException("Cannot lock a deleted account");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() != null && user.getLockUntil().isAfter(now)) {
             return "Account is already locked";
         }
 
         user.setStatus(UserStatus.LOCKED);
-        user.setLockUntil(now.plusYears(100));
+        user.setLockUntil(now.plus(100, java.time.temporal.ChronoUnit.YEARS));
         user.setLockReason("ADMIN_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
@@ -313,13 +361,13 @@ public class UserService {
             throw new IllegalStateException("Cannot lock a deleted account");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() != null && user.getLockUntil().isAfter(now)) {
             return "Account is already locked";
         }
 
         user.setStatus(UserStatus.LOCKED);
-        user.setLockUntil(now.plusYears(100));
+        user.setLockUntil(now.plus(100, java.time.temporal.ChronoUnit.YEARS));
         user.setLockReason("SELF_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
@@ -384,7 +432,7 @@ public class UserService {
         User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() == null || !user.getLockUntil().isAfter(now) || !"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
             throw new BadRequestException("Tài khoản không ở trạng thái tự khóa.");
         }
@@ -402,7 +450,7 @@ public class UserService {
         User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         if (user.getLockUntil() == null
                 || !user.getLockUntil().isAfter(now)
                 || !"SELF_LOCK".equalsIgnoreCase(user.getLockReason())) {
@@ -492,8 +540,8 @@ public class UserService {
         return "Account deleted successfully";
     }
 
-    private long calculateRemainingMinutes(LocalDateTime lockUntil) {
-        long remainingSeconds = Duration.between(LocalDateTime.now(), lockUntil).getSeconds();
+    private long calculateRemainingMinutes(Instant lockUntil) {
+        long remainingSeconds = Duration.between(Instant.now(), lockUntil).getSeconds();
         if (remainingSeconds <= 0) {
             return 0;
         }

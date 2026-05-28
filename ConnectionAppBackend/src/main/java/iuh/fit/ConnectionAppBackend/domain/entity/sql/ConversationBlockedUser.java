@@ -4,7 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "conversation_blocked_users", uniqueConstraints = {
@@ -33,5 +33,5 @@ public class ConversationBlockedUser {
     private User blockedBy;
 
     @CreatedDate
-    private LocalDateTime blockedAt;
+    private Instant blockedAt;
 }

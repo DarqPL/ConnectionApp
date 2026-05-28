@@ -1,13 +1,13 @@
 package iuh.fit.ConnectionAppBackend.exception;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public class AccountTemporarilyLockedException extends RuntimeException {
 
     private final long remainingMinutes;
-    private final LocalDateTime lockUntil;
+    private final Instant lockUntil;
 
-    public AccountTemporarilyLockedException(String message, long remainingMinutes, LocalDateTime lockUntil) {
+    public AccountTemporarilyLockedException(String message, long remainingMinutes, Instant lockUntil) {
         super(message);
         this.remainingMinutes = remainingMinutes;
         this.lockUntil = lockUntil;
@@ -17,7 +17,7 @@ public class AccountTemporarilyLockedException extends RuntimeException {
         return remainingMinutes;
     }
 
-    public LocalDateTime getLockUntil() {
+    public Instant getLockUntil() {
         return lockUntil;
     }
 }

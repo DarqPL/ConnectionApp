@@ -2,7 +2,7 @@ package iuh.fit.ConnectionAppBackend.domain.entity.mongodb.embedded;
 
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,7 +14,7 @@ import java.util.List;
 public class ReminderInfo {
     private String title;
     private String content;
-    private LocalDateTime reminderTime;
+    private Instant reminderTime;
 
     @Builder.Default
     private List<Long> participantIds = new ArrayList<>();

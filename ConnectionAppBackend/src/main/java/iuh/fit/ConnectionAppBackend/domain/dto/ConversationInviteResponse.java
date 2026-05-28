@@ -5,15 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TypingNotificationDTO {
-    private Long conversationId;
-    private Long userId;
-    private String displayName;
-    private Instant typedAt;
+public class ConversationInviteResponse {
+    private Long id;
+    private String name;
+    private String avatarUrl;
+    private String type;
+    private int memberCount;
+    private String createdByName;
 }

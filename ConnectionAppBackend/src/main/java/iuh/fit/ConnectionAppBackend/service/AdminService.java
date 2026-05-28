@@ -20,8 +20,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,8 +37,6 @@ public class AdminService {
 
     @Autowired
     private RefreshTokenService refreshTokenService;
-
-    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public AdminStatsResponse getDashboardStats() {
         long totalUsers = userRepository.countByStatusNot(UserStatus.DELETED);
@@ -164,9 +161,9 @@ public class AdminService {
                 .avatarUrl(user.getAvatarUrl())
                 .role(user.getRole().name())
                 .status(user.getStatus().name())
-                .lockUntil(user.getLockUntil() != null ? user.getLockUntil().format(ISO_FORMATTER) : null)
+                .lockUntil(user.getLockUntil() != null ? user.getLockUntil().toString() : null)
                 .lockReason(user.getLockReason())
-                .createdAt(user.getCreatedAt() != null ? user.getCreatedAt().format(ISO_FORMATTER) : null)
+                .createdAt(user.getCreatedAt() != null ? user.getCreatedAt().toString() : null)
                 .build();
     }
 
@@ -182,9 +179,9 @@ public class AdminService {
 
         String lastActivity = null;
         if (conversation.getLastMessageAt() != null) {
-            lastActivity = conversation.getLastMessageAt().format(ISO_FORMATTER);
+            lastActivity = conversation.getLastMessageAt().toString();
         } else if (conversation.getCreatedAt() != null) {
-            lastActivity = conversation.getCreatedAt().format(ISO_FORMATTER);
+            lastActivity = conversation.getCreatedAt().toString();
         }
 
         String status = conversation.isActivate() ? "ACTIVE" : "LOCKED";
@@ -195,7 +192,7 @@ public class AdminService {
                 .type(conversation.getType().name())
                 .participantCount(participantCount)
                 .creatorName(creatorName)
-                .createdAt(conversation.getCreatedAt() != null ? conversation.getCreatedAt().format(ISO_FORMATTER) : null)
+                .createdAt(conversation.getCreatedAt() != null ? conversation.getCreatedAt().toString() : null)
                 .status(status)
                 .lastActivity(lastActivity)
                 .build();

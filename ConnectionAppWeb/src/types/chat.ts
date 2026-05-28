@@ -45,6 +45,19 @@ export interface Conversation {
 }
 
 /**
+ * ConversationInviteResponse from backend (public invite preview)
+ * Minimal fields only — no participants, no inviteToken, no pinnedMessages.
+ */
+export interface ConversationInvitePreview {
+  id: number;
+  name: string;
+  avatarUrl?: string | null;
+  type: string;
+  memberCount: number;
+  createdByName: string;
+}
+
+/**
  * PageResponse<T> from backend
  */
 export interface PageResponse<T> {

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 public class UserAccountLockService {
@@ -29,8 +29,8 @@ public class UserAccountLockService {
 
     @Transactional
     public void assertAccountIsActive(User user) {
-        LocalDateTime lockUntil = user.getLockUntil();
-        LocalDateTime now = LocalDateTime.now();
+        Instant lockUntil = user.getLockUntil();
+        Instant now = Instant.now();
 
         if (lockUntil != null && lockUntil.isAfter(now)) {
             if (ADMIN_LOCK_REASON.equalsIgnoreCase(user.getLockReason())) {
@@ -66,8 +66,8 @@ public class UserAccountLockService {
         userRepository.save(user);
     }
 
-    private long calculateRemainingMinutes(LocalDateTime lockUntil) {
-        long remainingSeconds = Duration.between(LocalDateTime.now(), lockUntil).getSeconds();
+    private long calculateRemainingMinutes(Instant lockUntil) {
+        long remainingSeconds = Duration.between(Instant.now(), lockUntil).getSeconds();
         if (remainingSeconds <= 0) {
             return 0;
         }

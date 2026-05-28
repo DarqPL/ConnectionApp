@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -18,7 +18,7 @@ public class SecurityNotificationDTO {
     private String deviceName;
     private String ipAddress;
     private String userAgent;
-    private LocalDateTime loginAt;
+    private Instant loginAt;
     private Long remainingMinutes;
-    private LocalDateTime lockUntil;
+    private Instant lockUntil;
 }

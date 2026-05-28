@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,5 +42,5 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             "WHERE cs.status = :status " +
             "AND cs.createdAt <= :deadline")
     List<CallSession> findByStatusTimedOut(@Param("status") CallStatus status,
-                                           @Param("deadline") LocalDateTime deadline);
+                                           @Param("deadline") Instant deadline);
 }

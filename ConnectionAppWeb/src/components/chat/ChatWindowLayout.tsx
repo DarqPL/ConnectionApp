@@ -8,7 +8,7 @@ import MessageInput from "./MessageInput";
 import ChatInfoPanel from "./ChatInfoPanel";
 import PinnedMessagesBar from "./PinnedMessagesBar";
 import ReminderBanner from "./ReminderBanner";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { ForwardMessageModal } from "./ForwardMessageModal";
@@ -63,6 +63,7 @@ const ChatWindowLayout = () => {
   });
   const [isUpdatingBlock, setIsUpdatingBlock] = useState(false);
   const [isFilesPanelOpen, setIsFilesPanelOpen] = useState(false);
+  const fetchingRef = useRef<Set<number>>(new Set());
 
   const handleLeaveGroup = useCallback(() => {
     if (activeConversationId) {
@@ -169,7 +170,7 @@ const ChatWindowLayout = () => {
     };
 
     fetchOtherUser();
-  }, [selectedConvo, user, getUserById]);
+  }, [selectedConvo?.id, user?.id, getUserById]);
 
   useEffect(() => {
     if (selectedConvo?.type !== "PRIVATE") {
@@ -184,13 +185,16 @@ const ChatWindowLayout = () => {
     void refreshBlockStatus();
   }, [selectedConvo?.id, selectedConvo?.type, refreshBlockStatus]);
 
-  // 🔥 fetch messages
+  // fetch messages — guard by store cache (self-healing) + in-flight ref (no dupes)
   useEffect(() => {
-    if (activeConversationId) {
-      if (!allMessages[activeConversationId]) {
-        fetchMessages(activeConversationId);
-      }
-    }
+    if (!activeConversationId) return;
+    if (allMessages[activeConversationId]) return;
+    if (fetchingRef.current.has(activeConversationId)) return;
+
+    fetchingRef.current.add(activeConversationId);
+    fetchMessages(activeConversationId).finally(() => {
+      fetchingRef.current.delete(activeConversationId);
+    });
   }, [activeConversationId, fetchMessages, allMessages]);
 
   if (!selectedConvo) {

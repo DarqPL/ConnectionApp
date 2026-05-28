@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -16,5 +16,5 @@ public class CallTokenResponse {
     private String roomId;
     private String userId;
     private String token;
-    private LocalDateTime expiresAt;
+    private Instant expiresAt;
 }

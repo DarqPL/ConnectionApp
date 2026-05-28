@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,12 +48,12 @@ public class Conversation {
     private ConversationType type;
 
     @LastModifiedDate
-    private LocalDateTime updateAt;
+    private Instant updateAt;
 
     @CreatedDate
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
-    private LocalDateTime lastMessageAt;
+    private Instant lastMessageAt;
 
     @Column(columnDefinition = "TEXT")
     private String lastMessageContent;

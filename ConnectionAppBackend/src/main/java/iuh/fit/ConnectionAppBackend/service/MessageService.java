@@ -45,7 +45,7 @@ import org.springframework.util.StringUtils;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -176,7 +176,7 @@ public class MessageService {
                 .parentId(request.getParentId())
                 .poll(mapPollRequestToEntity(request.getPoll()))
                 .isDeleted(false)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
 
@@ -277,7 +277,7 @@ public class MessageService {
         }
 
         message.setContent(newContent);
-        message.setUpdateAt(LocalDateTime.now());
+        message.setUpdateAt(Instant.now());
 
         Message updatedMessage = messageRepository.save(message);
         return mapToMessageResponse(updatedMessage);
@@ -297,7 +297,7 @@ public class MessageService {
         }
 
         message.setIsDeleted(true);
-        message.setUpdateAt(LocalDateTime.now());
+        message.setUpdateAt(Instant.now());
         messageRepository.save(message);
     }
 
@@ -319,10 +319,10 @@ public class MessageService {
             throw new BadRequestException("Message is already recalled");
         }
 
-        message.setRecalledAt(LocalDateTime.now());
+        message.setRecalledAt(Instant.now());
         message.setContent(null);
         message.setAttachments(new java.util.ArrayList<>());
-        message.setUpdateAt(LocalDateTime.now());
+        message.setUpdateAt(Instant.now());
 
         Message updatedMessage = messageRepository.save(message);
         MessageResponse response = mapToMessageResponse(updatedMessage);
@@ -418,32 +418,32 @@ public class MessageService {
 
             nextReactions.removeIf(reaction -> Objects.equals(reaction.getUserId(), userId));
             message.setReactions(nextReactions);
-            message.setUpdateAt(LocalDateTime.now());
+            message.setUpdateAt(Instant.now());
             return true;
         }
 
         if (existingReaction != null && reactionCodeOrNull.equals(existingReaction.getReactionCode())) {
             nextReactions.removeIf(reaction -> Objects.equals(reaction.getUserId(), userId));
             message.setReactions(nextReactions);
-            message.setUpdateAt(LocalDateTime.now());
+            message.setUpdateAt(Instant.now());
             return true;
         }
 
         if (existingReaction != null) {
             existingReaction.setReactionCode(reactionCodeOrNull);
-            existingReaction.setReactedAt(LocalDateTime.now());
+            existingReaction.setReactedAt(Instant.now());
             message.setReactions(nextReactions);
-            message.setUpdateAt(LocalDateTime.now());
+            message.setUpdateAt(Instant.now());
             return true;
         }
 
         nextReactions.add(MessageReaction.builder()
                 .userId(userId)
                 .reactionCode(reactionCodeOrNull)
-                .reactedAt(LocalDateTime.now())
+                .reactedAt(Instant.now())
                 .build());
         message.setReactions(nextReactions);
-        message.setUpdateAt(LocalDateTime.now());
+        message.setUpdateAt(Instant.now());
         return true;
     }
 
@@ -472,7 +472,7 @@ public class MessageService {
             throw new BadRequestException("Poll is closed");
         }
 
-        if (message.getPoll().getExpiredAt() != null && message.getPoll().getExpiredAt().isBefore(LocalDateTime.now())) {
+        if (message.getPoll().getExpiredAt() != null && message.getPoll().getExpiredAt().isBefore(Instant.now())) {
             throw new BadRequestException("Poll has expired");
         }
 
@@ -512,13 +512,13 @@ public class MessageService {
         }
 
         // BUMP the message to the end of conversation
-        message.setUpdateAt(LocalDateTime.now());
+        message.setUpdateAt(Instant.now());
 
         Message updatedMessage = messageRepository.save(message);
         
         // Update conversation last message timestamp to bump conversation list
         conversationRepository.findById(message.getConversationId()).ifPresent(convo -> {
-            convo.setLastMessageAt(LocalDateTime.now());
+            convo.setLastMessageAt(Instant.now());
             conversationRepository.save(convo);
         });
 
@@ -550,7 +550,7 @@ public class MessageService {
         }
 
         message.getPoll().setClosed(true);
-        message.setUpdateAt(LocalDateTime.now());
+        message.setUpdateAt(Instant.now());
 
         Message updatedMessage = messageRepository.save(message);
         MessageResponse response = mapToMessageResponse(updatedMessage);
@@ -854,7 +854,7 @@ public class MessageService {
                 .build();
     }
 
-    private ReminderResponse mapReminderEntityToResponse(ReminderInfo info, Long conversationId, String messageId, LocalDateTime createdAt) {
+    private ReminderResponse mapReminderEntityToResponse(ReminderInfo info, Long conversationId, String messageId, Instant createdAt) {
         if (info == null) return null;
 
         return ReminderResponse.builder()

@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import lombok.AllArgsConstructor;
@@ -18,11 +18,11 @@ public class MessageResponse {
     private SenderInfoResponse senderInfo;
     private String content;
     private List<AttachmentResponse> attachments;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
     private String parentId;
     private boolean isDeleted;
-    private LocalDateTime recalledAt;
+    private Instant recalledAt;
     private ReplyInfoResponse replyInfo;
     private PollResponse poll;
     private ReminderResponse reminder;
@@ -67,6 +67,6 @@ public class MessageResponse {
     public static class MessageReactionResponse {
         private Long userId;
         private String reactionCode;
-        private LocalDateTime reactedAt;
+        private Instant reactedAt;
     }
 }

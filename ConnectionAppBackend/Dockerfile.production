@@ -1,5 +1,6 @@
 # Stage 1: Build
 FROM eclipse-temurin:21-jdk AS build
+ENV TZ=UTC
 WORKDIR /app
 COPY pom.xml .
 COPY .mvn .mvn
@@ -11,6 +12,7 @@ RUN ./mvnw clean package -DskipTests -B
 
 # Stage 2: Run
 FROM eclipse-temurin:21-jre-alpine AS run
+ENV TZ=UTC
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 RUN addgroup -g 1001 appgroup && adduser -u 1001 -G appgroup -D appuser

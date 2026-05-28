@@ -7,6 +7,7 @@ services:
       MARIADB_ROOT_USER: ${DB_USERNAME:-root}
       MARIADB_ROOT_PASSWORD: ${DB_PASSWORD}
       MARIADB_DATABASE: appChat
+      TZ: UTC
     volumes:
       - mariadb-data:/var/lib/mysql
     networks:
@@ -33,6 +34,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/appChat?useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATA_MONGODB_URI: ${MONGODB_URI}
+      TZ: UTC
     depends_on:
       mariadb:
         condition: service_healthy
@@ -56,6 +58,8 @@ services:
     image: nginx:alpine
     container_name: appchat-nginx
     restart: unless-stopped
+    environment:
+      TZ: UTC
     ports:
       - "80:80"
       - "443:443"

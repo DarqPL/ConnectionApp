@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -16,9 +16,9 @@ public class CallHistoryItemResponse {
     private Long conversationId;
     private String mediaType;
     private String status;
-    private LocalDateTime createdAt;
-    private LocalDateTime startedAt;
-    private LocalDateTime endedAt;
+    private Instant createdAt;
+    private Instant startedAt;
+    private Instant endedAt;
     private Long durationSeconds;
     private String counterpartSummary;
 }

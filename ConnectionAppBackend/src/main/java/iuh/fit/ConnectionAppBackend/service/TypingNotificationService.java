@@ -14,7 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -59,7 +59,7 @@ public class TypingNotificationService {
                 .conversationId(conversationId)
                 .userId(senderId)
                 .displayName(sender.getDisplayName())
-                .typedAt(LocalDateTime.now())
+                .typedAt(Instant.now())
                 .build();
 
         List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);

@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -47,10 +47,10 @@ public class Friend {
     private FriendStatus status;
 
     @LastModifiedDate
-    private LocalDateTime updateAt;
+    private Instant updateAt;
 
     @CreatedDate
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

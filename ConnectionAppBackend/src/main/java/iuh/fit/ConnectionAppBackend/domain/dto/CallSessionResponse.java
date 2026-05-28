@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -19,9 +19,9 @@ public class CallSessionResponse {
     private String mediaType;
     private String status;
     private String roomId;
-    private LocalDateTime createdAt;
-    private LocalDateTime startedAt;
-    private LocalDateTime endedAt;
+    private Instant createdAt;
+    private Instant startedAt;
+    private Instant endedAt;
     private Long durationSeconds;
     private String endedReason;
     private CallTokenResponse token;

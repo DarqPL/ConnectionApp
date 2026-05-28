@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,13 +21,13 @@ public class UserPresenceService {
 
     private static final long HEARTBEAT_TIMEOUT_SECONDS = 90;
 
-    private final ConcurrentHashMap<Long, LocalDateTime> lastSeenMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, Instant> lastSeenMap = new ConcurrentHashMap<>();
 
     @Autowired
     private UserRepository userRepository;
 
     public void setOnline(Long userId) {
-        lastSeenMap.put(userId, LocalDateTime.now());
+        lastSeenMap.put(userId, Instant.now());
         updateUserStatusInDb(userId, UserStatus.ONLINE);
         log.info("User {} is now ONLINE", userId);
     }
@@ -39,7 +39,7 @@ public class UserPresenceService {
     }
 
     public void heartbeat(Long userId) {
-        lastSeenMap.put(userId, LocalDateTime.now());
+        lastSeenMap.put(userId, Instant.now());
     }
 
     public boolean isOnline(Long userId) {
@@ -52,7 +52,7 @@ public class UserPresenceService {
 
     @Scheduled(fixedRate = 60000)
     public void cleanupStaleConnections() {
-        LocalDateTime cutoff = LocalDateTime.now().minusSeconds(HEARTBEAT_TIMEOUT_SECONDS);
+        Instant cutoff = Instant.now().minusSeconds(HEARTBEAT_TIMEOUT_SECONDS);
         int cleanedCount = 0;
 
         for (var entry : lastSeenMap.entrySet()) {
@@ -78,7 +78,7 @@ public class UserPresenceService {
 
             if (user.getStatus() == UserStatus.DELETED) return;
 
-            if (user.getLockUntil() != null && user.getLockUntil().isAfter(LocalDateTime.now())) {
+            if (user.getLockUntil() != null && user.getLockUntil().isAfter(Instant.now())) {
                 return;
             }
 

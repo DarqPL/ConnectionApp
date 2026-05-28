@@ -8,6 +8,7 @@ import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +55,7 @@ public class User {
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
-    private LocalDateTime lockUntil;
+    private Instant lockUntil;
 
     private String lockReason;
 
@@ -68,10 +69,10 @@ public class User {
     private Integer mobileTokenVersion = 0;
 
     @LastModifiedDate
-    private LocalDateTime updateAt;
+    private Instant updateAt;
 
     @CreatedDate
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ConversationUser> conversationUsers = new ArrayList<>();

@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -14,5 +14,5 @@ import java.time.LocalDateTime;
 public class MessageReaction {
     private Long userId;
     private String reactionCode;
-    private LocalDateTime reactedAt;
+    private Instant reactedAt;
 }

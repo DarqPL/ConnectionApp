@@ -3,6 +3,7 @@ package iuh.fit.ConnectionAppBackend.controller;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.ConversationInviteResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.PaginationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.RoleUpdateRequest;
@@ -84,10 +85,10 @@ public class ConversationController {
     }
 
     @GetMapping("/invite/{inviteToken}")
-    public ResponseEntity<ConversationResponse> resolveInvite(
+    public ResponseEntity<ConversationInviteResponse> resolveInvite(
             @PathVariable String inviteToken) {
 
-        ConversationResponse conversation = conversationService.resolveGroupInvite(inviteToken);
+        ConversationInviteResponse conversation = conversationService.resolveGroupInvitePublic(inviteToken);
         return ResponseEntity.ok(conversation);
     }
 

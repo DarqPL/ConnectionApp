@@ -4,7 +4,7 @@ import iuh.fit.ConnectionAppBackend.domain.common.CallParticipantStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "call_participants",
@@ -40,7 +40,7 @@ public class CallParticipant {
     @Column(nullable = false)
     private boolean videoMuted;
 
-    private LocalDateTime joinedAt;
+    private Instant joinedAt;
 
-    private LocalDateTime leftAt;
+    private Instant leftAt;
 }

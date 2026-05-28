@@ -5,6 +5,7 @@ import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.ConversationUserResponse;
+import iuh.fit.ConnectionAppBackend.domain.dto.ConversationInviteResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.MessageResponse;
 import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsRequest;
 import iuh.fit.ConnectionAppBackend.domain.dto.GroupSettingsResponse;
@@ -35,7 +36,7 @@ import iuh.fit.ConnectionAppBackend.domain.dto.ImageObjectResponse;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -100,12 +101,24 @@ public class ConversationService {
         return mapToConversationResponse(conversation);
     }
 
-    public ConversationResponse resolveGroupInvite(String inviteToken) {
+    public ConversationInviteResponse resolveGroupInvitePublic(String inviteToken) {
         Conversation conversation = conversationRepository.findByInviteTokenWithUsers(inviteToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Group invite link not found"));
 
         validateGroupInviteConversation(conversation);
-        return mapToConversationResponse(conversation);
+
+        int memberCount = conversation.getConversationUsers() != null
+                ? conversation.getConversationUsers().size()
+                : 0;
+
+        return ConversationInviteResponse.builder()
+                .id(conversation.getId())
+                .name(conversation.getName())
+                .avatarUrl(conversation.getAvatarUrl())
+                .type(conversation.getType() != null ? conversation.getType().name() : "GROUP")
+                .memberCount(memberCount)
+                .createdByName(conversation.getCreatedBy() != null ? conversation.getCreatedBy().getDisplayName() : "")
+                .build();
     }
 
     @Transactional
@@ -140,7 +153,7 @@ public class ConversationService {
             ConversationPendingMember pendingMember = ConversationPendingMember.builder()
                     .conversation(conversation)
                     .user(joiningUser)
-                    .requestedAt(LocalDateTime.now())
+                    .requestedAt(Instant.now())
                     .build();
             conversationPendingMemberRepository.save(pendingMember);
 
@@ -169,7 +182,7 @@ public class ConversationService {
                 .conversation(conversation)
                 .user(joiningUser)
                 .role(ConversationRole.MEMBER)
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(Instant.now())
                 .unreadCounts(0L)
                 .build();
         conversationUserRepository.save(joiningMember);
@@ -212,7 +225,7 @@ public class ConversationService {
                 .type(type)
                 .createdBy(creator)
                 .activate(true)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
         Conversation savedConversation = conversationRepository.save(conversation);
@@ -222,7 +235,7 @@ public class ConversationService {
                 .conversation(savedConversation)
                 .user(creator)
                 .role(ConversationRole.OWNER)
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(Instant.now())
                 .unreadCounts(0L)
                 .build();
         conversationUserRepository.save(conversationUser);
@@ -238,7 +251,7 @@ public class ConversationService {
                             .conversation(savedConversation)
                             .user(participant)
                             .role(ConversationRole.MEMBER)
-                            .joinedAt(LocalDateTime.now())
+                            .joinedAt(Instant.now())
                             .unreadCounts(0L)
                             .build();
                     conversationUserRepository.save(member);
@@ -290,7 +303,7 @@ public class ConversationService {
             conversation.setAvatarUrl(request.getAvatarUrl());
         }
 
-        conversation.setUpdateAt(LocalDateTime.now());
+        conversation.setUpdateAt(Instant.now());
         Conversation updatedConversation = conversationRepository.save(conversation);
 
         // 🔥 Send real-time notification to all members
@@ -378,7 +391,7 @@ public class ConversationService {
                     .conversation(conversation)
                     .user(newMember)
                     .requestedBy(userRepository.findById(userId).orElse(null))
-                    .requestedAt(LocalDateTime.now())
+                    .requestedAt(Instant.now())
                     .build();
             conversationPendingMemberRepository.save(pendingMember);
 
@@ -406,7 +419,7 @@ public class ConversationService {
                 .conversation(conversation)
                 .user(newMember)
                 .role(ConversationRole.MEMBER)
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(Instant.now())
                 .unreadCounts(0L)
                 .build();
 
@@ -745,7 +758,7 @@ public class ConversationService {
         }
 
         conversation.setAvatarUrl(upload.getImageUrl());
-        conversation.setUpdateAt(LocalDateTime.now());
+        conversation.setUpdateAt(Instant.now());
         Conversation updatedConversation = conversationRepository.save(conversation);
 
         // Send real-time notification to all members
@@ -851,7 +864,7 @@ public class ConversationService {
         if (request.getAllowNewMembersReadHistory() != null) conversation.setAllowNewMembersReadHistory(request.getAllowNewMembersReadHistory());
         if (request.getAllowLinkJoin() != null) conversation.setAllowLinkJoin(request.getAllowLinkJoin());
 
-        conversation.setUpdateAt(LocalDateTime.now());
+        conversation.setUpdateAt(Instant.now());
         conversationRepository.save(conversation);
 
         // Broadcast settings update to all members
@@ -885,7 +898,7 @@ public class ConversationService {
         String oldToken = conversation.getInviteToken();
         String newToken = generateUniqueInviteToken();
         conversation.setInviteToken(newToken);
-        conversation.setUpdateAt(LocalDateTime.now());
+        conversation.setUpdateAt(Instant.now());
         conversationRepository.save(conversation);
 
         // Notify all members about token refresh
@@ -970,7 +983,7 @@ public class ConversationService {
                 .conversation(conversation)
                 .user(blockedUser)
                 .blockedBy(blocker)
-                .blockedAt(LocalDateTime.now())
+                .blockedAt(Instant.now())
                 .build();
         conversationBlockedUserRepository.save(blockedEntry);
 
@@ -1055,7 +1068,7 @@ public class ConversationService {
                 .conversation(conversation)
                 .user(pending.getUser())
                 .role(ConversationRole.MEMBER)
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(Instant.now())
                 .unreadCounts(0L)
                 .build();
         conversationUserRepository.save(newMember);
@@ -1247,7 +1260,7 @@ public class ConversationService {
     /**
      * Get the joined date of a user in a conversation
      */
-    public LocalDateTime getUserJoinedAt(Long conversationId, Long userId) {
+    public Instant getUserJoinedAt(Long conversationId, Long userId) {
         return conversationUserRepository.findByConversationIdAndUserId(conversationId, userId)
                 .map(ConversationUser::getJoinedAt)
                 .orElse(null);

@@ -12,4 +12,6 @@ import org.springframework.context.annotation.Configuration;
 public class JwtConfig {
     private String secret;
     private long expiration;
+    private String issuer = "appchat";
+    private String audience = "appchat-api";
 }

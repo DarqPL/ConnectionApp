@@ -2,7 +2,8 @@ package iuh.fit.ConnectionAppBackend.service;
 
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,7 +15,7 @@ public class OtpService {
     private final Map<String, OtpEntry> otpStore = new ConcurrentHashMap<>();
 
     // Map: email -> expiry (trạng thái "đã xác minh email", có hiệu lực 10 phút)
-    private final Map<String, LocalDateTime> verifiedStore = new ConcurrentHashMap<>();
+    private final Map<String, Instant> verifiedStore = new ConcurrentHashMap<>();
 
     private static final int OTP_EXPIRY_MINUTES = 1;
     private static final int VERIFIED_EXPIRY_MINUTES = 10;
@@ -24,7 +25,7 @@ public class OtpService {
      */
     public String generateOtp(String email) {
         String otp = String.format("%06d", new Random().nextInt(999999));
-        otpStore.put(email, new OtpEntry(otp, LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES)));
+        otpStore.put(email, new OtpEntry(otp, Instant.now().plus(OTP_EXPIRY_MINUTES, ChronoUnit.MINUTES)));
         verifiedStore.remove(email); // reset trạng thái verified khi gửi OTP mới
         return otp;
     }
@@ -36,7 +37,7 @@ public class OtpService {
     public boolean verifyOtp(String email, String otp) {
         OtpEntry entry = otpStore.get(email);
         if (entry == null) return false;
-        if (LocalDateTime.now().isAfter(entry.expiry())) {
+        if (Instant.now().isAfter(entry.expiry())) {
             otpStore.remove(email);
             return false;
         }
@@ -49,7 +50,7 @@ public class OtpService {
      * OTP vẫn giữ trong otpStore để không làm hỏng luồng khác (forgot-password).
      */
     public void markEmailVerified(String email) {
-        verifiedStore.put(email, LocalDateTime.now().plusMinutes(VERIFIED_EXPIRY_MINUTES));
+        verifiedStore.put(email, Instant.now().plus(VERIFIED_EXPIRY_MINUTES, ChronoUnit.MINUTES));
         // Không xóa otpStore — OTP tự hết hạn sau 1 phút mà không ảnh hưởng luồng khác
     }
 
@@ -57,9 +58,9 @@ public class OtpService {
      * Kiểm tra xem email có đang ở trạng thái "đã xác minh" không.
      */
     public boolean isEmailVerified(String email) {
-        LocalDateTime expiry = verifiedStore.get(email);
+        Instant expiry = verifiedStore.get(email);
         if (expiry == null) return false;
-        if (LocalDateTime.now().isAfter(expiry)) {
+        if (Instant.now().isAfter(expiry)) {
             verifiedStore.remove(email);
             return false;
         }
@@ -74,5 +75,5 @@ public class OtpService {
         verifiedStore.remove(email);
     }
 
-    private record OtpEntry(String otp, LocalDateTime expiry) {}
+    private record OtpEntry(String otp, Instant expiry) {}
 }

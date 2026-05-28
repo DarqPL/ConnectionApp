@@ -1,6 +1,6 @@
 package iuh.fit.ConnectionAppBackend.domain.entity.sql;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import iuh.fit.ConnectionAppBackend.domain.common.ConversationRole;
 import jakarta.persistence.Column;
@@ -43,7 +43,7 @@ public class ConversationUser {
     private ConversationRole role;
 
     @Column(name = "joined_at")
-    private LocalDateTime joinedAt;
+    private Instant joinedAt;
 
     @Column(name = "unread_counts")
     private Long unreadCounts;

@@ -9,7 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,22 +33,22 @@ public class RefreshTokenService {
         refreshToken.setUserAgent(userAgent);
         refreshToken.setIpAddress(ipAddress);
         refreshToken.setToken(UUID.randomUUID().toString());
-        refreshToken.setCreatedAt(LocalDateTime.now());
-        refreshToken.setLastUsedAt(LocalDateTime.now());
-        refreshToken.setExpiryDate(LocalDateTime.now().plusDays(7));
+        refreshToken.setCreatedAt(Instant.now());
+        refreshToken.setLastUsedAt(Instant.now());
+        refreshToken.setExpiryDate(Instant.now().plus(7, ChronoUnit.DAYS));
 
         return refreshTokenRepo.save(refreshToken);
     }
 
     @Transactional
     public RefreshToken touch(RefreshToken token) {
-        token.setLastUsedAt(LocalDateTime.now());
+        token.setLastUsedAt(Instant.now());
         return refreshTokenRepo.save(token);
     }
 
     @Transactional(readOnly = true)
     public List<RefreshToken> getActiveSessions(User user) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return refreshTokenRepo.findAllByUserOrderByLastUsedAtDesc(user)
                 .stream()
                 .filter(token -> token.getExpiryDate() != null && token.getExpiryDate().isAfter(now))
@@ -74,7 +75,7 @@ public class RefreshTokenService {
 
     @Transactional(readOnly = true)
     public List<RefreshToken> getActiveSessionsByPlatform(User user, AuthPlatform platform) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return refreshTokenRepo.findAllByUserAndPlatformOrderByLastUsedAtDesc(user, platform)
                 .stream()
                 .filter(token -> token.getExpiryDate() != null && token.getExpiryDate().isAfter(now))
@@ -88,7 +89,7 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken verifyExpiration(RefreshToken token) {
-        if (token.getExpiryDate().isBefore(LocalDateTime.now())) {
+        if (token.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepo.delete(token);
             throw new RuntimeException("Refresh token expired");
         }

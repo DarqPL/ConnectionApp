@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -16,13 +16,13 @@ public class ReminderResponse {
     private String id;
     private String title;
     private String content;
-    private LocalDateTime reminderTime;
+    private Instant reminderTime;
     private boolean isNotified;
     private Long conversationId;
     private Long creatorId;
     private String creatorName;
     private List<Long> participantIds;
     private List<Long> declinedIds;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
     private String reminderGroupId;
 }

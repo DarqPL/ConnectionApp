@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 public class SecurityNotificationService {
@@ -27,7 +27,7 @@ public class SecurityNotificationService {
                 deviceName,
                 ipAddress,
                 userAgent,
-            LocalDateTime.now(),
+            Instant.now(),
             null,
             null
         );
@@ -49,7 +49,7 @@ public class SecurityNotificationService {
             deviceName,
             ipAddress,
             userAgent,
-            LocalDateTime.now(),
+            Instant.now(),
             null,
             null
         );
@@ -58,7 +58,7 @@ public class SecurityNotificationService {
         }
 
     public void notifyAccountTemporarilyLocked(Long userId,
-                                               LocalDateTime lockUntil,
+                                                Instant lockUntil,
                                                long remainingMinutes,
                                                String reason) {
         SecurityNotificationDTO payload = new SecurityNotificationDTO(
@@ -70,7 +70,7 @@ public class SecurityNotificationService {
                 null,
                 null,
                 null,
-                LocalDateTime.now(),
+                Instant.now(),
                 remainingMinutes,
                 lockUntil
         );

@@ -48,8 +48,15 @@ public class UserController {
      * Get user profile by ID
      */
     @GetMapping("/{userId}")
-    public ResponseEntity<UserProfileResponse> getUserProfile(@PathVariable Long userId) {
-        UserProfileResponse profile = userService.getUserProfile(userId);
+    public ResponseEntity<UserProfileResponse> getUserProfile(
+            Authentication authentication,
+            @PathVariable Long userId) {
+
+        Long viewerId = userService.getUserByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+
+        UserProfileResponse profile = userService.getUserProfileForViewer(userId, viewerId);
         return ResponseEntity.ok(profile);
     }
 
