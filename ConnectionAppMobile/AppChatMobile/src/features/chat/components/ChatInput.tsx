@@ -109,7 +109,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const typingStateRef = useRef(false);
   const deliveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stopTyping = (targetConversationId: number) => {
+  const stopTyping = useCallback((targetConversationId: number) => {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -119,7 +119,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       notifyStoppedTyping(targetConversationId);
       typingStateRef.current = false;
     }
-  };
+  }, [notifyStoppedTyping]);
 
   const appendFiles = useCallback((incoming: LocalAttachment[]) => {
     if (incoming.length === 0) return;
@@ -243,7 +243,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsSending(false);
     }
-  }, [text, selectedFiles, isSending, disabled, conversationId, onSend, replyTo, onCancelReply]);
+  }, [text, selectedFiles, isSending, disabled, conversationId, onSend, replyTo, onCancelReply, stopTyping]);
 
   const canSend =
     (text.trim().length > 0 || selectedFiles.length > 0) &&
@@ -356,7 +356,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsAiProcessing(false);
     }
-  }, [text, conversationId]);
+  }, [text, conversationId, applyAiDraft]);
 
   const openAiMenu = useCallback(() => {
     Keyboard.dismiss();
@@ -367,7 +367,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     applyAiDraft(suggestion);
     setIsSuggestionModalOpen(false);
     setAiSuggestions([]);
-  }, []);
+  }, [applyAiDraft]);
 
   // NEW: Cleanup timeout on unmount
   useEffect(() => {
