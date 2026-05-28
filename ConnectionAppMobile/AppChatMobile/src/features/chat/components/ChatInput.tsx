@@ -555,9 +555,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.iconBtn, !canSendMessage && styles.iconBtnDisabled]}
+            style={[styles.iconBtn, (!canSendMessage || isSending || disabled) && styles.iconBtnDisabled]}
             onPress={toggleExpand}
-            disabled={!canSendMessage}
+            disabled={!canSendMessage || isSending || disabled}
           >
             <Ionicons
               name={isExpanded ? "chevron-down" : "chevron-up"}
@@ -959,7 +959,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   dropdownItem: {
-    width: "48%",
+    width: "47%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
