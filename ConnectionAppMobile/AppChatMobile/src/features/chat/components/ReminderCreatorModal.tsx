@@ -103,11 +103,13 @@ const ReminderCreatorModal: React.FC<ReminderCreatorModalProps> = ({
 
     setIsLoading(true);
     try {
-      const reminderTime = `${date}T${time}:00`;
+      // Convert local time to UTC ISO string for backend
+      const localDateTime = new Date(`${date}T${time}:00`);
+      const utcReminderTime = localDateTime.toISOString();
       await chatService.createReminder({
         title: title.trim(),
         content: content.trim(),
-        reminderTime,
+        reminderTime: utcReminderTime,
         conversationId,
       });
       onClose();
