@@ -74,3 +74,36 @@ Each app has its own `.env` (gitignored) and `.env.example`:
 - `appchat.messages.json` and `test.sql` are dev/test data fixtures
 - Web state management: Zustand (`zustand`), routing: React Router v7
 - Upload limit: default 10MB backend, 2MB web/mobile (configurable via env)
+
+## CI/CD Setup
+
+Backend auto-deploys to EC2 on push to `main` via GitHub Actions.
+
+### Required GitHub Repository Secrets
+
+Configure these in Settings → Secrets and variables → Actions:
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `EC2_HOST` | EC2 public IP or DNS | `54.123.45.67` |
+| `EC2_USER` | SSH username | `ubuntu` |
+| `EC2_SSH_KEY` | SSH private key (PEM) | Content of `.pem` file |
+
+### EC2 Prerequisites
+
+- SSH key-based authentication enabled for the deploy user
+- Docker and Docker Compose installed
+- Repository cloned to `~/appchat/ConnectionApp/`
+- `.env` file configured in `ConnectionAppBackend/`
+- User has `docker` group membership (no sudo required for docker commands)
+
+### Triggering Deploy
+
+Push to `main` with changes in `ConnectionAppBackend/**`:
+```bash
+git push origin main
+```
+
+### Manual Deploy
+
+Run workflow manually from GitHub Actions tab → "Backend Deploy" → "Run workflow".
