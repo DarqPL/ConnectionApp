@@ -68,12 +68,13 @@ const ReminderCreator = ({ isOpen, onClose, onSave, initialData }: ReminderCreat
   const handleSave = () => {
     if (!title.trim() || !date || !time) return;
 
-    // Send local ISO string without "Z" suffix to preserve local time for LocalDateTime
-    const localReminderTime = `${date}T${time}:00`;
+    // Convert local time to UTC ISO string for backend
+    const localDateTime = new Date(`${date}T${time}:00`);
+    const utcReminderTime = localDateTime.toISOString();
     onSave({
       title: title.trim(),
       content: content.trim(),
-      reminderTime: localReminderTime,
+      reminderTime: utcReminderTime,
     });
     
     if (!initialData) {
