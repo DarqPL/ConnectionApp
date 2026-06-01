@@ -6,10 +6,15 @@ on:
     paths:
       - "ConnectionAppBackend/**"
 
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build & Verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ConnectionAppBackend
@@ -31,6 +36,7 @@ jobs:
     name: Deploy to EC2
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: SSH and Deploy
         uses: appleboy/ssh-action@v1
@@ -40,8 +46,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           disable_host_key_verification: true
           script: |
+            set -e
             cd ~/appchat/ConnectionApp/ConnectionAppBackend
             git pull origin main
             docker compose -f docker-compose.production.yml up -d --build backend
-            sleep 15
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                echo "Backend is healthy"
+                break
+              fi
+              echo "Waiting for backend health... ($i/30)"
+              sleep 2
+            done
             docker image prune -f
