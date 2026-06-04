@@ -240,7 +240,7 @@ const ChatWindowLayout = () => {
           onFilesOpen={() => setIsFilesPanelOpen(true)}
         />
 
-        <CallOverlay conversationId={selectedConvo.id} />
+        <CallOverlay conversationId={selectedConvo.id} isGroupConversation={selectedConvo.type === "GROUP"} />
 
         {activeConversationId && (
           <>
