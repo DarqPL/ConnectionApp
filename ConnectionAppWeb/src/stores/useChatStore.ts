@@ -893,6 +893,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
+  updateConvo: (convo) => {
+    set((state) => {
+      const otherConvos = state.conversations.filter((c) => c.id !== convo.id);
+      return {
+        conversations: [convo, ...otherConvos],
+      };
+    });
+  },
+
   createConversation: async (type, name, participantIds) => {
     set({ loading: true });
     try {

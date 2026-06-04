@@ -103,7 +103,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         // Subscribe to new conversation notifications
         client.subscribe(`/topic/user.${userId}/conversations`, (message) => {
           const newConvo = JSON.parse(message.body);
-          useChatStore.getState().addConvo(newConvo);
+          useChatStore.getState().updateConvo(newConvo);
         });
 
         // Subscribe to message recall notifications
