@@ -96,6 +96,7 @@ export interface ChatState {
   clearTypingUsers: (conversationId: number) => void;
   clearAllTypingUsers: () => void;
   addConvo: (convo: Conversation) => void;
+  updateConvo: (convo: Conversation) => void;
   createConversation: (
     type: string,
     name: string,

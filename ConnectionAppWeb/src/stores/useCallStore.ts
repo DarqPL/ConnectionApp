@@ -198,7 +198,6 @@ export const useCallStore = create<CallState>((set, get) => ({
     }
 
     // Only set activeCall if user is actually a participant in this call
-    const myUserId = useAuthStore.getState().user?.id;
     const isUserParticipant = call.participants?.some(p => p.userId === myUserId && p.status !== "LEFT");
     
     if (isUserParticipant || !call.isGroupCall) {
