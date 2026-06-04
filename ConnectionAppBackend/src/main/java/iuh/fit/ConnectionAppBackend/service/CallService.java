@@ -350,14 +350,17 @@ public class CallService {
                 callParticipantRepository.save(currentParticipant);
             }
 
-            // Check if any participant is still JOINED
-            boolean hasJoinedParticipant = participants.stream()
-                    .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED
-                            && !Objects.equals(p.getUser().getId(), user.getId()));
+            // Check if any participant is still JOINED or WAITING (hasn't left yet)
+            boolean hasActiveParticipant = participants.stream()
+                    .anyMatch(p -> (p.getStatus() == CallParticipantStatus.JOINED
+                            || p.getStatus() == CallParticipantStatus.WAITING)
+                            && !Objects.equals(p.getUser().getId(), user.getId())
+                            && p.getLeftAt() == null);
 
-            if (hasJoinedParticipant) {
-                // Call continues
+            if (hasActiveParticipant) {
+                // Call continues — other participants still waiting or joined
                 publishConversationParticipantState(callSession, participants);
+                publishConversationCallStateUpdate(callSession);
                 return toCallSessionResponse(callSession, participants, user.getId(), false);
             }
 
