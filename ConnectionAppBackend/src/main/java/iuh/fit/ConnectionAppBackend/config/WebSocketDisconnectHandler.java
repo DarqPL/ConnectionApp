@@ -81,17 +81,27 @@ public class WebSocketDisconnectHandler {
 
             log.info("User {} disconnected from group call {}, marked as LEFT", username, callSession.getId());
 
-            boolean hasActiveParticipant = participants.stream()
-                    .anyMatch(p -> (p.getStatus() == CallParticipantStatus.JOINED
-                            || p.getStatus() == CallParticipantStatus.WAITING)
+            boolean hasJoinedParticipant = participants.stream()
+                    .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED
                             && !Objects.equals(p.getUser().getId(), currentParticipant.getUser().getId())
                             && p.getLeftAt() == null);
 
-            if (hasActiveParticipant) {
+            if (hasJoinedParticipant) {
                 publishConversationParticipantState(callSession, participants);
                 publishConversationCallStateUpdate(callSession);
                 continue;
             }
+
+            // No other JOINED participants — end the call
+            // Mark all WAITING participants as MISSED
+            for (CallParticipant participant : participants) {
+                if (participant.getLeftAt() != null) continue;
+                if (participant.getStatus() == CallParticipantStatus.WAITING) {
+                    participant.setStatus(CallParticipantStatus.MISSED);
+                }
+                participant.setLeftAt(now);
+            }
+            callParticipantRepository.saveAll(participants);
 
             callSession.setStatus(CallStatus.ENDED);
             callSession.setEndedAt(now);

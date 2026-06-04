@@ -260,8 +260,32 @@ public class CallService {
         }
 
         // Existing participant logic
-        if (participant.getStatus() == CallParticipantStatus.DECLINED || participant.getStatus() == CallParticipantStatus.LEFT) {
+        // Allow re-joining: if participant was LEFT, reset to JOINED
+        if (participant.getStatus() == CallParticipantStatus.DECLINED) {
             throw new BadRequestException("This participant state cannot be accepted");
+        }
+
+        if (participant.getStatus() == CallParticipantStatus.LEFT) {
+            // Re-join: reset participant from LEFT to JOINED
+            participant.setStatus(CallParticipantStatus.JOINED);
+            participant.setJoinedAt(Instant.now());
+            participant.setLeftAt(null);
+            callParticipantRepository.save(participant);
+
+            // Only transition RINGING -> ONGOING for private calls
+            if (!isGroupCall && callSession.getStatus() == CallStatus.RINGING) {
+                callSession.setStatus(CallStatus.ONGOING);
+                if (callSession.getStartedAt() == null) {
+                    callSession.setStartedAt(Instant.now());
+                }
+                callSessionRepository.save(callSession);
+            }
+
+            List<CallParticipant> participants = callParticipantRepository.findByCallIdWithUser(callId);
+            publishStatusEvents(callSession, participants);
+            publishConversationParticipantState(callSession, participants);
+            publishConversationCallStateUpdate(callSession);
+            return toCallSessionResponse(callSession, participants, user.getId(), true);
         }
 
         if (participant.getStatus() != CallParticipantStatus.JOINED) {
@@ -350,19 +374,31 @@ public class CallService {
                 callParticipantRepository.save(currentParticipant);
             }
 
-            // Check if any participant is still JOINED or WAITING (hasn't left yet)
-            boolean hasActiveParticipant = participants.stream()
-                    .anyMatch(p -> (p.getStatus() == CallParticipantStatus.JOINED
-                            || p.getStatus() == CallParticipantStatus.WAITING)
+            // Check if any other participant is still JOINED (not WAITING — WAITING users haven't joined yet)
+            boolean hasJoinedParticipant = participants.stream()
+                    .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED
                             && !Objects.equals(p.getUser().getId(), user.getId())
                             && p.getLeftAt() == null);
 
-            if (hasActiveParticipant) {
-                // Call continues — other participants still waiting or joined
+            if (hasJoinedParticipant) {
+                // Call continues — other participants still joined
                 publishConversationParticipantState(callSession, participants);
                 publishConversationCallStateUpdate(callSession);
                 return toCallSessionResponse(callSession, participants, user.getId(), false);
             }
+
+            // No other JOINED participants — end the call
+            // Mark all WAITING participants as MISSED
+            for (CallParticipant participant : participants) {
+                if (participant.getLeftAt() != null) {
+                    continue;
+                }
+                if (participant.getStatus() == CallParticipantStatus.WAITING) {
+                    participant.setStatus(CallParticipantStatus.MISSED);
+                }
+                participant.setLeftAt(now);
+            }
+            callParticipantRepository.saveAll(participants);
 
             // Last participant left — end the call
             callSession.setStatus(CallStatus.ENDED);
