@@ -195,20 +195,26 @@ export const useCallStore = create<CallState>((set, get) => ({
       return;
     }
 
-    set((state) => {
-      const previousToken =
-        state.activeCall?.callId === call.callId
-          ? state.activeCall.token
-          : null;
+    // Only set activeCall if user is actually a participant in this call
+    const myUserId = useAuthStore.getState().user?.id;
+    const isUserParticipant = call.participants?.some(p => p.userId === myUserId && p.status !== "LEFT");
+    
+    if (isUserParticipant || !call.isGroupCall) {
+      set((state) => {
+        const previousToken =
+          state.activeCall?.callId === call.callId
+            ? state.activeCall.token
+            : null;
 
-      return {
-        activeCall: {
-          ...call,
-          token: call.token ?? previousToken ?? null,
-        },
-        incomingCall: null,
-      };
-    });
+        return {
+          activeCall: {
+            ...call,
+            token: call.token ?? previousToken ?? null,
+          },
+          incomingCall: null,
+        };
+      });
+    }
   },
 
   joinGroupCall: async (callId) => {
