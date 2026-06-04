@@ -38,6 +38,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
       isActive={activeConversationId === convo.id}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
+      hasActiveCall={(convo as any).hasActiveCall}
       leftSection={
         <>
           <UserAvatar
