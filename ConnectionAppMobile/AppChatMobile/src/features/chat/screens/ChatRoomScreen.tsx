@@ -197,6 +197,8 @@ const ChatRoomScreen = ({ route }: any) => {
     renameGroup,
     updateGroupDescription,
     uploadGroupAvatarFile,
+    groupCallActive,
+    joinGroupCall,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -257,6 +259,10 @@ const ChatRoomScreen = ({ route }: any) => {
     incomingCall?.conversationId === conversationId ? incomingCall : null;
   const activeForConversation =
     activeCall?.conversationId === conversationId ? activeCall : null;
+
+  const isUserInGroupCall = groupCallActive?.participants?.some(
+    (p) => p.userId === user?.id && p.status === "JOINED"
+  );
 
   useEffect(() => {
     activeCallIdRef.current = activeForConversation?.callId ?? null;
@@ -1226,6 +1232,20 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
+        {type === "GROUP" && groupCallActive && !isUserInGroupCall && (
+          <View style={styles.groupCallBanner}>
+            <Text style={styles.groupCallBannerText}>
+              Dang co cuoc goi nhom dien ra, ban co muon tham gia?
+            </Text>
+            <TouchableOpacity
+              style={styles.groupCallJoinBtn}
+              onPress={() => joinGroupCall(groupCallActive.callId)}
+            >
+              <Text style={styles.groupCallJoinBtnText}>Tham gia</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {activeForConversation && (
           <View style={styles.callBannerActive}>
             <View style={{ flex: 1 }}>
@@ -1735,6 +1755,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#e9f6ff",
     borderWidth: 1,
     borderColor: "#b7ddff",
+  },
+  groupCallBanner: {
+    padding: 12,
+    backgroundColor: "#eff6ff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#bfdbfe",
+    gap: 8,
+  },
+  groupCallBannerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1d4ed8",
+  },
+  groupCallJoinBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#2563eb",
+    alignSelf: "flex-start",
+  },
+  groupCallJoinBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
   },
   callBannerActive: {
     marginHorizontal: 12,
