@@ -33,6 +33,57 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
     }
   }, [conversationId, isGroupConversation, fetchActiveCall]);
 
+  // WebSocket subscription for call participants
+  useEffect(() => {
+    if (!isGroupConversation) {
+      return;
+    }
+
+    const { client } = useSocketStore.getState();
+    if (!client || !client.connected) {
+      return;
+    }
+
+    const topic = `/topic/conversation.${conversationId}/call-participants`;
+    const subscription = client.subscribe(topic, (message) => {
+      const payload = JSON.parse(message.body) as {
+        callId: number;
+        conversationId: number;
+        status: string;
+        participants: Array<{ userId: number; status: string }>;
+      };
+
+      const hasJoined = payload.participants.some(p => p.status === "JOINED");
+      const myUserId = useAuthStore.getState().user?.id;
+      const isUserJoined = payload.participants.some(
+        p => p.userId === myUserId && p.status === "JOINED"
+      );
+
+      if (hasJoined && payload.status === "ONGOING") {
+        if (!isUserJoined) {
+          useCallStore.getState().set({
+            groupCallActive: {
+              callId: payload.callId,
+              conversationId: payload.conversationId,
+              status: payload.status,
+              participants: payload.participants,
+              isGroupCall: true,
+            } as CallSession,
+          });
+        }
+      } else if (!hasJoined || payload.status === "ENDED" || payload.status === "MISSED") {
+        const current = useCallStore.getState().groupCallActive;
+        if (current?.conversationId === payload.conversationId) {
+          useCallStore.getState().set({ groupCallActive: null });
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [conversationId, isGroupConversation]);
+
   const groupCallForConversation =
     groupCallActive?.conversationId === conversationId ? groupCallActive : null;
 
