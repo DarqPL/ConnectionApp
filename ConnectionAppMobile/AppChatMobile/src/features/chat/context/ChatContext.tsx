@@ -822,14 +822,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         payload.status === "MISSED" ||
         payload.status === "CANCELLED"
       ) {
-        setGroupCallActive(null);
-        setActiveCall(null);
-        setIncomingCall(null);
+        setGroupCallActive((prev) => prev?.callId === session.callId ? null : prev);
+        setActiveCall((prev) => prev?.callId === session.callId ? null : prev);
+        setIncomingCall((prev) => prev?.callId === session.callId ? null : prev);
         return;
       }
 
       if (payload.status === "ONGOING") {
-        setGroupCallActive(session);
+        setGroupCallActive((prev) => prev?.callId === session.callId ? session : prev);
         return;
       }
     }
@@ -1810,9 +1810,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const endActiveCall = useCallback(
     async (callId: number, reason = "ENDED_BY_USER") => {
-      await callService.endCall(callId, reason);
+      const response = await callService.endCall(callId, reason);
       setActiveCall((prev) => (prev?.callId === callId ? null : prev));
       setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+      if (response?.isGroupCall && response?.status === "ONGOING") {
+        setGroupCallActive(response as CallSession);
+      }
     },
     [],
   );
@@ -1822,7 +1825,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const call = await callService.acceptCall(callId);
       const token = call.token ?? await callService.issueToken(callId);
       setActiveCall({ ...call, token });
-      setGroupCallActive(null);
     } catch (error) {
       console.error("[ChatContext] joinGroupCall error:", error);
       throw error;

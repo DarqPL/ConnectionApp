@@ -34,7 +34,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
       isActive={activeConversationId === convo.id}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
-      hasActiveCall={(convo as any).hasActiveCall}
+      hasActiveCall={convo.hasActiveCall}
       leftSection={
         <>
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}

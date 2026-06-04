@@ -36,6 +36,8 @@ export interface Conversation {
   allowLinkJoin?: boolean;
   blockedMembers?: Participant[];
   pendingMembers?: Participant[];
+  hasActiveCall?: boolean;
+  activeCallId?: number | null;
 }
 
 export interface SenderInfo {

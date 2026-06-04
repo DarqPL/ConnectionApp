@@ -84,6 +84,10 @@ public class CallService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private ConversationService conversationService;
+
     @Value("${app.zego.app-id:0}")
     private long zegoAppId;
 
@@ -191,6 +195,7 @@ public class CallService {
         }
         publishStatusEvents(savedSession, participants);
         publishConversationParticipantState(savedSession, participants);
+        publishConversationCallStateUpdate(savedSession);
 
         return toCallSessionResponse(savedSession, participants, caller.getId(), true);
     }
@@ -404,6 +409,7 @@ public class CallService {
 
         publishStatusEvents(callSession, participants);
         publishConversationParticipantState(callSession, participants);
+        publishConversationCallStateUpdate(callSession);
 
         return toCallSessionResponse(callSession, participants, user.getId(), false);
     }
@@ -670,6 +676,21 @@ public class CallService {
                 "/topic/conversation." + callSession.getConversation().getId() + "/call-participants",
                 payload
         );
+    }
+
+    private void publishConversationCallStateUpdate(CallSession callSession) {
+        Long conversationId = callSession.getConversation().getId();
+        boolean hasActiveCall = callSession.getStatus() == CallStatus.ONGOING;
+
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : members) {
+            try {
+                ConversationResponse convoResponse = conversationService.getConversationById(conversationId, member.getUser().getId());
+                messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/conversations", convoResponse);
+            } catch (Exception ex) {
+                // Skip if user can't access conversation
+            }
+        }
     }
 
     private CallSessionResponse toCallSessionResponse(CallSession callSession,

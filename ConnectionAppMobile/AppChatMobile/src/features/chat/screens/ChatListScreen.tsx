@@ -155,7 +155,7 @@ const ChatListScreen = () => {
               unreadCount={item.unreadCount || 0}
               type={item.type}
               participants={item.participants || []}
-              hasActiveCall={(item as any).hasActiveCall || false}
+              hasActiveCall={item.hasActiveCall || false}
               onPress={() => handlePress(item)}
             />
           )}

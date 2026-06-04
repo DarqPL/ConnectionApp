@@ -77,11 +77,15 @@ export const useCallStore = create<CallState>((set, get) => ({
       callId,
       reason ? { reason } : undefined,
     );
-    set((state) => ({
-      activeCall: state.activeCall?.callId === callId ? null : state.activeCall,
-      incomingCall:
-        state.incomingCall?.callId === callId ? null : state.incomingCall,
-    }));
+    if (call.isGroupCall) {
+      get().handleCallStatus(call);
+    } else {
+      set((state) => ({
+        activeCall: state.activeCall?.callId === callId ? null : state.activeCall,
+        incomingCall:
+          state.incomingCall?.callId === callId ? null : state.incomingCall,
+      }));
+    }
     return call;
   },
 
@@ -157,12 +161,18 @@ export const useCallStore = create<CallState>((set, get) => ({
 
     if (call.isGroupCall) {
       if (isFinishedStatus(call.status)) {
-        set({ groupCallActive: null, activeCall: null, incomingCall: null });
+        set((state) => ({
+          groupCallActive: state.groupCallActive?.callId === call.callId ? null : state.groupCallActive,
+          activeCall: state.activeCall?.callId === call.callId ? null : state.activeCall,
+          incomingCall: state.incomingCall?.callId === call.callId ? null : state.incomingCall,
+        }));
         void get().fetchHistory(0, 20);
         return;
       }
       if (call.status === "ONGOING") {
-        set({ groupCallActive: call });
+        set((state) => ({
+          groupCallActive: state.groupCallActive?.callId === call.callId ? call : state.groupCallActive,
+        }));
         return;
       }
     }
@@ -203,7 +213,7 @@ export const useCallStore = create<CallState>((set, get) => ({
 
   joinGroupCall: async (callId) => {
     const call = await callService.acceptCall(callId);
-    set({ groupCallActive: null, activeCall: call });
+    set({ activeCall: call });
     return call;
   },
 
