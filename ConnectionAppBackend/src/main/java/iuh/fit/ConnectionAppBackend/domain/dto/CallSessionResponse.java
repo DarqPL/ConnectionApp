@@ -26,4 +26,5 @@ public class CallSessionResponse {
     private String endedReason;
     private CallTokenResponse token;
     private List<CallParticipantResponse> participants;
+    private Boolean isGroupCall;
 }

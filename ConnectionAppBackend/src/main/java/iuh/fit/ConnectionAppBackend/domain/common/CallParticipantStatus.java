@@ -5,5 +5,6 @@ public enum CallParticipantStatus {
     JOINED,
     DECLINED,
     LEFT,
-    MISSED
+    MISSED,
+    WAITING
 }
