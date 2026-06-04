@@ -698,6 +698,22 @@ public class CallService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public CallSessionResponse getActiveCallByConversation(String username, Long conversationId) {
+        User user = requireUser(username);
+
+        if (!conversationUserRepository.isMember(conversationId, user.getId())) {
+            return null;
+        }
+
+        return callSessionRepository.findActiveByConversationIdAndStatus(conversationId, CallStatus.ONGOING)
+                .map(callSession -> {
+                    List<CallParticipant> participants = callParticipantRepository.findByCallIdWithUser(callSession.getId());
+                    return toCallSessionResponse(callSession, participants, user.getId(), true);
+                })
+                .orElse(null);
+    }
+
     private CallParticipantResponse toCallParticipantResponse(CallParticipant participant) {
         return CallParticipantResponse.builder()
                 .userId(participant.getUser().getId())

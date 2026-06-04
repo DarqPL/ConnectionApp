@@ -95,4 +95,16 @@ public class CallController {
         PageResponse<CallHistoryItemResponse> response = callService.getCallHistory(authentication.getName(), page, size);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/conversation/{convId}/active")
+    public ResponseEntity<CallSessionResponse> getActiveCallByConversation(
+            Authentication authentication,
+            @PathVariable Long convId) {
+
+        CallSessionResponse response = callService.getActiveCallByConversation(authentication.getName(), convId);
+        if (response == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(response);
+    }
 }
