@@ -893,7 +893,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
-  updateConvo: (convo) => {
+  updateConvo: (convo: Conversation) => {
     set((state) => {
       const otherConvos = state.conversations.filter((c) => c.id !== convo.id);
       return {
