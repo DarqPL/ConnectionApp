@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Ellipsis } from "lucide-react";
 import type { Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 
@@ -25,7 +24,7 @@ const GroupChatAvatar = ({ participants, type, avatarUrl }: GroupChatAvatarProps
   }
 
   const avatars = [];
-  const limit = Math.min(participants.length, 4);
+  const limit = Math.min(participants.length, 2);
 
   for (let i = 0; i < limit; i++) {
     const member = participants[i];
@@ -43,10 +42,9 @@ const GroupChatAvatar = ({ participants, type, avatarUrl }: GroupChatAvatarProps
     <div className="relative flex -space-x-2 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-2">
       {avatars}
 
-      {/* nếu nhiều hơn 4 avatar thì render dấu ... */}
       {participants.length > limit && (
-        <div className="flex items-center z-10 justify-center size-8 rounded-full bg-muted ring-2 ring-background text-muted-foreground">
-          <Ellipsis className="size-4" />
+        <div className="flex items-center z-10 justify-center size-8 rounded-full bg-muted ring-2 ring-background text-muted-foreground text-xs font-semibold">
+          +{participants.length - limit}
         </div>
       )}
     </div>
