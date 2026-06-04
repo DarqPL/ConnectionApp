@@ -175,6 +175,8 @@ export const useCallStore = create<CallState>((set, get) => ({
         }));
         return;
       }
+      // For all other group call statuses, just update groupCallActive, never activeCall
+      return;
     }
 
     if (isFinishedStatus(call.status)) {

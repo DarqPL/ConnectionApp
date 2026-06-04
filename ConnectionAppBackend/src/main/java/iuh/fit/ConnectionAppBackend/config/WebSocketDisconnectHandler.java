@@ -3,12 +3,17 @@ package iuh.fit.ConnectionAppBackend.config;
 import iuh.fit.ConnectionAppBackend.domain.common.CallParticipantStatus;
 import iuh.fit.ConnectionAppBackend.domain.common.CallStatus;
 import iuh.fit.ConnectionAppBackend.domain.common.ConversationType;
+import iuh.fit.ConnectionAppBackend.domain.dto.ConversationResponse;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.CallParticipant;
 import iuh.fit.ConnectionAppBackend.domain.entity.sql.CallSession;
+import iuh.fit.ConnectionAppBackend.domain.entity.sql.ConversationUser;
 import iuh.fit.ConnectionAppBackend.repo.CallParticipantRepository;
 import iuh.fit.ConnectionAppBackend.repo.CallSessionRepository;
+import iuh.fit.ConnectionAppBackend.repo.ConversationUserRepository;
+import iuh.fit.ConnectionAppBackend.service.ConversationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -24,12 +29,26 @@ import java.util.Objects;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class WebSocketDisconnectHandler {
 
     private final CallSessionRepository callSessionRepository;
     private final CallParticipantRepository callParticipantRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final ConversationUserRepository conversationUserRepository;
+    private final ConversationService conversationService;
+
+    public WebSocketDisconnectHandler(
+            CallSessionRepository callSessionRepository,
+            CallParticipantRepository callParticipantRepository,
+            SimpMessagingTemplate messagingTemplate,
+            ConversationUserRepository conversationUserRepository,
+            @Lazy ConversationService conversationService) {
+        this.callSessionRepository = callSessionRepository;
+        this.callParticipantRepository = callParticipantRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.conversationUserRepository = conversationUserRepository;
+        this.conversationService = conversationService;
+    }
 
     @EventListener
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
@@ -62,12 +81,15 @@ public class WebSocketDisconnectHandler {
 
             log.info("User {} disconnected from group call {}, marked as LEFT", username, callSession.getId());
 
-            boolean hasJoinedParticipant = participants.stream()
-                    .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED
-                            && !Objects.equals(p.getUser().getId(), currentParticipant.getUser().getId()));
+            boolean hasActiveParticipant = participants.stream()
+                    .anyMatch(p -> (p.getStatus() == CallParticipantStatus.JOINED
+                            || p.getStatus() == CallParticipantStatus.WAITING)
+                            && !Objects.equals(p.getUser().getId(), currentParticipant.getUser().getId())
+                            && p.getLeftAt() == null);
 
-            if (hasJoinedParticipant) {
+            if (hasActiveParticipant) {
                 publishConversationParticipantState(callSession, participants);
+                publishConversationCallStateUpdate(callSession);
                 continue;
             }
 
@@ -163,5 +185,18 @@ public class WebSocketDisconnectHandler {
         payload.put("participants", participantPayloads);
 
         return payload;
+    }
+
+    private void publishConversationCallStateUpdate(CallSession callSession) {
+        Long conversationId = callSession.getConversation().getId();
+        List<ConversationUser> members = conversationUserRepository.findByConversationId(conversationId);
+        for (ConversationUser member : members) {
+            try {
+                ConversationResponse convoResponse = conversationService.getConversationById(conversationId, member.getUser().getId());
+                messagingTemplate.convertAndSend("/topic/user." + member.getUser().getId() + "/conversations", convoResponse);
+            } catch (Exception ex) {
+                // Skip if user can't access conversation
+            }
+        }
     }
 }
