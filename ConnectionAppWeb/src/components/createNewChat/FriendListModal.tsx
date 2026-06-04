@@ -87,7 +87,7 @@ const FriendListModal = ({ setOpen }: Props) => {
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative size-10 shrink-0">
-                      <GroupChatAvatar participants={group.participants} type="chat" />
+                      <GroupChatAvatar participants={group.participants} type="chat" avatarUrl={group.avatarUrl} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-semibold text-sm truncate group-hover/item:text-primary transition-colors">
