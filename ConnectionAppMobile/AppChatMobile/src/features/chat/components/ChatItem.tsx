@@ -6,6 +6,7 @@ import {
   Image,
   TouchableOpacity,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../theme";
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
   unreadCount?: number;
   type?: string;
   participants?: Array<{ userId: number; avatarUrl?: string | null; displayName: string }>;
+  hasActiveCall?: boolean;
   onPress: () => void;
 }
 
@@ -27,6 +29,7 @@ const ChatItem: React.FC<Props> = ({
   unreadCount = 0,
   type = "PRIVATE",
   participants = [],
+  hasActiveCall = false,
   onPress,
 }) => {
   const isGroup = type === "GROUP";
@@ -75,12 +78,19 @@ const ChatItem: React.FC<Props> = ({
       {renderAvatar()}
       <View style={styles.content}>
         <View style={styles.row}>
-          <Text
-            style={[styles.name, hasUnread && styles.nameUnread]}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text
+              style={[styles.name, hasUnread && styles.nameUnread]}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            {hasActiveCall && (
+              <View style={styles.activeCallIndicator}>
+                <Ionicons name="call" size={14} color="#22c55e" />
+              </View>
+            )}
+          </View>
           <Text style={[styles.time, hasUnread && styles.timeUnread]}>{time}</Text>
         </View>
         <View style={styles.row}>
@@ -156,8 +166,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: COLORS.text,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
     marginRight: 8,
+  },
+  activeCallIndicator: {
+    marginLeft: 4,
   },
   nameUnread: {
     fontWeight: "700",
