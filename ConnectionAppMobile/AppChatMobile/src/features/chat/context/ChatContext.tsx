@@ -830,7 +830,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (payload.status === "ONGOING") {
-        setGroupCallActive((prev) => prev?.callId === session.callId ? session : prev);
+        setGroupCallActive(session);
         return;
       }
     }

@@ -142,8 +142,10 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
   const showIncoming =
     incomingForConversation && !activeForConversation;
   const showActive = !!activeForConversation;
+  const showGroupCallBanner = !!groupCallForConversation;
 
-  if (!showIncoming && !showActive) {
+  // Always render for group conversations so fetchActiveCall can run
+  if (!showIncoming && !showActive && !showGroupCallBanner && !isGroupConversation) {
     return null;
   }
 
@@ -242,7 +244,7 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
 
   return (
     <div className="border-b border-border/40 bg-muted/40 px-4 py-3">
-      {isGroupConversation && groupCallForConversation && !isUserInGroupCall && (
+      {isGroupConversation && groupCallForConversation && !isUserInGroupCall && !activeForConversation && (
         <div className="mb-3 rounded-lg border border-blue-300/60 bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
             <PhoneCall className="size-4" />

@@ -1240,7 +1240,7 @@ const ChatRoomScreen = ({ route }: any) => {
           </View>
         )}
 
-        {type === "GROUP" && groupCallActive && !isUserInGroupCall && (
+        {type === "GROUP" && groupCallActive && !isUserInGroupCall && !activeForConversation && (
           <View style={styles.groupCallBanner}>
             <Text style={styles.groupCallBannerText}>
               Dang co cuoc goi nhom dien ra, ban co muon tham gia?
