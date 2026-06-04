@@ -55,13 +55,16 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
         participants: Array<{ userId: number; status: string }>;
       };
 
-      const hasJoined = payload.participants.some(p => p.status === "JOINED");
+      // Check for any active participants (JOINED or WAITING), not just JOINED
+      const hasActiveParticipant = payload.participants.some(
+        p => p.status === "JOINED" || p.status === "WAITING"
+      );
       const myUserId = useAuthStore.getState().user?.id;
       const isUserJoined = payload.participants.some(
         p => p.userId === myUserId && p.status === "JOINED"
       );
 
-      if (hasJoined && payload.status === "ONGOING") {
+      if (hasActiveParticipant && payload.status === "ONGOING") {
         if (!isUserJoined) {
           useCallStore.getState().setGroupCallActive({
             callId: payload.callId,
@@ -71,7 +74,7 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
             isGroupCall: true,
           } as CallSession);
         }
-      } else if (!hasJoined || payload.status === "ENDED" || payload.status === "MISSED") {
+      } else if (!hasActiveParticipant || payload.status === "ENDED" || payload.status === "MISSED") {
         const current = useCallStore.getState().groupCallActive;
         if (current?.conversationId === payload.conversationId) {
           useCallStore.getState().setGroupCallActive(null);

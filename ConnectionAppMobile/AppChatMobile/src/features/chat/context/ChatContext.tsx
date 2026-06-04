@@ -37,6 +37,7 @@ interface ChatContextType {
   activeCall: CallSession | null;
   groupCallActive: CallSession | null;
   joinGroupCall: (callId: number) => Promise<void>;
+  fetchActiveCall: (conversationId: number) => Promise<void>;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
   sendMessage: (
@@ -1838,6 +1839,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const fetchActiveCall = useCallback(async (conversationId: number) => {
+    try {
+      const call = await callService.getActiveCallByConversation(conversationId);
+      if (call) {
+        setGroupCallActive(call);
+      } else {
+        setGroupCallActive(null);
+      }
+    } catch (error) {
+      console.error("[ChatContext] fetchActiveCall error:", error);
+    }
+  }, []);
+
   const value: ChatContextType = {
     conversations,
     currentMessages,
@@ -1849,6 +1863,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     activeCall,
     groupCallActive,
     joinGroupCall,
+    fetchActiveCall,
     fetchConversations,
     fetchMessages,
     sendMessage,

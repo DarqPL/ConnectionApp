@@ -77,14 +77,15 @@ export const useCallStore = create<CallState>((set, get) => ({
       callId,
       reason ? { reason } : undefined,
     );
+    // Always clear activeCall - user has left the call
+    set((state) => ({
+      activeCall: state.activeCall?.callId === callId ? null : state.activeCall,
+      incomingCall:
+        state.incomingCall?.callId === callId ? null : state.incomingCall,
+    }));
+    // For group calls, also update groupCallActive based on call status
     if (call.isGroupCall) {
       get().handleCallStatus(call);
-    } else {
-      set((state) => ({
-        activeCall: state.activeCall?.callId === callId ? null : state.activeCall,
-        incomingCall:
-          state.incomingCall?.callId === callId ? null : state.incomingCall,
-      }));
     }
     return call;
   },

@@ -199,6 +199,7 @@ const ChatRoomScreen = ({ route }: any) => {
     uploadGroupAvatarFile,
     groupCallActive,
     joinGroupCall,
+    fetchActiveCall,
   } = useChat();
   const { user, signOut } = useAuth();
   const flatListRef = useRef<FlatList>(null);
@@ -267,6 +268,13 @@ const ChatRoomScreen = ({ route }: any) => {
   useEffect(() => {
     activeCallIdRef.current = activeForConversation?.callId ?? null;
   }, [activeForConversation?.callId]);
+
+  // Fetch active call on mount for group conversations
+  useEffect(() => {
+    if (type === "GROUP" && conversationId) {
+      void fetchActiveCall(conversationId);
+    }
+  }, [conversationId, type, fetchActiveCall]);
 
   const ensureCallPermissions = React.useCallback(
     async (mediaType: CallMediaType) => {
