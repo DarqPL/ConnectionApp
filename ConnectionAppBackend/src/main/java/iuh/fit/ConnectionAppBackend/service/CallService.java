@@ -112,6 +112,9 @@ public class CallService {
             throw new UnauthorizedException("User is not a member of this conversation");
         }
 
+        boolean isGroupCall = conversation.getType() == ConversationType.GROUP;
+
+        // Check for existing active call
         List<CallSession> existingActiveCalls = callSessionRepository.findActiveByConversationId(
                 conversationId,
                 ACTIVE_CALL_STATUSES,
@@ -137,11 +140,13 @@ public class CallService {
         }
 
         Instant now = Instant.now();
+        CallStatus initialStatus = isGroupCall ? CallStatus.ONGOING : CallStatus.RINGING;
+
         CallSession callSession = CallSession.builder()
                 .conversation(conversation)
                 .initiatedBy(caller)
                 .mediaType(parseMediaType(request.getMediaType()))
-                .status(CallStatus.RINGING)
+                .status(initialStatus)
                 .zegoRoomId(generateRoomId(conversationId))
                 .createdAt(now)
                 .build();
@@ -153,13 +158,26 @@ public class CallService {
             Long memberId = member.getUser().getId();
             boolean isCaller = Objects.equals(memberId, caller.getId());
 
+            CallParticipantStatus initialParticipantStatus;
+            Instant initialJoinedAt;
+            if (isCaller) {
+                initialParticipantStatus = CallParticipantStatus.JOINED;
+                initialJoinedAt = now;
+            } else if (isGroupCall) {
+                initialParticipantStatus = CallParticipantStatus.WAITING;
+                initialJoinedAt = null;
+            } else {
+                initialParticipantStatus = CallParticipantStatus.RINGING;
+                initialJoinedAt = null;
+            }
+
             CallParticipant participant = CallParticipant.builder()
                     .callSession(savedSession)
                     .user(member.getUser())
-                    .status(isCaller ? CallParticipantStatus.JOINED : CallParticipantStatus.RINGING)
+                    .status(initialParticipantStatus)
                     .audioMuted(false)
                     .videoMuted(false)
-                    .joinedAt(isCaller ? now : null)
+                    .joinedAt(initialJoinedAt)
                     .leftAt(null)
                     .build();
             participants.add(participant);
@@ -167,7 +185,10 @@ public class CallService {
 
         callParticipantRepository.saveAll(participants);
 
-        publishInviteEvents(savedSession, participants);
+        // For group calls, don't send invite (no ringing)
+        if (!isGroupCall) {
+            publishInviteEvents(savedSession, participants);
+        }
         publishStatusEvents(savedSession, participants);
         publishConversationParticipantState(savedSession, participants);
 
@@ -197,10 +218,43 @@ public class CallService {
     public CallSessionResponse acceptCall(String username, Long callId) {
         User user = requireUser(username);
         CallSession callSession = getRequiredCallSession(callId);
+        Conversation conversation = callSession.getConversation();
+        boolean isGroupCall = conversation.getType() == ConversationType.GROUP;
 
-        CallParticipant participant = callParticipantRepository.findByCallSessionIdAndUserId(callId, user.getId())
-                .orElseThrow(() -> new UnauthorizedException("User is not a participant of this call"));
+        CallParticipant participant = callParticipantRepository
+                .findByCallSessionIdAndUserId(callId, user.getId())
+                .orElse(null);
 
+        // Upsert: if participant doesn't exist (new member added during call), create one
+        if (participant == null) {
+            if (!isGroupCall) {
+                throw new UnauthorizedException("User is not a participant of this call");
+            }
+            if (!conversationUserRepository.isMember(conversation.getId(), user.getId())) {
+                throw new UnauthorizedException("User is not a member of this conversation");
+            }
+            if (callSession.getStatus() != CallStatus.ONGOING) {
+                throw new BadRequestException("Call is no longer active");
+            }
+
+            participant = CallParticipant.builder()
+                    .callSession(callSession)
+                    .user(user)
+                    .status(CallParticipantStatus.JOINED)
+                    .audioMuted(false)
+                    .videoMuted(false)
+                    .joinedAt(Instant.now())
+                    .leftAt(null)
+                    .build();
+            callParticipantRepository.save(participant);
+
+            List<CallParticipant> participants = callParticipantRepository.findByCallIdWithUser(callId);
+            publishStatusEvents(callSession, participants);
+            publishConversationParticipantState(callSession, participants);
+            return toCallSessionResponse(callSession, participants, user.getId(), true);
+        }
+
+        // Existing participant logic
         if (participant.getStatus() == CallParticipantStatus.DECLINED || participant.getStatus() == CallParticipantStatus.LEFT) {
             throw new BadRequestException("This participant state cannot be accepted");
         }
@@ -211,7 +265,8 @@ public class CallService {
             callParticipantRepository.save(participant);
         }
 
-        if (callSession.getStatus() == CallStatus.RINGING) {
+        // Only transition RINGING -> ONGOING for private calls
+        if (!isGroupCall && callSession.getStatus() == CallStatus.RINGING) {
             callSession.setStatus(CallStatus.ONGOING);
             if (callSession.getStartedAt() == null) {
                 callSession.setStartedAt(Instant.now());
@@ -230,8 +285,15 @@ public class CallService {
     public CallSessionResponse rejectCall(String username, Long callId) {
         User user = requireUser(username);
         CallSession callSession = getRequiredCallSession(callId);
+        Conversation conversation = callSession.getConversation();
+        boolean isGroupCall = conversation.getType() == ConversationType.GROUP;
 
-        CallParticipant participant = callParticipantRepository.findByCallSessionIdAndUserId(callId, user.getId())
+        if (isGroupCall) {
+            throw new BadRequestException("Không thể từ chối cuộc gọi nhóm");
+        }
+
+        CallParticipant participant = callParticipantRepository
+                .findByCallSessionIdAndUserId(callId, user.getId())
                 .orElseThrow(() -> new UnauthorizedException("User is not a participant of this call"));
 
         if (participant.getStatus() == CallParticipantStatus.JOINED) {
@@ -257,7 +319,8 @@ public class CallService {
     public CallSessionResponse endCall(String username, Long callId, CallActionRequest request) {
         User user = requireUser(username);
         CallSession callSession = getRequiredCallSession(callId);
-        ensureUserIsParticipant(callId, user.getId());
+        Conversation conversation = callSession.getConversation();
+        boolean isGroupCall = conversation.getType() == ConversationType.GROUP;
 
         if (callSession.getStatus() == CallStatus.ENDED
                 || callSession.getStatus() == CallStatus.MISSED
@@ -267,29 +330,77 @@ public class CallService {
         }
 
         Instant now = Instant.now();
-        callSession.setStatus(CallStatus.ENDED);
-        callSession.setEndedAt(now);
-        callSession.setEndedReason(normalizeEndedReason(request == null ? null : request.getReason()));
-        if (callSession.getStartedAt() != null) {
-            long duration = Math.max(0, callSession.getStartedAt().until(now, ChronoUnit.SECONDS));
-            callSession.setDurationSeconds(duration);
-        }
-        callSessionRepository.save(callSession);
-
         List<CallParticipant> participants = callParticipantRepository.findByCallIdWithUser(callId);
-        for (CallParticipant participant : participants) {
-            if (participant.getLeftAt() != null) {
-                continue;
+
+        if (isGroupCall) {
+            // Group call: only mark this participant as LEFT
+            CallParticipant currentParticipant = participants.stream()
+                    .filter(p -> Objects.equals(p.getUser().getId(), user.getId()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (currentParticipant != null && currentParticipant.getLeftAt() == null) {
+                currentParticipant.setStatus(CallParticipantStatus.LEFT);
+                currentParticipant.setLeftAt(now);
+                callParticipantRepository.save(currentParticipant);
             }
 
-            if (participant.getStatus() == CallParticipantStatus.RINGING) {
-                participant.setStatus(CallParticipantStatus.MISSED);
-            } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
-                participant.setStatus(CallParticipantStatus.LEFT);
+            // Check if any participant is still JOINED
+            boolean hasJoinedParticipant = participants.stream()
+                    .anyMatch(p -> p.getStatus() == CallParticipantStatus.JOINED
+                            && !Objects.equals(p.getUser().getId(), user.getId()));
+
+            if (hasJoinedParticipant) {
+                // Call continues
+                publishConversationParticipantState(callSession, participants);
+                return toCallSessionResponse(callSession, participants, user.getId(), false);
             }
-            participant.setLeftAt(now);
+
+            // Last participant left — end the call
+            callSession.setStatus(CallStatus.ENDED);
+            callSession.setEndedAt(now);
+            callSession.setEndedReason(normalizeEndedReason(request == null ? null : request.getReason()));
+            if (callSession.getStartedAt() != null) {
+                long duration = Math.max(0, callSession.getStartedAt().until(now, ChronoUnit.SECONDS));
+                callSession.setDurationSeconds(duration);
+            }
+            callSessionRepository.save(callSession);
+
+            // Mark all WAITING participants as MISSED
+            for (CallParticipant participant : participants) {
+                if (participant.getLeftAt() != null) {
+                    continue;
+                }
+                if (participant.getStatus() == CallParticipantStatus.WAITING) {
+                    participant.setStatus(CallParticipantStatus.MISSED);
+                }
+                participant.setLeftAt(now);
+            }
+            callParticipantRepository.saveAll(participants);
+        } else {
+            // Private call: original logic
+            callSession.setStatus(CallStatus.ENDED);
+            callSession.setEndedAt(now);
+            callSession.setEndedReason(normalizeEndedReason(request == null ? null : request.getReason()));
+            if (callSession.getStartedAt() != null) {
+                long duration = Math.max(0, callSession.getStartedAt().until(now, ChronoUnit.SECONDS));
+                callSession.setDurationSeconds(duration);
+            }
+            callSessionRepository.save(callSession);
+
+            for (CallParticipant participant : participants) {
+                if (participant.getLeftAt() != null) {
+                    continue;
+                }
+                if (participant.getStatus() == CallParticipantStatus.RINGING) {
+                    participant.setStatus(CallParticipantStatus.MISSED);
+                } else if (participant.getStatus() == CallParticipantStatus.JOINED) {
+                    participant.setStatus(CallParticipantStatus.LEFT);
+                }
+                participant.setLeftAt(now);
+            }
+            callParticipantRepository.saveAll(participants);
         }
-        callParticipantRepository.saveAll(participants);
 
         publishStatusEvents(callSession, participants);
         publishConversationParticipantState(callSession, participants);
@@ -407,6 +518,11 @@ public class CallService {
 
     private void reconcileExistingActiveCall(CallSession callSession, List<CallParticipant> participants) {
         if (!ACTIVE_CALL_STATUSES.contains(callSession.getStatus())) {
+            return;
+        }
+
+        // Skip reconciliation for group calls (they don't have RINGING timeout)
+        if (callSession.getConversation().getType() == ConversationType.GROUP) {
             return;
         }
 
@@ -576,6 +692,7 @@ public class CallService {
                 .endedAt(callSession.getEndedAt())
                 .durationSeconds(callSession.getDurationSeconds())
                 .endedReason(callSession.getEndedReason())
+                .isGroupCall(callSession.getConversation().getType() == ConversationType.GROUP)
                 .token(includeToken ? buildToken(callSession, currentUserId) : null)
                 .participants(participantResponses)
                 .build();
