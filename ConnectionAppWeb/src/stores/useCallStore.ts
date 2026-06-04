@@ -33,6 +33,7 @@ interface CallState {
   clearActiveCall: () => void;
   joinGroupCall: (callId: number) => Promise<CallSession>;
   fetchActiveCall: (convId: number) => Promise<void>;
+  setGroupCallActive: (call: CallSession | null) => void;
   reset: () => void;
 }
 
@@ -214,6 +215,8 @@ export const useCallStore = create<CallState>((set, get) => ({
       set({ groupCallActive: null });
     }
   },
+
+  setGroupCallActive: (call) => set({ groupCallActive: call }),
 
   clearIncomingCall: () => set({ incomingCall: null }),
   clearActiveCall: () => set({ activeCall: null }),

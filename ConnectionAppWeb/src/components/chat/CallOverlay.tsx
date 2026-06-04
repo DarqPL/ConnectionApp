@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
+import { useSocketStore } from "@/stores/useSocketStore";
+import type { CallSession } from "@/types/call";
 import { Phone, PhoneCall, PhoneIncoming, PhoneOff, Video } from "lucide-react";
 import { toast } from "sonner";
 import ZegoCallRoom from "./ZegoCallRoom";
@@ -45,7 +47,7 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
     }
 
     const topic = `/topic/conversation.${conversationId}/call-participants`;
-    const subscription = client.subscribe(topic, (message) => {
+    const subscription = client.subscribe(topic, (message: { body: string }) => {
       const payload = JSON.parse(message.body) as {
         callId: number;
         conversationId: number;
@@ -61,20 +63,18 @@ const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) 
 
       if (hasJoined && payload.status === "ONGOING") {
         if (!isUserJoined) {
-          useCallStore.getState().set({
-            groupCallActive: {
-              callId: payload.callId,
-              conversationId: payload.conversationId,
-              status: payload.status,
-              participants: payload.participants,
-              isGroupCall: true,
-            } as CallSession,
-          });
+          useCallStore.getState().setGroupCallActive({
+            callId: payload.callId,
+            conversationId: payload.conversationId,
+            status: payload.status,
+            participants: payload.participants,
+            isGroupCall: true,
+          } as CallSession);
         }
       } else if (!hasJoined || payload.status === "ENDED" || payload.status === "MISSED") {
         const current = useCallStore.getState().groupCallActive;
         if (current?.conversationId === payload.conversationId) {
-          useCallStore.getState().set({ groupCallActive: null });
+          useCallStore.getState().setGroupCallActive(null);
         }
       }
     });
