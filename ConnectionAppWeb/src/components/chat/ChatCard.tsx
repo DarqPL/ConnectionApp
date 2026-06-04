@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { formatOnlineTime, cn } from "@/lib/utils";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, PhoneCall } from "lucide-react";
 
 interface ChatCardProps {
   convoId: number;
@@ -11,6 +11,7 @@ interface ChatCardProps {
   unreadCount?: number;
   leftSection: React.ReactNode;
   subtitle: React.ReactNode;
+  hasActiveCall?: boolean;
 }
 
 const ChatCard = ({
@@ -22,6 +23,7 @@ const ChatCard = ({
   unreadCount,
   leftSection,
   subtitle,
+  hasActiveCall,
 }: ChatCardProps) => {
   return (
     <Card
@@ -46,6 +48,9 @@ const ChatCard = ({
             >
               {name}
             </h3>
+            {hasActiveCall && (
+              <PhoneCall className="size-3 text-green-500 animate-pulse ml-1" />
+            )}
 
             <span className="text-xs text-muted-foreground">
               {timestamp ? formatOnlineTime(timestamp) : ""}

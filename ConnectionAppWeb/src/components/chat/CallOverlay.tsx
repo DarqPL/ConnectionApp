@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
+import { useSocketStore } from "@/stores/useSocketStore";
+import type { CallSession } from "@/types/call";
 import { Phone, PhoneCall, PhoneIncoming, PhoneOff, Video } from "lucide-react";
 import { toast } from "sonner";
 import ZegoCallRoom from "./ZegoCallRoom";
 
 interface CallOverlayProps {
   conversationId: number;
+  isGroupConversation?: boolean;
 }
 
-const CallOverlay = ({ conversationId }: CallOverlayProps) => {
+const CallOverlay = ({ conversationId, isGroupConversation }: CallOverlayProps) => {
   const {
     incomingCall,
     activeCall,
@@ -17,10 +21,76 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     rejectCall,
     endCall,
     ensureActiveCallToken,
+    groupCallActive,
+    joinGroupCall,
+    fetchActiveCall,
   } = useCallStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const lastIncomingCallIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isGroupConversation) {
+      void fetchActiveCall(conversationId);
+    }
+  }, [conversationId, isGroupConversation, fetchActiveCall]);
+
+  // WebSocket subscription for call participants
+  useEffect(() => {
+    if (!isGroupConversation) {
+      return;
+    }
+
+    const { client } = useSocketStore.getState();
+    if (!client || !client.connected) {
+      return;
+    }
+
+    const topic = `/topic/conversation.${conversationId}/call-participants`;
+    const subscription = client.subscribe(topic, (message: { body: string }) => {
+      const payload = JSON.parse(message.body) as {
+        callId: number;
+        conversationId: number;
+        status: string;
+        participants: Array<{ userId: number; status: string }>;
+      };
+
+      const hasJoined = payload.participants.some(p => p.status === "JOINED");
+      const myUserId = useAuthStore.getState().user?.id;
+      const isUserJoined = payload.participants.some(
+        p => p.userId === myUserId && p.status === "JOINED"
+      );
+
+      if (hasJoined && payload.status === "ONGOING") {
+        if (!isUserJoined) {
+          useCallStore.getState().setGroupCallActive({
+            callId: payload.callId,
+            conversationId: payload.conversationId,
+            status: payload.status,
+            participants: payload.participants,
+            isGroupCall: true,
+          } as CallSession);
+        }
+      } else if (!hasJoined || payload.status === "ENDED" || payload.status === "MISSED") {
+        const current = useCallStore.getState().groupCallActive;
+        if (current?.conversationId === payload.conversationId) {
+          useCallStore.getState().setGroupCallActive(null);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [conversationId, isGroupConversation]);
+
+  const groupCallForConversation =
+    groupCallActive?.conversationId === conversationId ? groupCallActive : null;
+
+  const myUserId = useAuthStore.getState().user?.id;
+  const isUserInGroupCall = groupCallForConversation?.participants.some(
+    (p) => p.userId === myUserId && p.status === "JOINED"
+  );
 
   const incomingForConversation =
     incomingCall?.conversationId === conversationId ? incomingCall : null;
@@ -150,8 +220,45 @@ const CallOverlay = ({ conversationId }: CallOverlayProps) => {
     }
   };
 
+  const handleJoinGroupCall = async () => {
+    if (!groupCallForConversation || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await joinGroupCall(groupCallForConversation.callId);
+      toast.success("Da tham gia cuoc goi nhom");
+    } catch (error) {
+      console.error(error);
+      toast.error("Khong the tham gia cuoc goi");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="border-b border-border/40 bg-muted/40 px-4 py-3">
+      {isGroupConversation && groupCallForConversation && !isUserInGroupCall && (
+        <div className="mb-3 rounded-lg border border-blue-300/60 bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+            <PhoneCall className="size-4" />
+            <span>Dang co cuoc goi nhom dien ra, ban co muon tham gia?</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={() => void handleJoinGroupCall()}
+              disabled={isSubmitting}
+            >
+              <PhoneCall className="size-4" />
+              Tham gia
+            </Button>
+          </div>
+        </div>
+      )}
+
       {showIncoming && (
         <div className="mb-3 rounded-lg border border-emerald-300/60 bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">

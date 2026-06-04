@@ -23,6 +23,8 @@ import iuh.fit.ConnectionAppBackend.repo.ConversationBlockedUserRepository;
 import iuh.fit.ConnectionAppBackend.repo.ConversationPendingMemberRepository;
 import iuh.fit.ConnectionAppBackend.repo.MessageRepository;
 import iuh.fit.ConnectionAppBackend.repo.UserRepository;
+import iuh.fit.ConnectionAppBackend.repo.CallSessionRepository;
+import iuh.fit.ConnectionAppBackend.domain.common.CallStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -77,6 +79,9 @@ public class ConversationService {
 
     @Autowired
     private ConversationPendingMemberRepository conversationPendingMemberRepository;
+
+    @Autowired
+    private CallSessionRepository callSessionRepository;
 
     /**
      * Get all conversations for a user with pagination
@@ -628,6 +633,10 @@ public class ConversationService {
                     .collect(Collectors.toList());
         }
 
+        var activeCallOpt = callSessionRepository.findActiveByConversationIdAndStatus(conversation.getId(), CallStatus.ONGOING);
+        boolean hasActiveCall = activeCallOpt.isPresent();
+        Long activeCallId = activeCallOpt.map(iuh.fit.ConnectionAppBackend.domain.entity.sql.CallSession::getId).orElse(null);
+
         return ConversationResponse.builder()
                 .id(conversation.getId())
                 .name(conversation.getName())
@@ -651,6 +660,8 @@ public class ConversationService {
                 .markAdminMessages(conversation.isMarkAdminMessages())
                 .allowNewMembersReadHistory(conversation.isAllowNewMembersReadHistory())
                 .allowLinkJoin(conversation.isAllowLinkJoin())
+                .hasActiveCall(hasActiveCall)
+                .activeCallId(activeCallId)
                 .blockedMembers(new ArrayList<>())
                 .pendingMembers(new ArrayList<>())
                 .build();

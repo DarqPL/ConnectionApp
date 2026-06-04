@@ -58,4 +58,22 @@ export const callService = {
     const res = await api.get("/calls/history", { params: { page, size } });
     return res.data;
   },
+
+  async getActiveCallByConversation(
+    conversationId: number,
+  ): Promise<CallSession | null> {
+    const res = await api.get(
+      `/calls/conversation/${conversationId}/active`,
+      {
+        validateStatus: (status) =>
+          status === 204 || (status >= 200 && status < 300),
+      },
+    );
+
+    if (res.status === 204) {
+      return null;
+    }
+
+    return res.data as CallSession;
+  },
 };

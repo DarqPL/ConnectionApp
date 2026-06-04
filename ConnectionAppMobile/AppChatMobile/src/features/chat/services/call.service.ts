@@ -35,6 +35,7 @@ export interface CallSession {
   endedReason?: string | null;
   token?: CallToken | null;
   participants: CallParticipant[];
+  isGroupCall?: boolean;
 }
 
 class CallService {
@@ -135,6 +136,23 @@ class CallService {
 
     if (!response.ok) {
       throw await this.parseError(response, "Khong the ket thuc cuoc goi");
+    }
+
+    return (await response.json()) as CallSession;
+  }
+
+  async getActiveCallByConversation(conversationId: number): Promise<CallSession | null> {
+    const response = await authService.authFetch(
+      `/calls/conversation/${conversationId}/active`,
+      { method: "GET" },
+    );
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    if (!response.ok) {
+      throw await this.parseError(response, "Khong the kiem tra cuoc goi");
     }
 
     return (await response.json()) as CallSession;

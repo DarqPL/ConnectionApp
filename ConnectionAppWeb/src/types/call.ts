@@ -40,6 +40,7 @@ export interface CallSession {
   endedReason?: string | null;
   token?: CallToken | null;
   participants: CallParticipant[];
+  isGroupCall?: boolean;
 }
 
 export interface StartCallRequest {

@@ -41,4 +41,7 @@ public class ConversationResponse {
 
     private List<ConversationUserResponse> blockedMembers;
     private List<ConversationUserResponse> pendingMembers;
+
+    private Boolean hasActiveCall;
+    private Long activeCallId;
 }
