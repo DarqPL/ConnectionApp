@@ -1821,8 +1821,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const response = await callService.endCall(callId, reason);
       setActiveCall((prev) => (prev?.callId === callId ? null : prev));
       setIncomingCall((prev) => (prev?.callId === callId ? null : prev));
-      if (response?.isGroupCall && response?.status === "ONGOING") {
-        setGroupCallActive(response as CallSession);
+      if (response?.isGroupCall) {
+        if (response.status === "ENDED" || response.status === "MISSED" || response.status === "CANCELLED") {
+          setGroupCallActive((prev) => prev?.callId === callId ? null : prev);
+        } else if (response.status === "ONGOING") {
+          setGroupCallActive(response as CallSession);
+        }
       }
     },
     [],
