@@ -11,6 +11,7 @@ import { useAuthStore } from "./useAuthStore";
 interface CallState {
   activeCall: CallSession | null;
   incomingCall: CallSession | null;
+  groupCallActive: CallSession | null;
   history: CallHistoryItem[];
   loading: boolean;
   startCall: (
@@ -30,6 +31,8 @@ interface CallState {
   handleCallStatus: (call: CallSession) => void;
   clearIncomingCall: () => void;
   clearActiveCall: () => void;
+  joinGroupCall: (callId: number) => Promise<CallSession>;
+  fetchActiveCall: (convId: number) => Promise<void>;
   reset: () => void;
 }
 
@@ -39,6 +42,7 @@ const isFinishedStatus = (status: string): boolean =>
 export const useCallStore = create<CallState>((set, get) => ({
   activeCall: null,
   incomingCall: null,
+  groupCallActive: null,
   history: [],
   loading: false,
 
@@ -133,6 +137,11 @@ export const useCallStore = create<CallState>((set, get) => ({
     const myUserId = useAuthStore.getState().user?.id;
     const isIncoming = myUserId != null && call.initiatedBy !== myUserId;
 
+    if (call.isGroupCall && call.status === "ONGOING") {
+      set({ groupCallActive: call, incomingCall: null });
+      return;
+    }
+
     if (isIncoming) {
       set({ incomingCall: call });
       return;
@@ -144,6 +153,18 @@ export const useCallStore = create<CallState>((set, get) => ({
   handleCallStatus: (call) => {
     const myUserId = useAuthStore.getState().user?.id;
     const isIncoming = myUserId != null && call.initiatedBy !== myUserId;
+
+    if (call.isGroupCall) {
+      if (isFinishedStatus(call.status)) {
+        set({ groupCallActive: null, activeCall: null, incomingCall: null });
+        void get().fetchHistory(0, 20);
+        return;
+      }
+      if (call.status === "ONGOING") {
+        set({ groupCallActive: call });
+        return;
+      }
+    }
 
     if (isFinishedStatus(call.status)) {
       set((state) => ({
@@ -179,8 +200,23 @@ export const useCallStore = create<CallState>((set, get) => ({
     });
   },
 
+  joinGroupCall: async (callId) => {
+    const call = await callService.acceptCall(callId);
+    set({ groupCallActive: null, activeCall: call });
+    return call;
+  },
+
+  fetchActiveCall: async (convId) => {
+    const call = await callService.getActiveCallByConversation(convId);
+    if (call) {
+      set({ groupCallActive: call });
+    } else {
+      set({ groupCallActive: null });
+    }
+  },
+
   clearIncomingCall: () => set({ incomingCall: null }),
   clearActiveCall: () => set({ activeCall: null }),
   reset: () =>
-    set({ activeCall: null, incomingCall: null, history: [], loading: false }),
+    set({ activeCall: null, incomingCall: null, groupCallActive: null, history: [], loading: false }),
 }));
