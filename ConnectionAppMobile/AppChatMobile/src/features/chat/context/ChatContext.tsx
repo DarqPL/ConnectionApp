@@ -1842,11 +1842,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const fetchActiveCall = useCallback(async (conversationId: number) => {
     try {
       const call = await callService.getActiveCallByConversation(conversationId);
-      if (call) {
-        setGroupCallActive(call);
-      } else {
-        setGroupCallActive(null);
-      }
+      setGroupCallActive((prev) => {
+        if (call) {
+          return call;
+        }
+        // Only clear if the current groupCallActive is for this conversation
+        if (prev?.conversationId === conversationId) {
+          return null;
+        }
+        return prev;
+      });
     } catch (error) {
       console.error("[ChatContext] fetchActiveCall error:", error);
     }

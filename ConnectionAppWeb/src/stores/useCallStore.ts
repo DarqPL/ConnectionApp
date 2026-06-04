@@ -227,11 +227,17 @@ export const useCallStore = create<CallState>((set, get) => ({
 
   fetchActiveCall: async (convId) => {
     const call = await callService.getActiveCallByConversation(convId);
-    if (call) {
-      set({ groupCallActive: call });
-    } else {
-      set({ groupCallActive: null });
-    }
+    set((state) => {
+      if (call) {
+        return { groupCallActive: call };
+      }
+      // Only clear if the current groupCallActive is for this conversation
+      // This prevents clearing groupCallActive for conversation A when fetching conversation B
+      if (state.groupCallActive?.conversationId === convId) {
+        return { groupCallActive: null };
+      }
+      return state;
+    });
   },
 
   setGroupCallActive: (call) => set({ groupCallActive: call }),
