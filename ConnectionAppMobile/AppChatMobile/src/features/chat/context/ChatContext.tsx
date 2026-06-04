@@ -35,6 +35,8 @@ interface ChatContextType {
   typingUsers: TypingPresence[];
   incomingCall: CallSession | null;
   activeCall: CallSession | null;
+  groupCallActive: CallSession | null;
+  joinGroupCall: (callId: number) => Promise<void>;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId: number) => Promise<void>;
   sendMessage: (
@@ -119,6 +121,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const [typingUsers, setTypingUsers] = useState<TypingPresence[]>([]);
   const [incomingCall, setIncomingCall] = useState<CallSession | null>(null);
   const [activeCall, setActiveCall] = useState<CallSession | null>(null);
+  const [groupCallActive, setGroupCallActive] = useState<CallSession | null>(null);
   const [appState, setAppState] = useState<AppStateStatus>(
     AppState.currentState,
   );
@@ -781,7 +784,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    setIncomingCall(payload as CallSession);
+    const session = payload as CallSession;
+
+    if (session.isGroupCall && session.status === "ONGOING") {
+      setGroupCallActive(session);
+      return;
+    }
+
+    setIncomingCall(session);
 
     if (payload?.conversationId === currentConversationRef.current) {
       return;
@@ -805,6 +815,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const session = payload as CallSession;
+
+    if (session.isGroupCall) {
+      if (
+        payload.status === "ENDED" ||
+        payload.status === "MISSED" ||
+        payload.status === "CANCELLED"
+      ) {
+        setGroupCallActive(null);
+        setActiveCall(null);
+        setIncomingCall(null);
+        return;
+      }
+
+      if (payload.status === "ONGOING") {
+        setGroupCallActive(session);
+        return;
+      }
+    }
 
     if (payload.status === "RINGING") {
       const isIncoming = payload?.initiatedBy !== userIdRef.current;
@@ -1789,6 +1817,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+  const joinGroupCall = useCallback(async (callId: number) => {
+    try {
+      const call = await callService.acceptCall(callId);
+      const token = call.token ?? await callService.issueToken(callId);
+      setActiveCall({ ...call, token });
+      setGroupCallActive(null);
+    } catch (error) {
+      console.error("[ChatContext] joinGroupCall error:", error);
+      throw error;
+    }
+  }, []);
+
   const value: ChatContextType = {
     conversations,
     currentMessages,
@@ -1798,6 +1838,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     typingUsers,
     incomingCall,
     activeCall,
+    groupCallActive,
+    joinGroupCall,
     fetchConversations,
     fetchMessages,
     sendMessage,
