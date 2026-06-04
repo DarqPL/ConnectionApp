@@ -171,9 +171,7 @@ export const useCallStore = create<CallState>((set, get) => ({
         return;
       }
       if (call.status === "ONGOING") {
-        set((state) => ({
-          groupCallActive: state.groupCallActive?.callId === call.callId ? call : state.groupCallActive,
-        }));
+        set({ groupCallActive: call });
         return;
       }
       // For all other group call statuses, just update groupCallActive, never activeCall
