@@ -30,6 +30,7 @@ public class UserService {
     }
 
     private static final String DEFAULT_TEMP_LOCK_REASON = "POLICY_VIOLATION";
+    private static final Duration PERMANENT_LOCK_DURATION = Duration.ofDays(36525); // ~100 years
 
     @Autowired
     private UserRepository userRepository;
@@ -339,7 +340,7 @@ public class UserService {
         }
 
         user.setStatus(UserStatus.LOCKED);
-        user.setLockUntil(now.plus(100, java.time.temporal.ChronoUnit.YEARS));
+        user.setLockUntil(now.plus(PERMANENT_LOCK_DURATION));
         user.setLockReason("ADMIN_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
@@ -367,7 +368,7 @@ public class UserService {
         }
 
         user.setStatus(UserStatus.LOCKED);
-        user.setLockUntil(now.plus(100, java.time.temporal.ChronoUnit.YEARS));
+        user.setLockUntil(now.plus(PERMANENT_LOCK_DURATION));
         user.setLockReason("SELF_LOCK");
         bumpAllPlatformTokenVersions(user);
         userRepository.save(user);
