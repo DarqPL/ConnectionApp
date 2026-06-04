@@ -850,15 +850,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     if (payload.status === "ONGOING") {
-      setActiveCall((prev) => ({
-        ...session,
-        token:
-          session.token ??
-          (prev?.callId === session.callId ? prev.token : null),
-      }));
-      setIncomingCall((prev) =>
-        prev?.callId === session.callId ? null : prev,
+      // Only set activeCall if user is actually a participant in this call
+      const isUserParticipant = session.participants?.some(
+        (p) => p.userId === userIdRef.current && p.status !== "LEFT"
       );
+      
+      if (isUserParticipant || !session.isGroupCall) {
+        setActiveCall((prev) => ({
+          ...session,
+          token:
+            session.token ??
+            (prev?.callId === session.callId ? prev.token : null),
+        }));
+        setIncomingCall((prev) =>
+          prev?.callId === session.callId ? null : prev,
+        );
+      }
       return;
     }
 
