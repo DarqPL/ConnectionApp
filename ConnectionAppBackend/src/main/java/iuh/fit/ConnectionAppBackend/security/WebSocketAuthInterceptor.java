@@ -46,6 +46,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor  {
                     if (jwtUtils.validateToken(token, userDetails)) {
                         if (userDetails instanceof CustomerUserDetails customerUserDetails) {
                             userAccountLockService.assertAccountIsActive(customerUserDetails.getUser());
+                            accessor.getSessionAttributes().put("userId", customerUserDetails.getUser().getId());
                         }
 
                         UsernamePasswordAuthenticationToken auth =
@@ -53,6 +54,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor  {
                                         userDetails, null, userDetails.getAuthorities());
 
                         accessor.setUser(auth);
+                        accessor.getSessionAttributes().put("username", username);
                         return message;
                     }
                 } catch (RuntimeException ex) {
